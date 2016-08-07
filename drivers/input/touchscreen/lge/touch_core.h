@@ -335,6 +335,10 @@ enum {
 	APP_HOME = 0,
 	APP_CONTACTS,
 	APP_MENU,
+	LPWG_SET_COORDS = 3,
+	LPWG_SET_TAPS = 4,
+	LPWG_ENABLE_TAP_LISTENER = 8,
+	LPWG_MASTER = 9,
 };
 
 struct state_info {
