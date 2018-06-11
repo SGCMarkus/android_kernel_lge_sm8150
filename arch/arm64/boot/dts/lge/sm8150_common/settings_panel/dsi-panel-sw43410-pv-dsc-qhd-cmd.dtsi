@@ -45,6 +45,7 @@
 		qcom,mdss-dsi-lp11-init;
 		qcom,mdss-dsi-tx-eot-append;
 		qcom,ulps-enabled;
+		qcom,panel-allow-phy-poweroff;
 		//qcom,mdss-dsi-force-clock-lane-hs;
 
 		qcom,mdss-dsi-panel-hdr-enabled;
