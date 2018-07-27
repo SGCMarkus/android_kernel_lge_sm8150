@@ -271,7 +271,12 @@ next:
 			ClearPageUptodate(page);
 			clear_cold_data(page);
 		}
+<<<<<<< HEAD
 		f2fs_clear_page_private(page);
+=======
+		set_page_private(page, 0);
+		ClearPagePrivate(page);
+>>>>>>> 18acb442527d... f2fs: fix to spread clear_cold_data()
 		f2fs_put_page(page, 1);
 
 		list_del(&cur->list);
