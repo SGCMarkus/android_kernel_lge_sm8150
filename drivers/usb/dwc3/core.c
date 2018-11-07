@@ -1368,7 +1368,8 @@ static int dwc3_probe(struct platform_device *pdev)
 		dwc->dr_mode == USB_DR_MODE_PERIPHERAL) {
 		ret = dwc3_gadget_init(dwc);
 		if (ret) {
-			dev_err(dwc->dev, "gadget init failed %d\n", ret);
+			if (ret != -EPROBE_DEFER)
+			    dev_err(dwc->dev, "gadget init failed %d\n", ret);
 			goto err3;
 		}
 	}
