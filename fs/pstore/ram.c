@@ -821,27 +821,42 @@ static int ramoops_probe(struct platform_device *pdev)
 		goto fail_init_mprz;
 
 	cxt->pstore.data = cxt;
-#ifdef CONFIG_LGE_HANDLE_PANIC
-	if (cxt->console_size)
-		cxt->pstore.bufsize = 1024; /* LOG_LINE_MAX */
-    cxt->pstore.bufsize = max(cxt->record_size, cxt->pstore.bufsize);
-#else
-	cxt->pstore.bufsize = cxt->dprzs[0]->buffer_size;
-#endif
-	cxt->pstore.buf = kzalloc(cxt->pstore.bufsize, GFP_KERNEL);
-	if (!cxt->pstore.buf) {
-		pr_err("cannot allocate pstore crash dump buffer\n");
-		err = -ENOMEM;
-		goto fail_clear;
-	}
-
-	cxt->pstore.flags = PSTORE_FLAGS_DMESG;
+	/*
+	 * Prepare frontend flags based on which areas are initialized.
+	 * For ramoops_init_przs() cases, the "max count" variable tells
+	 * if there are regions present. For ramoops_init_prz() cases,
+	 * the single region size is how to check.
+	 */
+	cxt->pstore.flags = 0;
+	if (cxt->max_dump_cnt)
+		cxt->pstore.flags |= PSTORE_FLAGS_DMESG;
 	if (cxt->console_size)
 		cxt->pstore.flags |= PSTORE_FLAGS_CONSOLE;
-	if (cxt->ftrace_size)
+	if (cxt->max_ftrace_cnt)
 		cxt->pstore.flags |= PSTORE_FLAGS_FTRACE;
 	if (cxt->pmsg_size)
 		cxt->pstore.flags |= PSTORE_FLAGS_PMSG;
+
+	/*
+	 * Since bufsize is only used for dmesg crash dumps, it
+	 * must match the size of the dprz record (after PRZ header
+	 * and ECC bytes have been accounted for).
+	 */
+	if (cxt->pstore.flags & PSTORE_FLAGS_DMESG) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	    if (cxt->console_size)
+		    cxt->pstore.bufsize = 1024; /* LOG_LINE_MAX */
+        cxt->pstore.bufsize = max(cxt->record_size, cxt->pstore.bufsize);
+#else
+	    cxt->pstore.bufsize = cxt->dprzs[0]->buffer_size;
+#endif
+		cxt->pstore.buf = kzalloc(cxt->pstore.bufsize, GFP_KERNEL);
+		if (!cxt->pstore.buf) {
+			pr_err("cannot allocate pstore crash dump buffer\n");
+			err = -ENOMEM;
+			goto fail_clear;
+		}
+	}
 
 	err = pstore_register(&cxt->pstore);
 	if (err) {
