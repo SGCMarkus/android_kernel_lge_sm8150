@@ -2785,9 +2785,11 @@ QDF_STATUS sap_fsm(struct sap_context *sap_ctx, ptWLAN_SAPEvent sap_event)
 
 	mac_ctx = PMAC_STRUCT(hal);
 
+#ifdef WLAN_DEBUG
 	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_DEBUG,
 		  FL("sap_ctx=%pK, state_var=%d, msg=0x%x"),
 		  sap_ctx, state_var, msg);
+#endif
 
 	switch (state_var) {
 	case SAP_INIT:

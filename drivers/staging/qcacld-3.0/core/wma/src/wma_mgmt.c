@@ -3055,8 +3055,10 @@ static int wma_process_mgmt_tx_completion(tp_wma_handle wma_handle,
 		return -EINVAL;
 	}
 
+#ifdef WLAN_DEBUG
 	WMA_LOGD("%s: status: %s wmi_desc_id: %d", __func__,
 		wma_get_status_str(status), desc_id);
+#endif
 
 	pdev = wma_handle->pdev;
 	if (pdev == NULL) {
