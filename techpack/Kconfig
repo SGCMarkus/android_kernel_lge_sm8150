@@ -1,1 +1,3 @@
 source techpack/audio/Kconfig
+
+source techpack/data/drivers/Kconfig
