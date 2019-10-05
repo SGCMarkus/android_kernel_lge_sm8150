@@ -92,6 +92,10 @@ struct dp_catalog_aux {
 			struct dp_aux_cfg *aux_cfg);
 	void (*get_irq)(struct dp_catalog_aux *aux, bool cmd_busy);
 	void (*clear_hw_interrupts)(struct dp_catalog_aux *aux);
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	void (*change_aux_cfg)(struct dp_catalog_aux *aux,
+		struct dp_aux_cfg *cfg, enum dp_phy_aux_config_type type, u32 index);
+#endif
 };
 
 struct dp_catalog_ctrl {
@@ -232,7 +236,7 @@ struct dp_catalog_panel {
 	void (*config_spd)(struct dp_catalog_panel *panel);
 	void (*config_misc)(struct dp_catalog_panel *panel);
 	void (*config_msa)(struct dp_catalog_panel *panel,
-			u32 rate, u32 stream_rate_khz);
+			u32 rate, u32 stream_rate_khz, bool fixed_nvid);
 	void (*update_transfer_unit)(struct dp_catalog_panel *panel);
 	void (*config_ctrl)(struct dp_catalog_panel *panel, u32 cfg);
 	void (*config_dto)(struct dp_catalog_panel *panel, bool ack);

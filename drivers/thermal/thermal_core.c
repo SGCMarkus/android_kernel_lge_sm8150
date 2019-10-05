@@ -44,6 +44,9 @@ static DEFINE_IDA(thermal_cdev_ida);
 static LIST_HEAD(thermal_tz_list);
 static LIST_HEAD(thermal_cdev_list);
 static LIST_HEAD(thermal_governor_list);
+#ifdef CONFIG_LGE_PM
+struct list_head thermal_cdev_debug_list = LIST_HEAD_INIT(thermal_cdev_debug_list);
+#endif
 
 static DEFINE_MUTEX(thermal_list_lock);
 static DEFINE_MUTEX(thermal_governor_lock);
@@ -488,8 +491,7 @@ void thermal_zone_device_update_temp(struct thermal_zone_device *tz,
 {
 	int count;
 
-	if (atomic_read(&in_suspend) && (!tz->ops->is_wakeable ||
-		!(tz->ops->is_wakeable(tz))))
+	if (atomic_read(&in_suspend))
 		return;
 
 	trace_thermal_device_update(tz, event);
@@ -509,8 +511,7 @@ void thermal_zone_device_update(struct thermal_zone_device *tz,
 {
 	int count;
 
-	if (atomic_read(&in_suspend) && (!tz->ops->is_wakeable ||
-		!(tz->ops->is_wakeable(tz))))
+	if (atomic_read(&in_suspend))
 		return;
 
 	if (!tz->ops->get_temp)
@@ -1074,6 +1075,9 @@ __thermal_cooling_device_register(struct device_node *np,
 	/* Add 'this' new cdev to the global cdev list */
 	mutex_lock(&thermal_list_lock);
 	list_add(&cdev->node, &thermal_cdev_list);
+#ifdef CONFIG_LGE_PM
+	thermal_cdev_debug_list = thermal_cdev_list;
+#endif
 	mutex_unlock(&thermal_list_lock);
 
 	/* Update binding information for 'this' new cdev */
@@ -1599,9 +1603,6 @@ static int thermal_pm_notify(struct notifier_block *nb,
 	case PM_POST_SUSPEND:
 		atomic_set(&in_suspend, 0);
 		list_for_each_entry(tz, &thermal_tz_list, node) {
-			if (tz->ops->is_wakeable &&
-				tz->ops->is_wakeable(tz))
-				continue;
 			thermal_zone_device_reset(tz);
 			thermal_zone_device_update(tz,
 						   THERMAL_EVENT_UNSPECIFIED);

@@ -1,0 +1,112 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-alpha_lao_com.dtsi"
+#include "sm8150-alpha_lao_com-sound_rev-a.dtsi"
+#include "../sm8150-camera/sm8150-alpha-camera_rev-a.dtsi"
+
+/ {
+	model = "LG Electronics, Alpha_lao_hk, rev_a";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x03060008 0>;
+};
+
+&usb_qmp_dp_phy {
+	vdd-supply = <&pm8150_l18>;
+	qcom,vdd-voltage-level = <0 912000 912000>;
+};
+
+&dsi_sw43410_mp_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_pv_gi_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_dv2_gi_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_pv_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_dv2_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_dv1_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_pp2_dsc_qhd_cmd {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&dsi_sw43410_dsc_qhd_cmd_pxw {
+	interrupt-parent = <&tlmm>;
+	interrupts = <9 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+	lge,err-detect-gpio = <&tlmm 9 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+};
+
+&pm8150b_charger {
+	lge-extension-usb {
+		lge,usbid-parallel-kohm = <2000>;		// parallel resistance
+	};
+};
+
+&soc{
+	fingerprint@0 {
+		goodix,gpio_vddio = <&tlmm 21 0x00>;
+		gf,vddio-uV = <2800000>;
+	};
+};
+
+&lge_sbu_switch {
+	lge,oe-gpio = <&tlmm 119 0>;
+
+	pinctrl-0 = <&lge_sbu_switch_oe_active &lge_sbu_switch_sel_active>;
+};
+
+&tlmm {
+	lge_sbu_switch_oe_active: lge_sbu_switch_oe_active {
+		mux {
+			pins = "gpio119";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio119";
+			drive-strength = <6>;
+			bias-bus-hold;
+		};
+	};
+};

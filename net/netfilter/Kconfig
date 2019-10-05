@@ -1594,6 +1594,16 @@ config NETFILTER_XT_MATCH_U32
 
 endif # NETFILTER_XTABLES
 
+config LG_VPN_V37
+    tristate "LG VPN ver3.7 Support"
+    default n
+    ---help---
+    This feature is for LG VPN ver3.7 support. It includes interceptor netfilter.
+    
+if LG_VPN_V37
+source "net/netfilter/interceptor_v37/Kconfig"
+endif
+
 endmenu
 
 source "net/netfilter/ipset/Kconfig"

@@ -398,7 +398,12 @@ static struct device *msm_smmu_device_create(struct device *dev,
 	}
 
 	smmu->client = platform_get_drvdata(pdev);
-
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if(!smmu->client) {
+		pr_err("[Display][%s] smmu->client is null name:%s \n",__func__,dev_name(dev));
+		return ERR_PTR(-ENODEV);
+	}
+#endif
 	return &pdev->dev;
 }
 

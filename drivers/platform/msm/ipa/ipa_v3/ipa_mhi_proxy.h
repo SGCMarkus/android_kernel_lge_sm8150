@@ -23,7 +23,6 @@ struct ipa_mhi_alloc_channel_resp_msg_v01 *imp_handle_allocate_channel_req(
 	struct ipa_mhi_alloc_channel_req_msg_v01 *req);
 
 struct ipa_mhi_clk_vote_resp_msg_v01 *imp_handle_vote_req(bool vote);
-
 void imp_handle_modem_shutdown(void);
 
 #else /* CONFIG_IPA3_MHI_PROXY */

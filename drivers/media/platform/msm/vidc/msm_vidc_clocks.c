@@ -491,6 +491,19 @@ static unsigned long msm_vidc_max_freq(struct msm_vidc_core *core)
 	return freq;
 }
 
+#ifdef CONFIG_MACH_LGE
+static unsigned long msm_vidc_higher_freq(struct msm_vidc_inst *inst)
+{
+	struct clock_data *dcvs = NULL;
+	unsigned long freq = 0;
+
+	dcvs = &inst->clk_data;
+	freq = dcvs->load_high;
+	dprintk(VIDC_PROF, "Higher rate = %lu\n", freq);
+	return freq;
+}
+#endif
+
 void msm_comm_free_freq_table(struct msm_vidc_inst *inst)
 {
 	struct vidc_freq_data *temp, *next;
@@ -837,8 +850,8 @@ int msm_vidc_validate_operating_rate(struct msm_vidc_inst *inst,
 {
 	struct msm_vidc_inst *temp;
 	struct msm_vidc_core *core;
-	unsigned long max_freq, freq_left, op_rate_possible, load, cycles;
-	unsigned long mbs_per_second, freq_core0 = 0, freq_core1 = 0, freq;
+	unsigned long max_freq, freq_left, ops_left, load, cycles, freq = 0;
+	unsigned long mbs_per_second;
 	int rc = 0;
 	u32 curr_operating_rate = 0;
 
@@ -847,13 +860,7 @@ int msm_vidc_validate_operating_rate(struct msm_vidc_inst *inst,
 		return -EINVAL;
 	}
 	core = inst->core;
-	curr_operating_rate =
-		max(inst->clk_data.operating_rate >> 16, inst->prop.fps);
-	operating_rate = operating_rate >> 16;
-
-	/* always allow decreasing operating rate*/
-	if (curr_operating_rate >= operating_rate)
-		return 0;
+	curr_operating_rate = inst->clk_data.operating_rate >> 16;
 
 	mutex_lock(&core->lock);
 	max_freq = msm_vidc_max_freq(core);
@@ -863,24 +870,10 @@ int msm_vidc_validate_operating_rate(struct msm_vidc_inst *inst,
 				temp->state >= MSM_VIDC_RELEASE_RESOURCES_DONE)
 			continue;
 
-		if (temp->clk_data.core_id == VIDC_CORE_ID_1)
-			freq_core0 += temp->clk_data.min_freq;
-		else if (temp->clk_data.core_id == VIDC_CORE_ID_2)
-			freq_core1 += temp->clk_data.min_freq;
-		else if (temp->clk_data.core_id == VIDC_CORE_ID_3) {
-			freq_core0 += temp->clk_data.min_freq;
-			freq_core1 += temp->clk_data.min_freq;
-		}
+		freq += temp->clk_data.min_freq;
 	}
 
-	if (inst->clk_data.core_id == VIDC_CORE_ID_1)
-		freq = freq_core0;
-	else if (inst->clk_data.core_id == VIDC_CORE_ID_2)
-		freq = freq_core1;
-	else
-		freq = max(freq_core0, freq_core1);
-
-	freq_left = max_freq > freq ? max_freq - freq : 0;
+	freq_left = max_freq - freq;
 
 	mbs_per_second = msm_comm_get_inst_load_per_core(inst,
 		LOAD_CALC_NO_QUIRKS);
@@ -891,15 +884,13 @@ int msm_vidc_validate_operating_rate(struct msm_vidc_inst *inst,
 			inst->clk_data.entry->low_power_cycles :
 			cycles;
 
-	if (inst->clk_data.work_route)
-		cycles /= inst->clk_data.work_route;
-
 	load = cycles * mbs_per_second;
 
-	op_rate_possible = load ? (freq_left * curr_operating_rate / load) : 0;
+	ops_left = load ? (freq_left / load) : 0;
 
+	operating_rate = operating_rate >> 16;
 
-	if (op_rate_possible >= operating_rate ||
+	if ((curr_operating_rate * (1 + ops_left)) >= operating_rate ||
 			msm_vidc_clock_voting ||
 			inst->clk_data.buffer_counter < DCVS_FTB_WINDOW) {
 		dprintk(VIDC_DBG,
@@ -960,7 +951,14 @@ int msm_comm_scale_clocks(struct msm_vidc_inst *inst)
 
 	if (inst->clk_data.buffer_counter < DCVS_FTB_WINDOW || is_turbo ||
 		msm_vidc_clock_voting) {
+#ifdef CONFIG_MACH_LGE
+		if (is_turbo)
+			inst->clk_data.min_freq = msm_vidc_higher_freq(inst);
+		else
+			inst->clk_data.min_freq = msm_vidc_max_freq(inst->core);
+#else
 		inst->clk_data.min_freq = msm_vidc_max_freq(inst->core);
+#endif
 		inst->clk_data.dcvs_flags = 0;
 	}
 
@@ -1067,7 +1065,7 @@ void msm_clock_data_reset(struct msm_vidc_inst *inst)
 
 	dprintk(VIDC_DBG, "Init DCVS Load\n");
 
-	if (!inst || !inst->core || !inst->clk_data.entry) {
+	if (!inst || !inst->core) {
 		dprintk(VIDC_ERR, "%s Invalid args: Inst = %pK\n",
 			__func__, inst);
 		return;
@@ -1185,7 +1183,8 @@ int msm_vidc_get_extra_buff_count(struct msm_vidc_inst *inst,
 	 * batch size count of extra buffers added on output port
 	 */
 	if (is_output_buffer(inst, buffer_type)) {
-		if (inst->decode_batching && is_decode_session(inst) &&
+		if (inst->core->resources.decode_batching &&
+			is_decode_session(inst) &&
 			count < inst->batch.size)
 			count = inst->batch.size;
 	}

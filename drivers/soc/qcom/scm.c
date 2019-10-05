@@ -46,7 +46,7 @@ static DEFINE_MUTEX(scm_lock);
 DEFINE_MUTEX(scm_lmh_lock);
 
 #define SCM_EBUSY_WAIT_MS 30
-#define SCM_EBUSY_MAX_RETRY 67
+#define SCM_EBUSY_MAX_RETRY 134 //67->134 by QCT case03856851
 
 #define N_EXT_SCM_ARGS 7
 #define FIRST_EXT_ARG_IDX 3

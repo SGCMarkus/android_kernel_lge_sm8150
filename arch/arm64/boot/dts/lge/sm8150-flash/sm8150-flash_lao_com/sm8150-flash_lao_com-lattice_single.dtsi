@@ -1,0 +1,44 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+&soc {
+	qupv3_se8_spi: spi@a80000 {	// [Modified] QUP_BASE address for BLSP# QUP# (ref. AP datasheet, This model use BLSP-1 QUP7)
+		/* [S][Modified] Ref. kernel/msm-4.14/arch/arm64/boot/dts/qcom/sm8150-qupv3.dtsi */
+
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&qupv3_se8_spibus_active &spi_tdmb_active>;
+		pinctrl-1 = <&qupv3_se8_spibus_sleep &spi_tdmb_sleep>;
+
+		status = "ok";
+	};
+};
+
+&qupv3_se8_spi {
+	lattice@2 {
+		compatible = "lattice,ice40-fpga-mgr";
+		reg = <2>;
+		spi-max-frequency = <10000000>;
+		reset-gpios = <&tlmm 42 0>;
+		lreset-gpios = <&tlmm 74 0>;
+		cdone-gpios = <&tlmm 148 0>;
+		fw = "lattice/lg_singlewire_m48_impl_1.img";
+		status = "disabled";
+	};
+};
+
+&qupv3_se10_i2c {
+	latticei2c@58 {
+		compatible = "lattice,ice40-i2c";
+		reg = <0x58>;
+		status = "disabled";
+	};
+};

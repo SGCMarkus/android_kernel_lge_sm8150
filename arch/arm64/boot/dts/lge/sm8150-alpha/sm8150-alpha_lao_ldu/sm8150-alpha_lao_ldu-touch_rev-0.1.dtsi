@@ -1,0 +1,38 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-alpha_common/sm8150-alpha_common-touch.dtsi"
+
+&qupv3_se17_i2c {
+	stm_ftm4@49 {
+		status = "disable";
+	};
+
+	synaptics_s3707@20 {
+		status = "ok";
+		maker_id-gpio = <&tlmm 82 0x00>;
+		/* Firmware */
+		fw_image = "touch/alpha/PLG662-V0.08-PR2789051-s3707b_BLV86_DS5.10.81.1_50061108.img";
+		panel_spec = "touch/alpha/alpha_limit.txt";
+		panel_spec_mfts_folder = "touch/alpha/alpha_limit_mfts.txt";
+	};
+
+	sw42000@28 {
+		status = "ok";
+		maker_id-gpio = <&tlmm 82 0x00>;
+		/* Firmware */
+		fw_image = "touch/alpha/L0W60ALPHA_0_21.img";
+		panel_spec = "touch/alpha/alpha_siw_limit.txt";
+		panel_spec_mfts_folder = "touch/alpha/alpha_siw_limit_mfts.txt";
+	};
+};

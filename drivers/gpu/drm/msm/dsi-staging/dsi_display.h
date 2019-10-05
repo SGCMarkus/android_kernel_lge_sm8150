@@ -676,6 +676,11 @@ int dsi_display_pre_kickoff(struct drm_connector *connector,
  *
  * Return: enum dsi_pixel_format type
  */
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+int dsi_display_post_kickoff(struct dsi_display *display);
+#endif
+
 enum dsi_pixel_format dsi_display_get_dst_format(
 		struct drm_connector *connector,
 		void *display);

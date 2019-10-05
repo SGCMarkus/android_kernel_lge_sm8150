@@ -194,3 +194,6 @@ obj-$(CONFIG_IP_SET) += ipset/
 
 # IPVS
 obj-$(CONFIG_IP_VS) += ipvs/
+
+# LGE VPN
+obj-$(CONFIG_LG_VPN_V37) += interceptor_v37/

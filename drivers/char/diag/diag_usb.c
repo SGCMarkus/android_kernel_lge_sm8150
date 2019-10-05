@@ -29,7 +29,14 @@
 #include "diag_usb.h"
 #include "diag_mux.h"
 #include "diagmem.h"
+#ifdef CONFIG_LGE_DIAG_BYPASS
+int diag_bypass_enable = 1;
+#endif
 #include "diag_ipc_logging.h"
+
+#ifdef CONFIG_LGE_USB_DIAG_LOCK
+#include "diag_lock.h"
+#endif
 
 #define DIAG_USB_STRING_SZ	10
 #define DIAG_USB_MAX_SIZE	16384
@@ -385,11 +392,22 @@ static void diag_usb_notifier(void *priv, unsigned int event,
 	case USB_DIAG_CONNECT:
 		pr_info("diag: USB channel %s: Received Connect event\n",
 			usb_info->name);
+#ifdef CONFIG_LGE_DIAG_BYPASS
+        diag_bypass_enable = 0;
+#endif
+#ifdef CONFIG_LGE_USB_DIAG_LOCK
+		pr_info("diag: USB channel %s: Diag is %salllowed\n",
+			usb_info->name,
+			diag_lock_is_allowed() ? "" : "not ");
+#endif
 		if (!atomic_read(&usb_info->connected))
 			queue_work(usb_info->usb_wq,
 			   &usb_info->connect_work);
 		break;
 	case USB_DIAG_DISCONNECT:
+#ifdef CONFIG_LGE_DIAG_BYPASS
+        diag_bypass_enable = 1;
+#endif
 		pr_info("diag: USB channel %s: Received Disconnect event\n",
 			usb_info->name);
 		queue_work(usb_info->usb_wq,

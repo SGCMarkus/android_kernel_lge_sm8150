@@ -17,6 +17,9 @@
 #include "dp_link.h"
 #include "dp_panel.h"
 
+#undef pr_debug
+#define pr_debug pr_err
+
 enum dynamic_range {
 	DP_DYNAMIC_RANGE_RGB_VESA = 0x00,
 	DP_DYNAMIC_RANGE_RGB_CEA = 0x01,

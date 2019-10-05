@@ -45,6 +45,10 @@
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
 
+#ifdef CONFIG_LGE_PM_PRM
+#include "fbcn/lge_intm.h"
+#endif
+
 struct sde_crtc_custom_events {
 	u32 event;
 	int (*func)(struct drm_crtc *crtc, bool en,
@@ -4258,6 +4262,11 @@ void sde_crtc_commit_kickoff(struct drm_crtc *crtc,
 	}
 	sde_crtc->play_count++;
 
+#ifdef CONFIG_LGE_PM_PRM
+	if (lge_prm_get_info(LGE_PRM_INFO_FBCN_ENABLED))
+		lge_intv_notify(ktime_get());
+#endif
+
 	/*
 	 * For SYNC inline modes, delay the kick off until after the
 	 * wait for frame done in case the wait times out.
@@ -5657,18 +5666,28 @@ static int _sde_crtc_get_output_fence(struct drm_crtc *crtc,
 {
 	struct sde_crtc *sde_crtc;
 	struct sde_crtc_state *cstate;
-	uint32_t offset;
+	uint32_t offset, i;
+	struct drm_connector_state *old_conn_state, *new_conn_state;
+	struct drm_connector *conn;
+	struct sde_connector *sde_conn = NULL;
+	struct msm_display_info disp_info;
 	bool is_vid = false;
-	struct drm_encoder *encoder;
 
 	sde_crtc = to_sde_crtc(crtc);
 	cstate = to_sde_crtc_state(state);
 
-	drm_for_each_encoder_mask(encoder, crtc->dev, state->encoder_mask) {
-		is_vid |= sde_encoder_check_mode(encoder,
-						MSM_DISPLAY_CAP_VID_MODE);
-		if (is_vid)
-			break;
+	for_each_oldnew_connector_in_state(state->state, conn, old_conn_state,
+							new_conn_state, i) {
+		if (!new_conn_state || new_conn_state->crtc != crtc)
+			continue;
+
+		sde_conn = to_sde_connector(new_conn_state->connector);
+		if (sde_conn->display && sde_conn->ops.get_info) {
+			sde_conn->ops.get_info(conn, &disp_info,
+							sde_conn->display);
+			is_vid |= disp_info.capabilities &
+						MSM_DISPLAY_CAP_VID_MODE;
+		}
 	}
 
 	offset = sde_crtc_get_property(cstate, CRTC_PROP_OUTPUT_FENCE_OFFSET);

@@ -224,5 +224,8 @@ ssize_t fsg_store_removable(struct fsg_lun *curlun, const char *buf,
 			    size_t count);
 ssize_t fsg_store_inquiry_string(struct fsg_lun *curlun, const char *buf,
 				 size_t count);
+#ifdef CONFIG_LGE_USB_GADGET_CDROM_MAC_SUPPORT
+int fsg_get_toc(struct fsg_lun *curlun, int msf, int format, u8 *buf);
+#endif
 
 #endif /* USB_STORAGE_COMMON_H */

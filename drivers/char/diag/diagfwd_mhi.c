@@ -108,7 +108,7 @@ static int mhi_buf_tbl_add(struct diag_mhi_info *mhi_info, int type,
 	kmemleak_not_leak(item);
 
 	item->buf = buf;
-	DIAG_LOG(DIAG_DEBUG_MHI,
+	DIAG_LOG(DIAG_DEBUG_BRIDGE,
 		 "buffer %pK added to table of ch: %s\n", buf, mhi_info->name);
 	item->len = len;
 	list_add_tail(&item->link, &ch->buf_tbl);
@@ -148,8 +148,8 @@ static void mhi_buf_tbl_remove(struct diag_mhi_info *mhi_info, int type,
 			continue;
 		list_del(&item->link);
 		if (type == TYPE_MHI_READ_CH) {
-			DIAG_LOG(DIAG_DEBUG_MHI,
-			"Callback received on buffer:%pK from mhi\n", buf);
+			DIAG_LOG(DIAG_DEBUG_BRIDGE,
+				"Callback received on buffer:%pK from mhi\n", buf);
 			diagmem_free(driver, item->buf, mhi_info->mempool);
 		}
 		kfree(item);
@@ -188,9 +188,8 @@ static void mhi_buf_tbl_clear(struct diag_mhi_info *mhi_info)
 			list_for_each_entry_safe(tp, tp_temp,
 				&mhi_info->read_done_list, link) {
 				if (tp->buf == buf) {
-					DIAG_LOG(DIAG_DEBUG_MHI,
-						"buffer:%pK removed from table for ch:%s\n",
-						buf, mhi_info->name);
+					DIAG_LOG(DIAG_DEBUG_BRIDGE,
+					"buffer:%pK removed from table for ch:%s\n", buf, mhi_info->name);
 					list_del(&tp->link);
 					kfree(tp);
 					tp = NULL;
@@ -395,17 +394,15 @@ static void mhi_read_done_work_fn(struct work_struct *work)
 			err = diag_remote_dev_read_done(mhi_info->dev_id, buf,
 						  len);
 			if (err) {
-				DIAG_LOG(DIAG_DEBUG_MHI,
-				"diag: remove buf entry %pK for failing flush to sink\n",
-				buf);
+				DIAG_LOG(DIAG_DEBUG_BRIDGE,
+					"diag: remove buf entry %pK for failed flush to sink\n", buf);				
 				mhi_buf_tbl_remove(mhi_info, TYPE_MHI_READ_CH,
 					buf, len);
 				break;
 			}
 		} else {
-			DIAG_LOG(DIAG_DEBUG_MHI,
-			"diag: remove buf entry %pK if channel is closed\n",
-				buf);
+			DIAG_LOG(DIAG_DEBUG_BRIDGE,
+				"diag: remove buf entry %pK if channel is closed\n", buf);
 			mhi_buf_tbl_remove(mhi_info, TYPE_MHI_READ_CH, buf,
 					   len);
 			break;
@@ -438,7 +435,7 @@ static void mhi_read_work_fn(struct work_struct *work)
 			spin_unlock_irqrestore(&read_ch->lock, flags);
 			break;
 		}
-		DIAG_LOG(DIAG_DEBUG_MHI,
+		DIAG_LOG(DIAG_DEBUG_BRIDGE,
 			 "Allocated buffer %pK, ch: %s\n", buf, mhi_info->name);
 
 		err = mhi_buf_tbl_add(mhi_info, TYPE_MHI_READ_CH, buf,
@@ -465,8 +462,7 @@ static void mhi_read_work_fn(struct work_struct *work)
 
 	return;
 fail:
-	DIAG_LOG(DIAG_DEBUG_MHI,
-		"diag: remove buf entry %pK for error\n", buf);
+	DIAG_LOG(DIAG_DEBUG_BRIDGE, "diag: remove buf entry %pK for error\n", buf);
 	mhi_buf_tbl_remove(mhi_info, TYPE_MHI_READ_CH, buf, DIAG_MDM_BUF_SIZE);
 	queue_work(mhi_info->mhi_wq, &mhi_info->read_work);
 }
@@ -524,9 +520,8 @@ static int mhi_write(int id, unsigned char *buf, int len, int ctxt)
 				len, mhi_flags);
 	spin_unlock_irqrestore(&ch->lock, flags);
 	if (err) {
-		DIAG_LOG(DIAG_DEBUG_MHI,
-			"Cannot write to MHI channel %s, len %d, err: %d\n",
-			  diag_mhi[id].name, len, err);
+		DIAG_LOG(DIAG_DEBUG_BRIDGE, "diag: cannot write to MHI channel %pK, len %d, err: %d\n",
+				   diag_mhi[id].name, len, err);
 		mhi_buf_tbl_remove(&diag_mhi[id], TYPE_MHI_WRITE_CH, buf, len);
 		goto fail;
 	}
@@ -547,9 +542,8 @@ static int mhi_fwd_complete(int id, unsigned char *buf, int len, int ctxt)
 	if (!buf)
 		return -EINVAL;
 
-	DIAG_LOG(DIAG_DEBUG_MHI,
-		"Remove buffer from mhi read table after write completion %pK len:%d\n",
-		buf, len);
+	DIAG_LOG(DIAG_DEBUG_BRIDGE,
+	"Remove from mhi read table after write completion %pK len:%d\n", buf, len);
 	mhi_buf_tbl_remove(&diag_mhi[id], TYPE_MHI_READ_CH, buf, len);
 	queue_work(diag_mhi[id].mhi_wq, &(diag_mhi[id].read_work));
 	return 0;
@@ -604,9 +598,8 @@ static void diag_mhi_read_cb(struct mhi_device *mhi_dev,
 		list_for_each_entry_safe(item, temp,
 				&mhi_info->read_ch.buf_tbl, link) {
 			if (item->buf == buf) {
-				DIAG_LOG(DIAG_DEBUG_MHI,
-				"Callback received on buffer:%pK from mhi\n",
-					buf);
+				DIAG_LOG(DIAG_DEBUG_BRIDGE,
+					"Callback received on buffer:%pK from mhi\n", buf);
 				tp->buf = buf;
 				tp->len = result->bytes_xferd;
 				list_add_tail(&tp->link,
@@ -620,9 +613,8 @@ static void diag_mhi_read_cb(struct mhi_device *mhi_dev,
 			queue_work(mhi_info->mhi_wq,
 			&(mhi_info->read_done_work));
 	} else {
-		DIAG_LOG(DIAG_DEBUG_MHI,
-		"Removing buf entry from read table if ch is not open %pK\n",
-		buf);
+		DIAG_LOG(DIAG_DEBUG_BRIDGE,
+		"Removing buf entry from read table if ch is not open %pK\n", buf);
 		mhi_buf_tbl_remove(mhi_info, TYPE_MHI_READ_CH, buf,
 					result->bytes_xferd);
 	}

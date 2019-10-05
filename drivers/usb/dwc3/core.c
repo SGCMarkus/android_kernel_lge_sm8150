@@ -257,6 +257,15 @@ done:
 	 * we must wait at least 50ms before accessing the PHY domain
 	 * (synchronization delay). DWC_usb31 programming guide section 1.3.2.
 	 */
+#ifdef CONFIG_LGE_USB
+	/*
+	 * Do not delay in usb compliance mode. Otherwise, it may fail at "TD
+	 * 4.7.5 Try. SNK DRP Connect Sink Test" of "USB-C Functional Tests".
+	 */
+	if (!(dwc->usb_compliance_mode &&
+	      *dwc->usb_compliance_mode &&
+	      (dwc->usb2_phy->flags & PHY_HOST_MODE)))
+#endif
 	if (dwc3_is_usb31(dwc))
 		msleep(50);
 
@@ -339,10 +348,8 @@ static void dwc3_free_event_buffers(struct dwc3 *dwc)
 	struct dwc3_event_buffer	*evt;
 
 	evt = dwc->ev_buf;
-	if (evt) {
+	if (evt)
 		dwc3_free_one_event_buffer(dwc, evt);
-		dwc->ev_buf = NULL;
-	}
 
 	/* free GSI related event buffers */
 	dwc3_notify_event(dwc, DWC3_GSI_EVT_BUF_FREE, 0);
@@ -974,6 +981,7 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 	if (node) {
 		dwc->usb2_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 0);
 		dwc->usb3_phy = devm_usb_get_phy_by_phandle(dev, "usb-phy", 1);
+		dwc->usbpd = devm_usbpd_get_by_phandle(dev, "usbpd");
 	} else {
 		dwc->usb2_phy = devm_usb_get_phy(dev, USB_PHY_TYPE_USB2);
 		dwc->usb3_phy = devm_usb_get_phy(dev, USB_PHY_TYPE_USB3);
@@ -1028,6 +1036,20 @@ static int dwc3_core_get_phy(struct dwc3 *dwc)
 			return ret;
 		}
 	}
+
+#ifdef CONFIG_LGE_USB
+	if (IS_ERR(dwc->usbpd)) {
+		ret = PTR_ERR(dwc->usbpd);
+		if (ret == -ENXIO || ret == -ENODEV) {
+			dwc->usbpd = NULL;
+		} else if (ret == -EPROBE_DEFER) {
+			return ret;
+		} else {
+			dev_err(dev, "no usbpd configured\n");
+			return ret;
+		}
+	}
+#endif
 
 	return 0;
 }

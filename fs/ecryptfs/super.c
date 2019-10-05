@@ -150,6 +150,10 @@ static int ecryptfs_show_options(struct seq_file *m, struct dentry *root)
 	struct super_block *sb = root->d_sb;
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat =
 		&ecryptfs_superblock_to_private(sb)->mount_crypt_stat;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_sd_crypt_stat *mount_sd_crypt_stat =
+		&ecryptfs_superblock_to_private(sb)->mount_sd_crypt_stat;
+#endif
 	struct ecryptfs_global_auth_tok *walker;
 
 	mutex_lock(&mount_crypt_stat->global_auth_tok_list_mutex);
@@ -179,7 +183,12 @@ static int ecryptfs_show_options(struct seq_file *m, struct dentry *root)
 		seq_printf(m, ",ecryptfs_unlink_sigs");
 	if (mount_crypt_stat->flags & ECRYPTFS_GLOBAL_MOUNT_AUTH_TOK_ONLY)
 		seq_printf(m, ",ecryptfs_mount_auth_tok_only");
-
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	if (mount_sd_crypt_stat->flags & ECRYPTFS_DECRYPTION_ONLY)
+		seq_printf(m, ",decryption_only");
+	if (mount_sd_crypt_stat->flags & ECRYPTFS_MEDIA_EXCEPTION)
+		seq_printf(m, ",media_exception");
+#endif
 	return 0;
 }
 

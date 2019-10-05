@@ -58,18 +58,22 @@
 	parser->get_io_buf(parser, #x); \
 }
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
+extern bool is_dd_connected(void);
+#endif
+
 static u8 const vm_pre_emphasis[4][4] = {
-	{0x00, 0x0B, 0x14, 0xFF},       /* pe0, 0 db */
-	{0x00, 0x0B, 0x12, 0xFF},       /* pe1, 3.5 db */
-	{0x00, 0x0B, 0xFF, 0xFF},       /* pe2, 6.0 db */
+	{0x00, 0x0B, 0x12, 0xFF},       /* pe0, 0 db */
+	{0x00, 0x0A, 0x12, 0xFF},       /* pe1, 3.5 db */
+	{0x00, 0x0C, 0xFF, 0xFF},       /* pe2, 6.0 db */
 	{0xFF, 0xFF, 0xFF, 0xFF}        /* pe3, 9.5 db */
 };
 
 /* voltage swing, 0.2v and 1.0v are not support */
 static u8 const vm_voltage_swing[4][4] = {
-	{0x07, 0x0F, 0x16, 0xFF}, /* sw0, 0.4v  */
-	{0x11, 0x1E, 0x1F, 0xFF}, /* sw1, 0.6 v */
-	{0x19, 0x1F, 0xFF, 0xFF}, /* sw1, 0.8 v */
+	{0x07, 0x0F, 0x14, 0xFF}, /* sw0, 0.4v  */
+	{0x11, 0x1D, 0x1F, 0xFF}, /* sw1, 0.6 v */
+	{0x18, 0x1F, 0xFF, 0xFF}, /* sw1, 0.8 v */
 	{0xFF, 0xFF, 0xFF, 0xFF}  /* sw1, 1.2 v, optional */
 };
 
@@ -265,6 +269,23 @@ static void dp_catalog_aux_enable(struct dp_catalog_aux *aux, bool enable)
 	}
 }
 
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+static void dp_catalog_aux_cfg_change(struct dp_catalog_aux *aux,
+		struct dp_aux_cfg *cfg, enum dp_phy_aux_config_type type, u32 index)
+{
+	struct dp_catalog_private *catalog;
+	struct dp_io_data *io_data;
+
+	catalog = dp_catalog_get_priv(aux);
+
+	io_data = catalog->io.dp_phy;
+
+	pr_info("Force set aux cfg#%d index to %d(0x%08x)\n", type, index, cfg[type].lut[index]);
+	dp_write(catalog->exe_mode, io_data, cfg[type].offset,
+			cfg[type].lut[index]);
+}
+#endif
+
 static void dp_catalog_aux_update_cfg(struct dp_catalog_aux *aux,
 		struct dp_aux_cfg *cfg, enum dp_phy_aux_config_type type)
 {
@@ -283,7 +304,7 @@ static void dp_catalog_aux_update_cfg(struct dp_catalog_aux *aux,
 
 	current_index = cfg[type].current_index;
 	new_index = (current_index + 1) % cfg[type].cfg_cnt;
-	pr_debug("Updating %s from 0x%08x to 0x%08x\n",
+	pr_err("Updating %s from 0x%08x to 0x%08x\n",
 		dp_phy_aux_config_type_to_string(type),
 	cfg[type].lut[current_index], cfg[type].lut[new_index]);
 
@@ -964,10 +985,12 @@ static void dp_catalog_panel_config_misc(struct dp_catalog_panel *panel)
 }
 
 static void dp_catalog_panel_config_msa(struct dp_catalog_panel *panel,
-					u32 rate, u32 stream_rate_khz)
+					u32 rate, u32 stream_rate_khz,
+					bool fixed_nvid)
 {
 	u32 pixel_m, pixel_n;
 	u32 mvid, nvid;
+	u64 mvid_calc;
 	u32 const nvid_fixed = 0x8000;
 	u32 const link_rate_hbr2 = 540000;
 	u32 const link_rate_hbr3 = 810000;
@@ -987,38 +1010,56 @@ static void dp_catalog_panel_config_msa(struct dp_catalog_panel *panel,
 	}
 
 	catalog = dp_catalog_get_priv(panel);
-	io_data = catalog->io.dp_mmss_cc;
+	if (fixed_nvid) {
+		pr_debug("use fixed NVID=0x%x\n", nvid_fixed);
+		nvid = nvid_fixed;
 
-	if (panel->stream_id == DP_STREAM_1)
-		strm_reg_off = MMSS_DP_PIXEL1_M - MMSS_DP_PIXEL_M;
+		pr_debug("link rate=%dkbps, stream_rate_khz=%uKhz",
+			rate, stream_rate_khz);
 
-	pixel_m = dp_read(catalog->exe_mode, io_data,
-			MMSS_DP_PIXEL_M + strm_reg_off);
-	pixel_n = dp_read(catalog->exe_mode, io_data,
-			MMSS_DP_PIXEL_N + strm_reg_off);
-	pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
+		/*
+		 * For intermediate results, use 64 bit arithmetic to avoid
+		 * loss of precision.
+		 */
+		mvid_calc = (u64) stream_rate_khz * nvid;
+		mvid_calc = div_u64(mvid_calc, rate);
 
-	mvid = (pixel_m & 0xFFFF) * 5;
-	nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
+		/*
+		 * truncate back to 32 bits as this final divided value will
+		 * always be within the range of a 32 bit unsigned int.
+		 */
+		mvid = (u32) mvid_calc;
 
-	if (nvid < nvid_fixed) {
-		u32 temp;
+		if (panel->widebus_en) {
+			mvid <<= 1;
+			nvid <<= 1;
+		}
+	} else {
+		io_data = catalog->io.dp_mmss_cc;
 
-		temp = (nvid_fixed / nvid) * nvid;
-		mvid = (nvid_fixed / nvid) * mvid;
-		nvid = temp;
+		if (panel->stream_id == DP_STREAM_1)
+			strm_reg_off = MMSS_DP_PIXEL1_M - MMSS_DP_PIXEL_M;
+
+		pixel_m = dp_read(catalog->exe_mode, io_data,
+				MMSS_DP_PIXEL_M + strm_reg_off);
+		pixel_n = dp_read(catalog->exe_mode, io_data,
+				MMSS_DP_PIXEL_N + strm_reg_off);
+		pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
+
+		mvid = (pixel_m & 0xFFFF) * 5;
+		nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
+
+		pr_debug("rate = %d\n", rate);
+
+		if (panel->widebus_en)
+			mvid <<= 1;
+
+		if (link_rate_hbr2 == rate)
+			nvid *= 2;
+
+		if (link_rate_hbr3 == rate)
+			nvid *= 3;
 	}
-
-	pr_debug("rate = %d\n", rate);
-
-	if (panel->widebus_en)
-		mvid <<= 1;
-
-	if (link_rate_hbr2 == rate)
-		nvid *= 2;
-
-	if (link_rate_hbr3 == rate)
-		nvid *= 3;
 
 	io_data = catalog->io.dp_link;
 
@@ -1068,6 +1109,10 @@ static void dp_catalog_ctrl_set_pattern(struct dp_catalog_ctrl *ctrl,
 		pr_err("set link_train=%d failed\n", pattern);
 }
 
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+extern void is_dd_usb_restart(void);
+#endif
+
 static void dp_catalog_ctrl_usb_reset(struct dp_catalog_ctrl *ctrl, bool flip)
 {
 	struct dp_catalog_private *catalog;
@@ -1077,6 +1122,11 @@ static void dp_catalog_ctrl_usb_reset(struct dp_catalog_ctrl *ctrl, bool flip)
 		pr_err("invalid input\n");
 		return;
 	}
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	pr_info("USB_DD is_dd_usb_restart %s: flip=%d\n", __func__, flip);
+	is_dd_usb_restart();
+#endif
 
 	catalog = dp_catalog_get_priv(ctrl);
 
@@ -2480,6 +2530,9 @@ struct dp_catalog *dp_catalog_get(struct device *dev, struct dp_parser *parser)
 		.setup         = dp_catalog_aux_setup,
 		.get_irq       = dp_catalog_aux_get_irq,
 		.clear_hw_interrupts = dp_catalog_aux_clear_hw_interrupts,
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+		.change_aux_cfg = dp_catalog_aux_cfg_change,
+#endif
 	};
 	struct dp_catalog_ctrl ctrl = {
 		.state_ctrl     = dp_catalog_ctrl_state_ctrl,
@@ -2505,6 +2558,7 @@ struct dp_catalog *dp_catalog_get(struct device *dev, struct dp_parser *parser)
 		.channel_alloc = dp_catalog_ctrl_channel_alloc,
 		.update_rg = dp_catalog_ctrl_update_rg,
 		.channel_dealloc = dp_catalog_ctrl_channel_dealloc,
+		.mainlink_levels = dp_catalog_ctrl_mainlink_levels,
 		.fec_config = dp_catalog_ctrl_fec_config,
 		.mainlink_levels = dp_catalog_ctrl_mainlink_levels,
 	};

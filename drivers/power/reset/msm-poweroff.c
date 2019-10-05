@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,6 +35,10 @@
 #include <soc/qcom/watchdog.h>
 #include <soc/qcom/minidump.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
+
 #define EMERGENCY_DLOAD_MAGIC1    0x322A4F99
 #define EMERGENCY_DLOAD_MAGIC2    0xC67E4350
 #define EMERGENCY_DLOAD_MAGIC3    0x77777777
@@ -63,7 +67,13 @@ static void scm_disable_sdi(void);
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
+#ifdef CONFIG_LGE_HANDLE_PANIC
+/* dload flag changed value once by bootcmd param. */
+static int download_mode = 0;
+#else
 static int download_mode = 1;
+#endif
+
 static struct kobject dload_kobj;
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
@@ -75,15 +85,39 @@ static struct kobject dload_kobj;
 
 static int in_panic;
 static int dload_type = SCM_DLOAD_FULLDUMP;
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static void *dload_mode_addr;
+#endif
 static bool dload_mode_enabled;
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static void *emergency_dload_mode_addr;
+#endif
 #ifdef CONFIG_RANDOMIZE_BASE
 static void *kaslr_imem_addr;
 #endif
 static bool scm_dload_supported;
 
 static bool force_warm_reboot;
+
+#ifdef CONFIG_LGE_USB_GADGET
+/* dload specific suppot */
+#define PID_MAGIC_ID		0x71432909
+#define SERIAL_NUM_MAGIC_ID	0x61945374
+#define SERIAL_NUMBER_LENGTH	128
+
+struct magic_num_struct {
+	uint32_t pid;
+	uint32_t serial_num;
+};
+
+struct dload_struct {
+	uint32_t pid;
+	char serial_number[SERIAL_NUMBER_LENGTH];
+	struct magic_num_struct magic_struct;
+};
+
+static struct dload_struct __iomem *diag_dload;
+#endif
 
 static int dload_set(const char *val, const struct kernel_param *kp);
 /* interface for exporting attributes */
@@ -137,6 +171,7 @@ static void set_dload_mode(int on)
 {
 	int ret;
 
+#ifndef CONFIG_LGE_HANDLE_PANIC
 	if (dload_mode_addr) {
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
@@ -144,7 +179,7 @@ static void set_dload_mode(int on)
 		/* Make sure the download cookie is updated */
 		mb();
 	}
-
+#endif
 	ret = scm_set_dload_mode(on ? dload_type : 0, 0);
 	if (ret)
 		pr_err("Failed to set secure DLOAD mode: %d\n", ret);
@@ -152,6 +187,7 @@ static void set_dload_mode(int on)
 	dload_mode_enabled = on;
 }
 
+#ifndef CONFIG_LGE_HANDLE_PANIC
 static bool get_dload_mode(void)
 {
 	return dload_mode_enabled;
@@ -183,17 +219,13 @@ static void enable_emergency_dload_mode(void)
 	if (ret)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
+#endif
 
 static int dload_set(const char *val, const struct kernel_param *kp)
 {
 	int ret;
 
 	int old_val = download_mode;
-
-	if (!download_mode) {
-		pr_err("Error: SDI dynamic enablement is not supported\n");
-		return -EINVAL;
-	}
 
 	ret = param_set_int(val, kp);
 
@@ -208,11 +240,28 @@ static int dload_set(const char *val, const struct kernel_param *kp)
 
 	set_dload_mode(download_mode);
 
-	if (!download_mode)
-		scm_disable_sdi();
-
 	return 0;
 }
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+int lge_get_download_mode()
+{
+	return download_mode;
+}
+EXPORT_SYMBOL(lge_get_download_mode);
+
+int lge_set_download_mode(int val)
+{
+	if(val >> 1)
+		return -EINVAL;
+
+	download_mode = val;
+	set_dload_mode(download_mode);
+	return 0;
+}
+EXPORT_SYMBOL(lge_set_download_mode);
+#endif
+
 #else
 static void set_dload_mode(int on)
 {
@@ -275,6 +324,11 @@ static void halt_spmi_pmic_arbiter(void)
 static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
+#ifdef CONFIG_LGE_PSTORE_BACKUP
+	pr_notice("reset cmd : %s\n", cmd);
+	need_warm_reset = true;
+#endif
+
 #ifdef CONFIG_QCOM_DLOAD_MODE
 	/* Write download mode flags if we're panic'ing
 	 * Write download mode flags if restart_mode says so
@@ -285,6 +339,11 @@ static void msm_restart_prepare(const char *cmd)
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
 
+#ifdef CONFIG_MACH_LGE
+	/* set warm reset only when panic in progress */
+	if (in_panic)
+		need_warm_reset = true;
+#else
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
 		if (get_dload_mode() ||
@@ -295,15 +354,22 @@ static void msm_restart_prepare(const char *cmd)
 		need_warm_reset = (get_dload_mode() ||
 				(cmd != NULL && cmd[0] != '\0'));
 	}
+#endif
 
 	if (force_warm_reboot)
 		pr_info("Forcing a warm reset of the system\n");
 
+#ifndef CONFIG_LGE_PSTORE_BACKUP
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (force_warm_reboot || need_warm_reset)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+#endif
+
+	/*  default normal and re-write in each case again
+	 *  this is for removing the human error */
+	__raw_writel(0x77665501, restart_reason);
 
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
@@ -330,6 +396,24 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_KEYS_CLEAR);
 			__raw_writel(0x7766550a, restart_reason);
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_DIMMING_BOOT_SUPPORT)
+		} else if (!strncmp(cmd, "FOTA LCD off", 12)) {
+				qpnp_pon_set_restart_reason(
+								PON_RESTART_REASON_FOTA_LCD_OFF);
+				__raw_writel(0x77665560, restart_reason);
+		} else if (!strncmp(cmd, "FOTA OUT LCD off", 16)) {
+				qpnp_pon_set_restart_reason(
+								PON_RESTART_REASON_FOTA_OUT_LCD_OFF);
+				__raw_writel(0x77665561, restart_reason);
+		} else if (!strncmp(cmd, "LCD off", 7)) {
+				qpnp_pon_set_restart_reason(
+								PON_RESTART_REASON_LCD_OFF);
+				__raw_writel(0x77665562, restart_reason);
+#endif
+		} else if (!strncmp(cmd, "opid mismatched", 15)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_OPID_MISMATCHED);
+			__raw_writel(0x77665563, restart_reason);
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			int ret;
@@ -338,12 +422,90 @@ static void msm_restart_prepare(const char *cmd)
 			if (!ret)
 				__raw_writel(0x6f656d00 | (code & 0xff),
 					     restart_reason);
+#ifdef CONFIG_LGE_PM
+			if (!ret && code == 0x11)
+				qpnp_pon_set_restart_reason(
+					PON_RESTART_REASON_SHIP_MODE);
+#endif
+#ifndef CONFIG_LGE_HANDLE_PANIC
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+#endif
+		} else if (!strncmp(cmd, "", 1)) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_NORMAL);
+			__raw_writel(0x77665501, restart_reason);
+
 		} else {
+			qpnp_pon_set_restart_reason(
+					PON_RESTART_REASON_NORMAL);
 			__raw_writel(0x77665501, restart_reason);
 		}
 	}
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	else {
+		qpnp_pon_set_restart_reason(
+			PON_RESTART_REASON_NORMAL);
+		__raw_writel(0x77665501, restart_reason);
+	}
+#endif
+
+#ifdef CONFIG_LGE_PSTORE_BACKUP
+	/* Hard reset the PMIC unless memory contents must be maintained. */
+	if (force_warm_reboot || need_warm_reset)
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+	else
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+#endif
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	if (restart_mode == RESTART_DLOAD) {
+		set_dload_mode(0);
+
+#ifdef CONFIG_LGE_USB_GADGET
+	if (diag_dload &&
+		diag_dload->magic_struct.pid == PID_MAGIC_ID) {
+		switch (diag_dload->pid) {
+		case 0x633A: // common
+		case 0x631B: // common_fusion_chip (temporary)
+		case 0x634A: // common_fusion_chip
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_BOOT);
+			__raw_writel(0x77665564, restart_reason);
+			break;
+		case 0x633F: // common_fusion_chip
+		case 0x633E: // common
+		case 0x62CE: // vzw
+		case 0x62CF: // vzw_fusion_chip
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_MTP);
+			__raw_writel(0x77665565, restart_reason);
+			break;
+		case 0x6343: // common_fusion_chip
+		case 0x6344: // common
+		case 0x62C4: // vzw
+		case 0x62C3: // vzw_fusion_chip
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_TETHER);
+			__raw_writel(0x77665566, restart_reason);
+			break;
+		case 0x6000: // factory
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_FACTORY);
+			__raw_writel(0x77665567, restart_reason);
+			break;
+		default:
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_LAF_DLOAD_MODE);
+			__raw_writel(0x77665568, restart_reason);
+			break;
+		}
+	}
+#endif
+	}
+
+	if (in_panic)
+		lge_set_panic_reason();
+#endif
 
 	flush_cache_all();
 
@@ -380,7 +542,13 @@ static void deassert_ps_hold(void)
 
 static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	struct task_struct *task = current;
+	pr_notice("Going down for restart now (pid: %d, comm: %s)\n",
+			task->pid, task->comm);
+#else
 	pr_notice("Going down for restart now\n");
+#endif
 
 	msm_restart_prepare(cmd);
 
@@ -403,8 +571,13 @@ static void do_msm_restart(enum reboot_mode reboot_mode, const char *cmd)
 
 static void do_msm_poweroff(void)
 {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	struct task_struct *task = current;
+	pr_notice("Powering off the SoC (pid: %d, comm: %s)\n",
+			task->pid, task->comm);
+#else
 	pr_notice("Powering off the SoC\n");
-
+#endif
 	set_dload_mode(0);
 	scm_disable_sdi();
 	qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
@@ -415,6 +588,20 @@ static void do_msm_poweroff(void)
 	msleep(10000);
 	pr_err("Powering off has failed\n");
 }
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+extern int skip_free_rdump;
+static int __init lge_crash_handler(char *status)
+{
+	if (!strcmp(status, "on"))
+	{
+		download_mode = 1;
+		skip_free_rdump = 1;
+	}
+	return 1;
+}
+__setup("lge.crash_handler=", lge_crash_handler);
+#endif
 
 static ssize_t attr_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
@@ -559,6 +746,7 @@ static int msm_restart_probe(struct platform_device *pdev)
 		scm_dload_supported = true;
 
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+#ifndef CONFIG_LGE_HANDLE_PANIC
 	np = of_find_compatible_node(NULL, NULL, DL_MODE_PROP);
 	if (!np) {
 		pr_err("unable to find DT imem DLOAD mode node\n");
@@ -576,6 +764,18 @@ static int msm_restart_probe(struct platform_device *pdev)
 		if (!emergency_dload_mode_addr)
 			pr_err("unable to map imem EDLOAD mode offset\n");
 	}
+#endif
+
+#ifdef CONFIG_LGE_USB_GADGET
+	np = of_find_compatible_node(NULL, NULL, "qcom,msm-imem-diag-dload");
+	if (!np)
+		np = of_find_compatible_node(NULL, NULL, "qcom,android-usb");
+
+	if (!np)
+		pr_warn("diag: failed to find diag_dload imem node\n");
+
+	diag_dload  = np ? of_iomap(np, 0) : NULL;
+#endif
 
 #ifdef CONFIG_RANDOMIZE_BASE
 #define KASLR_OFFSET_BIT_MASK	0x00000000FFFFFFFF
@@ -659,8 +859,12 @@ skip_sysfs_create:
 		scm_deassert_ps_hold_supported = true;
 
 	set_dload_mode(download_mode);
-	if (!download_mode)
+	if (!download_mode) {
 		scm_disable_sdi();
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_panic_handler_fb_cleanup();
+#endif
+	}
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
@@ -668,9 +872,14 @@ skip_sysfs_create:
 	return 0;
 
 err_restart_reason:
+#ifdef CONFIG_LGE_USB_GADGET
+	iounmap(diag_dload);
+#endif
 #ifdef CONFIG_QCOM_DLOAD_MODE
+#ifndef CONFIG_LGE_HANDLE_PANIC
 	iounmap(emergency_dload_mode_addr);
 	iounmap(dload_mode_addr);
+#endif
 #endif
 	return ret;
 }

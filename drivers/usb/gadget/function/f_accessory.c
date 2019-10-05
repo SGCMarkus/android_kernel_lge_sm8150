@@ -659,16 +659,16 @@ static ssize_t acc_write(struct file *fp, const char __user *buf,
 	}
 
 	while (count > 0) {
-		/* get an idle tx request to use */
-		req = 0;
-		ret = wait_event_interruptible(dev->write_wq,
-			((req = req_get(dev, &dev->tx_idle)) || !dev->online));
-		if (!dev->online || dev->disconnected) {
+		if (!dev->online) {
 			pr_debug("acc_write dev->error\n");
 			r = -EIO;
 			break;
 		}
 
+		/* get an idle tx request to use */
+		req = 0;
+		ret = wait_event_interruptible(dev->write_wq,
+			((req = req_get(dev, &dev->tx_idle)) || !dev->online));
 		if (!req) {
 			r = ret;
 			break;
@@ -844,6 +844,12 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			w_value, w_index, w_length);
 */
 
+#ifdef CONFIG_LGE_USB_GADGET
+	if (!dev) {
+		value = -ENODEV;
+		goto err;
+	}
+#endif
 	if (b_requestType == (USB_DIR_OUT | USB_TYPE_VENDOR)) {
 		if (b_request == ACCESSORY_START) {
 			dev->start_requested = 1;
@@ -910,8 +916,10 @@ int acc_ctrlrequest(struct usb_composite_dev *cdev,
 			memset(dev->serial, 0, sizeof(dev->serial));
 			dev->start_requested = 0;
 			dev->audio_mode = 0;
+#ifndef CONFIG_LGE_USB_GADGET
 			strlcpy(dev->manufacturer, "Android", ACC_STRING_SIZE);
 			strlcpy(dev->model, "Android", ACC_STRING_SIZE);
+#endif
 		}
 	}
 

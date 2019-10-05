@@ -324,6 +324,7 @@ static void wda_svc_config(struct work_struct *work)
 
 	if (data->restart_state == 1)
 		return;
+
 	rc = wda_set_powersave_config_req(&data->handle);
 	if (rc < 0) {
 		pr_err("%s Failed to init service, err[%d]\n", __func__, rc);
@@ -332,12 +333,14 @@ static void wda_svc_config(struct work_struct *work)
 
 	if (data->restart_state == 1)
 		return;
+
 	while (!rtnl_trylock()) {
 		if (!data->restart_state)
 			cond_resched();
 		else
 			return;
 	}
+
 	qmi = (struct qmi_info *)rmnet_get_qmi_pt(data->rmnet_port);
 	if (!qmi) {
 		rtnl_unlock();

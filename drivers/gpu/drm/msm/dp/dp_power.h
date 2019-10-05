@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,15 +21,12 @@
 /**
  * sruct dp_power - DisplayPort's power related data
  *
- * @sim_mode: simulation mode enable flag
  * @init: initializes the regulators/core clocks/GPIOs/pinctrl
  * @deinit: turns off the regulators/core clocks/GPIOs/pinctrl
  * @clk_enable: enable/disable the DP clocks
  * @set_pixel_clk_parent: set the parent of DP pixel clock
  */
 struct dp_power {
-	bool sim_mode;
-
 	int (*init)(struct dp_power *power, bool flip);
 	int (*deinit)(struct dp_power *power);
 	int (*clk_enable)(struct dp_power *power, enum dp_pm_type pm_type,
@@ -58,4 +55,11 @@ struct dp_power *dp_power_get(struct dp_parser *parser);
  * @power: pointer to the power module's data
  */
 void dp_power_put(struct dp_power *power);
+
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+extern struct ice40 *global_ice40;
+extern int ice40_master_reg_write(struct ice40 *ice40, uint addr, uint val);
+extern int ice40_master_reg_read(struct ice40 *ice40, uint addr, uint *val);
+extern int ice40_enable(struct ice40 *ice40);
+#endif
 #endif /* _DP_POWER_H_ */

@@ -37,6 +37,10 @@
 
 #include <linux/phy/phy.h>
 
+#ifdef CONFIG_LGE_USB
+#include <linux/usb/usbpd.h>
+#endif
+
 #define DWC3_MSG_MAX	500
 
 /* Global constants */
@@ -855,9 +859,13 @@ struct dwc3_scratchpad_array {
 #define DWC3_GSI_EVT_BUF_ALLOC			10
 #define DWC3_GSI_EVT_BUF_SETUP			11
 #define DWC3_GSI_EVT_BUF_CLEANUP		12
-#define DWC3_GSI_EVT_BUF_CLEAR			13
-#define DWC3_GSI_EVT_BUF_FREE			14
-#define DWC3_CONTROLLER_NOTIFY_CLEAR_DB		15
+#define DWC3_GSI_EVT_BUF_FREE			13
+#define DWC3_CONTROLLER_NOTIFY_CLEAR_DB		14
+
+#ifdef CONFIG_LGE_USB
+#define DWC3_CONTROLLER_WAKEUP_EVENT		15
+#define DWC3_CONTROLLER_SUSPEND_EVENT		16
+#endif
 
 #define MAX_INTR_STATS				10
 
@@ -1024,6 +1032,11 @@ struct dwc3 {
 
 	struct phy		*usb2_generic_phy;
 	struct phy		*usb3_generic_phy;
+
+#ifdef CONFIG_LGE_USB
+	struct usbpd		*usbpd;
+	struct usbpd_svid_handler usbpd_svid_handler;
+#endif
 
 	bool			phys_ready;
 
@@ -1204,6 +1217,10 @@ struct dwc3 {
 	 * connected devices on PM resume.
 	 */
 	bool			host_poweroff_in_pm_suspend;
+
+#ifdef CONFIG_LGE_USB
+	bool			*usb_compliance_mode;
+#endif
 };
 
 #define work_to_dwc(w)		(container_of((w), struct dwc3, drd_work))

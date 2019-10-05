@@ -592,9 +592,6 @@ static void _dp_mst_bridge_pre_enable_part1(struct dp_mst_bridge *dp_bridge)
 
 	/* skip mst specific disable operations during suspend */
 	if (mst->state == PM_SUSPEND) {
-		dp_display->wakeup_phy_layer(dp_display, true);
-		drm_dp_send_power_updown_phy(&mst->mst_mgr, port, true);
-		dp_display->wakeup_phy_layer(dp_display, false);
 		_dp_mst_update_single_timeslot(mst, dp_bridge);
 		return;
 	}
@@ -678,12 +675,8 @@ static void _dp_mst_bridge_pre_disable_part2(struct dp_mst_bridge *dp_bridge)
 	DP_MST_DEBUG("enter\n");
 
 	/* skip mst specific disable operations during suspend */
-	if (mst->state == PM_SUSPEND) {
-		dp_display->wakeup_phy_layer(dp_display, true);
-		drm_dp_send_power_updown_phy(&mst->mst_mgr, port, false);
-		dp_display->wakeup_phy_layer(dp_display, false);
+	if (mst->state == PM_SUSPEND)
 		return;
-	}
 
 	mst->mst_fw_cbs->check_act_status(&mst->mst_mgr);
 
@@ -1496,6 +1489,10 @@ static void dp_mst_display_hpd(void *dp_display, bool hpd_status,
 	int rc;
 	struct dp_display *dp = dp_display;
 	struct dp_mst_private *mst = dp->dp_mst_prv_info;
+
+	mutex_lock(&mst->mst_lock);
+	mst->mst_session_state = hpd_status;
+	mutex_unlock(&mst->mst_lock);
 
 	mutex_lock(&mst->mst_lock);
 	mst->mst_session_state = hpd_status;

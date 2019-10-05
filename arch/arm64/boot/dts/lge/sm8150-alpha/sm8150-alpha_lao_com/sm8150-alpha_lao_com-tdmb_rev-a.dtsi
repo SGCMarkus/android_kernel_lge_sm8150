@@ -1,0 +1,125 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&pm8150_l16 {
+	regulator-min-microvolt = <2704000>;
+	regulator-max-microvolt = <2704000>;
+	qcom,init-voltage = <2704000>;
+	status = "ok";
+};
+
+&soc {
+	/delete-node/ wil6210;
+};
+
+&qupv3_se8_spi { /* [Modified] QUP_BASE address for BLSP# QUP# (ref. AP datasheet, This model use BLSP-1 QUP7) */
+	/* [Modified] Ref. kernel/msm-4.14/arch/arm64/boot/dts/qcom/sm8150-qupv3.dtsi */
+
+	pinctrl-names = "default", "sleep";
+	pinctrl-0 = <&spi_tdmb_active>;
+	pinctrl-1 = <&spi_tdmb_suspend>;
+
+	status = "ok";
+
+	tdmb: tdmb@0 {
+		compatible = "lge,tdmb"; // [Fixed] Should be "lge,tdmb".
+		reg = <0>;
+
+	/* [GPIO Information]
+	*  1) interrupts      (DMB_INT)                       : GPIO #108
+	*  2) en-gpio         (DMB_EN)                        : GPIO #166
+	*  3) ant-sw-gpio  (DMB_ANT_SW)                : GPIO #163
+	*  4) lna-gc-gpio   (DMB_GAIN_CTRL)           : GPIO #11
+	*  5) lna-en-gpio   (DMB_LNA_EN)                 : GPIO #164
+	*  6) ldo-en-gpio   (DMB_LDO_EN)                : NA
+	*/
+
+		/* [Fixed] parents's node name ("tlmm" on sm8150) */
+		interrupt-parent = <&tlmm>;
+
+		/* [Modified] Set DMB_INT GPIO, first # is gpio #, second flag keep it 0. */
+		interrupts = <108 0>;
+
+		/* [Fixed] Specifies maximum SPI clock frequency of DMB chipset(38.4 MHz). (ref. FC8080 datasheet) */
+		spi-max-frequency = <40000000>;
+
+		/* [Fixed] The list of names to assign states, List entry 0,1,2... define the name for integer state ID 0,1,2...
+			- tdmb_pin_active : set to pinctrl-0 list (set to active)
+			- tdmb_pin_sleep : set to pinctrl-1 list (set to sleep) 	*/
+		pinctrl-names = "tdmb_pin_active", "tdmb_pin_sleep";
+
+		/* [Modified] The pin cofig lists can be for control pin.
+			- pinctrl-0 : active state
+			- pinctrl-1 : active sleep(suspend)
+			The pin config lists shall be defined in the "(model)-pinctrl.dtsi" file
+			The control pins lists are interrupt(tdmb_int), enable(tdmb_en),
+				FM/DMB antenna swtiching(tdmb_ant), LNA gain control & enable(tdmb_lna), LDO enable(tdmb_lna_en)
+			Additional items may vary depending on model schematic. */
+		pinctrl-0 = <&tdmb_int_active>, <&tdmb_en_active_rev_a>, <&tdmb_ant_active>, <&tdmb_lna_active>;
+		pinctrl-1 = <&tdmb_int_suspend>, <&tdmb_en_suspend_rev_a>, <&tdmb_ant_suspend>, <&tdmb_lna_suspend>;
+
+		/* [Modified] first is parents's node, second # is gpio #, third flag keep it 0. */
+		en-gpio = <&tlmm 166 0>;
+		lna-gc-gpio = <&tlmm 11 0>;
+		lna-en-gpio = <&tlmm 164 0>;
+		//ldo-en-gpio = <&tlmm ?? 0>;
+
+		/* [Modified] when use DMB_EN & LDO_EN same gpio, change below property to 1 */
+		dmb-en-lna-en-same-gpio = <1>;
+
+
+	/* [ANT Switch Information]
+	*  1) FM/DMB Switch                               : Control
+	*  2) TDMB ANT connected to port1 (High) and FM_ANT connected to port2 (Low), so active mode is high
+	*/
+
+	/* [Modified] when use ant switching, change use-ant-sw to 1, and set ant active mode (high(1) or low(0)), ant-gpio.
+		ant-sw-apio should be dmb_ant's Gpio number */
+		use-ant-sw = <1>;
+		ant-sw-gpio = <&tlmm 163 0>;
+		ant-sw-active-value = <1>;
+
+
+	/* [CLK Information] */
+	/* [Modified] when use pmic clk buffer, change use-xtal to 0 and set xtal-freq(DMB Chipset Core clk), interface-freq(SPI interface clk) inter value in kHz. */
+		use-xtal = <0>;
+		xtal-freq = <38400>;
+		interface-freq = <19200>;
+
+	/* [Modified] when using clock buffer, you should check which clock buffer used for dmb device */
+		clock-names = "tdmb_xo";
+		clocks = <&clock_rpmh RPMH_RF_CLK3>;
+
+
+	/* [Power Supply Description Information]
+	*  1) ANT-SW LDO     (pm8150_l16)                 : V2.7, Not always power, power on/off control need
+	*  2) DMB LDO      (vreg_bob)                      : V1.8, Always power, power on/off control not need
+	*  3) LNA LDO      (pm8150_l16)                   : V2.7, Not always power, power on/off control need
+	*/
+
+	/* [Modified] When use ldo for RFSW, change ctrl-ant-sw-ldo to 1, and ant-sw-supply set the appropriate chipset & power function such as <&pm8953_l10>
+				If no use case, change ctrl-ant-sw-ldo to 0, and ant-sw-supply set such as <&chipset#_l??>*/
+		ctrl-ant-sw-ldo = <0>;
+		//ant-sw-ldo-supply = <&chipset#_l??>;
+
+	/* [Modified] when use ldo for LDO_IN, change ctrl-dmb-ldo to 1, and dmb-ldo-supply set the appropriate chipset & power function such as <&pm8953_l10>
+				If no use case, change ctrl-dmb-ldo to 0, and dmb-ldo-supply set such as <&chipset#_l??>*/
+		ctrl-dmb-ldo = <0>;
+		//dmb-ldo-supply = <&chipset#_l??>
+
+	/* [Modified] when use ldo for LNA(U1800), change ctrl-lna-ldo to 1, and lna-ldo-supply set the appropriate chipset & power function such as <&pm8953_l10>
+				If no use case, change ctrl-lna-ldo to 0, and lna-ldo-supply set such as <&chipset#_l??>*/
+		ctrl-lna-ldo = <1>;
+		lna-ldo-supply = <&pm8150_l16>;
+	};
+};

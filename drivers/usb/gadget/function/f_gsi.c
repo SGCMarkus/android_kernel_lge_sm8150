@@ -511,22 +511,10 @@ static int ipa_connect_channels(struct gsi_data_port *d_port)
 	struct ipa_req_chan_out_params ipa_out_channel_out_params;
 
 	log_event_dbg("%s: USB GSI IN OPS", __func__);
-	ret = usb_gsi_ep_op(d_port->in_ep, &d_port->in_request,
+	usb_gsi_ep_op(d_port->in_ep, &d_port->in_request,
 		GSI_EP_OP_PREPARE_TRBS);
-	if (ret) {
-		log_event_err("%s: GSI_EP_OP_PREPARE_TRBS failed: %d\n",
-				__func__, ret);
-		return ret;
-	}
-
-	ret = usb_gsi_ep_op(d_port->in_ep, &d_port->in_request,
+	usb_gsi_ep_op(d_port->in_ep, &d_port->in_request,
 			GSI_EP_OP_STARTXFER);
-	if (ret) {
-		log_event_err("%s: GSI_EP_OP_STARTXFER failed: %d\n",
-				__func__, ret);
-		return ret;
-	}
-
 	d_port->in_xfer_rsc_index = usb_gsi_ep_op(d_port->in_ep, NULL,
 			GSI_EP_OP_GET_XFER_IDX);
 
@@ -567,22 +555,10 @@ static int ipa_connect_channels(struct gsi_data_port *d_port)
 
 	if (d_port->out_ep) {
 		log_event_dbg("%s: USB GSI OUT OPS", __func__);
-		ret = usb_gsi_ep_op(d_port->out_ep, &d_port->out_request,
+		usb_gsi_ep_op(d_port->out_ep, &d_port->out_request,
 			GSI_EP_OP_PREPARE_TRBS);
-		if (ret) {
-			log_event_err("%s: GSI_EP_OP_PREPARE_TRBS failed: %d\n",
-					__func__, ret);
-			return ret;
-		}
-
-		ret = usb_gsi_ep_op(d_port->out_ep, &d_port->out_request,
+		usb_gsi_ep_op(d_port->out_ep, &d_port->out_request,
 				GSI_EP_OP_STARTXFER);
-		if (ret) {
-			log_event_err("%s: GSI_EP_OP_STARTXFER failed: %d\n",
-					__func__, ret);
-			return ret;
-		}
-
 		d_port->out_xfer_rsc_index =
 			usb_gsi_ep_op(d_port->out_ep,
 				NULL, GSI_EP_OP_GET_XFER_IDX);
@@ -895,12 +871,10 @@ static void ipa_work_handler(struct work_struct *w)
 								__func__);
 				break;
 			}
-
+			ipa_connect_channels(d_port);
 			d_port->sm_state = STATE_CONNECT_IN_PROGRESS;
 			log_event_dbg("%s: ST_INIT_EVT_CONN_IN_PROG",
 					__func__);
-			if (peek_event(d_port) != EVT_DISCONNECTED)
-				ipa_connect_channels(d_port);
 		} else if (event == EVT_HOST_READY) {
 			/*
 			 * When in a composition such as RNDIS + ADB,
@@ -3287,6 +3261,45 @@ static void gsi_free_func(struct usb_function *f)
 	pr_debug("%s\n", __func__);
 }
 
+#ifdef CONFIG_LGE_USB_GADGET
+static int gsi_set_mac_os(struct usb_function *f)
+{
+	struct usb_composite_dev *cdev = f->config->cdev;
+	struct usb_interface_assoc_descriptor *iad_desc;
+	struct usb_interface_descriptor *ctrl_desc;
+
+	iad_desc = (struct usb_interface_assoc_descriptor *)f->fs_descriptors[0];
+	ctrl_desc = (struct usb_interface_descriptor *)f->fs_descriptors[1];
+	iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+		USB_CLASS_WIRELESS_CONTROLLER;
+	iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+	iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+
+	if (f->hs_descriptors && gadget_is_dualspeed(cdev->gadget)) {
+		iad_desc = (struct usb_interface_assoc_descriptor *)f->hs_descriptors[0];
+		ctrl_desc = (struct usb_interface_descriptor *)f->hs_descriptors[1];
+		iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+			USB_CLASS_WIRELESS_CONTROLLER;
+		iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+		iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+	}
+
+	if (f->ss_descriptors && gadget_is_superspeed(cdev->gadget)) {
+		iad_desc = (struct usb_interface_assoc_descriptor *)f->ss_descriptors[0];
+		ctrl_desc = (struct usb_interface_descriptor *)f->ss_descriptors[1];
+		iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+			USB_CLASS_WIRELESS_CONTROLLER;
+		iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+		iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+	}
+
+	DBG(cdev, "MAC OS GSI class/subclass/proto change to %u/%u/%u\n",
+	    USB_CLASS_WIRELESS_CONTROLLER, 0x01, 0x03);
+
+	return 0;
+}
+#endif
+
 static int gsi_bind_config(struct f_gsi *gsi)
 {
 	int status = 0;
@@ -3332,6 +3345,9 @@ static int gsi_bind_config(struct f_gsi *gsi)
 	gsi->function.get_status = gsi_get_status;
 	gsi->function.func_suspend = gsi_func_suspend;
 	gsi->function.resume = gsi_resume;
+#ifdef CONFIG_LGE_USB_GADGET
+	gsi->function.set_mac_os = gsi_set_mac_os;
+#endif
 
 	INIT_WORK(&gsi->d_port.usb_ipa_w, ipa_work_handler);
 

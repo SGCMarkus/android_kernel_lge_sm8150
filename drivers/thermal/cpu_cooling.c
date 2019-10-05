@@ -732,6 +732,12 @@ update_frequency:
 		cpufreq_update_policy(cpu);
 	}
 
+
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("%s: cdev[%s] set frequency=%lu, state=%d\n",
+			__func__, cdev->type, clip_freq, state);
+#endif
+
 	return 0;
 }
 

@@ -92,4 +92,15 @@ int dsi_pwr_get_dt_vreg_data(struct device *dev,
  * return: error code in case of failure or 0 for success.
  */
 int dsi_pwr_enable_regulator(struct dsi_regulator_info *regs, bool enable);
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+/**
+ * dsi_pwr_set_regulator() - enable a set of regulators
+ * @regs:       Pointer to set of regulators to enable or disable.
+ * @mode:		regulators mode.
+ *
+ * return: error code in case of failure or 0 for success.
+ */
+int dsi_pwr_set_regulator(struct dsi_regulator_info *regs, int mode);
+#endif
 #endif /* _DSI_PWR_H_ */

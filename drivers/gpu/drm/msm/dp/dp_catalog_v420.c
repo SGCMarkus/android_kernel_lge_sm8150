@@ -27,16 +27,27 @@
 #define MAX_PRE_EMP_LEVELS 4
 
 static u8 const vm_pre_emphasis[MAX_VOLTAGE_LEVELS][MAX_PRE_EMP_LEVELS] = {
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	{0x0B, 0x0F, 0x14, 0xFF},       /* pe0, 2.1 db */
+	{0x0B, 0x0F, 0x12, 0xFF},       /* pe1, 2.9 db */
+	{0x0B, 0x0F, 0xFF, 0xFF},       /* pe2, 6.0 db */
+#else
 	{0x00, 0x0E, 0x16, 0xFF},       /* pe0, 0 db */
 	{0x00, 0x0E, 0x16, 0xFF},       /* pe1, 3.5 db */
 	{0x00, 0x0E, 0xFF, 0xFF},       /* pe2, 6.0 db */
+#endif
 	{0xFF, 0xFF, 0xFF, 0xFF}        /* pe3, 9.5 db */
 };
 
 /* voltage swing, 0.2v and 1.0v are not support */
 static u8 const vm_voltage_swing[MAX_VOLTAGE_LEVELS][MAX_PRE_EMP_LEVELS] = {
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	{0x08, 0x10, 0x17, 0xFF}, /* sw0, 0.4v  */
+	{0x12, 0x1F, 0x1F, 0xFF}, /* sw1, 0.6 v */
+#else
 	{0x07, 0x0F, 0x16, 0xFF}, /* sw0, 0.4v  */
 	{0x11, 0x1E, 0x1F, 0xFF}, /* sw1, 0.6 v */
+#endif
 	{0x1A, 0x1F, 0xFF, 0xFF}, /* sw1, 0.8 v */
 	{0xFF, 0xFF, 0xFF, 0xFF}  /* sw1, 1.2 v, optional */
 };
@@ -131,10 +142,12 @@ static void dp_catalog_aux_clear_hw_interrupts_v420(struct dp_catalog_aux *aux)
 }
 
 static void dp_catalog_panel_config_msa_v420(struct dp_catalog_panel *panel,
-					u32 rate, u32 stream_rate_khz)
+					u32 rate, u32 stream_rate_khz,
+					bool fixed_nvid)
 {
 	u32 pixel_m, pixel_n;
 	u32 mvid, nvid, reg_off = 0, mvid_off = 0, nvid_off = 0;
+	u64 mvid_calc;
 	u32 const nvid_fixed = 0x8000;
 	u32 const link_rate_hbr2 = 540000;
 	u32 const link_rate_hbr3 = 810000;
@@ -152,38 +165,56 @@ static void dp_catalog_panel_config_msa_v420(struct dp_catalog_panel *panel,
 	}
 
 	catalog = dp_catalog_get_priv_v420(panel);
-	io_data = catalog->io->dp_mmss_cc;
+	if (fixed_nvid) {
+		pr_debug("use fixed NVID=0x%x\n", nvid_fixed);
+		nvid = nvid_fixed;
 
-	if (panel->stream_id == DP_STREAM_1)
-		reg_off = MMSS_DP_PIXEL1_M_V420 - MMSS_DP_PIXEL_M_V420;
+		pr_debug("link rate=%dkbps, stream_rate_khz=%uKhz",
+			rate, stream_rate_khz);
 
-	pixel_m = dp_read(catalog->exe_mode, io_data,
-			MMSS_DP_PIXEL_M_V420 + reg_off);
-	pixel_n = dp_read(catalog->exe_mode, io_data,
-			MMSS_DP_PIXEL_N_V420 + reg_off);
-	pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
+		/*
+		 * For intermediate results, use 64 bit arithmetic to avoid
+		 * loss of precision.
+		 */
+		mvid_calc = (u64) stream_rate_khz * nvid;
+		mvid_calc = div_u64(mvid_calc, rate);
 
-	mvid = (pixel_m & 0xFFFF) * 5;
-	nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
+		/*
+		 * truncate back to 32 bits as this final divided value will
+		 * always be within the range of a 32 bit unsigned int.
+		 */
+		mvid = (u32) mvid_calc;
 
-	if (nvid < nvid_fixed) {
-		u32 temp;
+		if (panel->widebus_en) {
+			mvid <<= 1;
+			nvid <<= 1;
+		}
+	} else {
+		io_data = catalog->io->dp_mmss_cc;
 
-		temp = (nvid_fixed / nvid) * nvid;
-		mvid = (nvid_fixed / nvid) * mvid;
-		nvid = temp;
+		if (panel->stream_id == DP_STREAM_1)
+			reg_off = MMSS_DP_PIXEL1_M_V420 - MMSS_DP_PIXEL_M_V420;
+
+		pixel_m = dp_read(catalog->exe_mode, io_data,
+				MMSS_DP_PIXEL_M_V420 + reg_off);
+		pixel_n = dp_read(catalog->exe_mode, io_data,
+				MMSS_DP_PIXEL_N_V420 + reg_off);
+		pr_debug("pixel_m=0x%x, pixel_n=0x%x\n", pixel_m, pixel_n);
+
+		mvid = (pixel_m & 0xFFFF) * 5;
+		nvid = (0xFFFF & (~pixel_n)) + (pixel_m & 0xFFFF);
+
+		pr_debug("rate = %d\n", rate);
+
+		if (panel->widebus_en)
+			mvid <<= 1;
+
+		if (link_rate_hbr2 == rate)
+			nvid *= 2;
+
+		if (link_rate_hbr3 == rate)
+			nvid *= 3;
 	}
-
-	pr_debug("rate = %d\n", rate);
-
-	if (panel->widebus_en)
-		mvid <<= 1;
-
-	if (link_rate_hbr2 == rate)
-		nvid *= 2;
-
-	if (link_rate_hbr3 == rate)
-		nvid *= 3;
 
 	io_data = catalog->io->dp_link;
 

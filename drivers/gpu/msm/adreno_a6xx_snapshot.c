@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,9 +24,6 @@
 #define A6XX_NUM_AXI_ARB_BLOCKS 2
 #define A6XX_NUM_XIN_AXI_BLOCKS 5
 #define A6XX_NUM_XIN_CORE_BLOCKS 4
-
-/* Snapshot section size of each CP preemption record for A6XX  */
-#define A6XX_SNAPSHOT_CP_CTXRECORD_SIZE_IN_BYTES (64 * 1024)
 
 static const unsigned int a6xx_gras_cluster[] = {
 	0x8000, 0x8006, 0x8010, 0x8092, 0x8094, 0x809D, 0x80A0, 0x80A6,
@@ -57,24 +54,6 @@ static const unsigned int a6xx_fe_cluster[] = {
 
 static const unsigned int a6xx_pc_vs_cluster[] = {
 	0x9100, 0x9108, 0x9300, 0x9306, 0x9980, 0x9981, 0x9B00, 0x9B07,
-};
-
-static const unsigned int a630_rscc_snapshot_registers[] = {
-	0x23400, 0x23434, 0x23436, 0x23436, 0x23480, 0x23484, 0x23489, 0x2348C,
-	0x23491, 0x23494, 0x23499, 0x2349C, 0x234A1, 0x234A4, 0x234A9, 0x234AC,
-	0x23500, 0x23502, 0x23504, 0x23507, 0x23514, 0x23519, 0x23524, 0x2352B,
-	0x23580, 0x23597, 0x23740, 0x23741, 0x23744, 0x23747, 0x2374C, 0x23787,
-	0x237EC, 0x237EF, 0x237F4, 0x2382F, 0x23894, 0x23897, 0x2389C, 0x238D7,
-	0x2393C, 0x2393F, 0x23944, 0x2397F,
-};
-
-static const unsigned int a6xx_rscc_snapshot_registers[] = {
-	0x23400, 0x23434, 0x23436, 0x23436, 0x23440, 0x23440, 0x23480, 0x23484,
-	0x23489, 0x2348C, 0x23491, 0x23494, 0x23499, 0x2349C, 0x234A1, 0x234A4,
-	0x234A9, 0x234AC, 0x23500, 0x23502, 0x23504, 0x23507, 0x23514, 0x23519,
-	0x23524, 0x2352B, 0x23580, 0x23597, 0x23740, 0x23741, 0x23744, 0x23747,
-	0x2374C, 0x23787, 0x237EC, 0x237EF, 0x237F4, 0x2382F, 0x23894, 0x23897,
-	0x2389C, 0x238D7, 0x2393C, 0x2393F, 0x23944, 0x2397F,
 };
 
 static const struct sel_reg {
@@ -1500,32 +1479,6 @@ static void _a6xx_do_crashdump(struct kgsl_device *device)
 	crash_dump_valid = true;
 }
 
-/* Snapshot the preemption related buffers */
-size_t a6xx_snapshot_preemption(struct kgsl_device *device,
-	u8 *buf, size_t remain, void *priv)
-{
-	struct kgsl_memdesc *memdesc = priv;
-	struct kgsl_snapshot_gpu_object_v2 *header =
-		(struct kgsl_snapshot_gpu_object_v2 *)buf;
-	u8 *ptr = buf + sizeof(*header);
-
-	if (remain < (A6XX_SNAPSHOT_CP_CTXRECORD_SIZE_IN_BYTES +
-						sizeof(*header))) {
-		SNAPSHOT_ERR_NOMEM(device, "PREEMPTION RECORD");
-		return 0;
-	}
-
-	header->size = A6XX_SNAPSHOT_CP_CTXRECORD_SIZE_IN_BYTES >> 2;
-	header->gpuaddr = memdesc->gpuaddr;
-	header->ptbase =
-		kgsl_mmu_pagetable_get_ttbr0(device->mmu.defaultpagetable);
-	header->type = SNAPSHOT_GPU_OBJECT_GLOBAL;
-
-	memcpy(ptr, memdesc->hostptr, A6XX_SNAPSHOT_CP_CTXRECORD_SIZE_IN_BYTES);
-
-	return A6XX_SNAPSHOT_CP_CTXRECORD_SIZE_IN_BYTES + sizeof(*header);
-}
-
 /*
  * a6xx_snapshot() - A6XX GPU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -1587,15 +1540,6 @@ void a6xx_snapshot(struct adreno_device *adreno_dev,
 		kgsl_snapshot_add_section(device, KGSL_SNAPSHOT_SECTION_REGS,
 			snapshot, a6xx_snapshot_registers, &a6xx_reg_list[i]);
 	}
-
-	if (adreno_is_a615_family(adreno_dev) || adreno_is_a630(adreno_dev))
-		adreno_snapshot_registers(device, snapshot,
-			a630_rscc_snapshot_registers,
-			ARRAY_SIZE(a630_rscc_snapshot_registers) / 2);
-	else if (adreno_is_a640(adreno_dev) || adreno_is_a680(adreno_dev))
-		adreno_snapshot_registers(device, snapshot,
-			a6xx_rscc_snapshot_registers,
-			ARRAY_SIZE(a6xx_rscc_snapshot_registers) / 2);
 
 	/* CP_SQE indexed registers */
 	kgsl_snapshot_indexed_registers(device, snapshot,

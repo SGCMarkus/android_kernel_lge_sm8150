@@ -1161,7 +1161,7 @@ int of_register_mhi_controller(struct mhi_controller *mhi_cntrl)
 	dev_set_name(&mhi_dev->dev, "%04x_%02u.%02u.%02u", mhi_dev->dev_id,
 		     mhi_dev->domain, mhi_dev->bus, mhi_dev->slot);
 
-	/* init wake source */
+	/* init wake source */ 
 	device_init_wakeup(&mhi_dev->dev, true);
 
 	ret = device_add(&mhi_dev->dev);

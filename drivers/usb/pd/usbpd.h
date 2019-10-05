@@ -77,7 +77,9 @@ int pd_phy_signal(enum pd_sig_type sig);
 int pd_phy_write(u16 hdr, const u8 *data, size_t data_len,
 		enum pd_sop_type sop);
 int pd_phy_update_roles(enum data_role dr, enum power_role pr);
+#ifdef CONFIG_LGE_USB
 int pd_phy_update_frame_filter(u8 frame_filter_val);
+#endif
 void pd_phy_close(void);
 #else
 static inline int pd_phy_open(struct pd_phy_params *params)
@@ -101,10 +103,12 @@ static inline int pd_phy_update_roles(enum data_role dr, enum power_role pr)
 	return -ENODEV;
 }
 
-static inline int pd_phy_update_frame_filter(u8 frame_filter_val)
+#ifdef CONFIG_LGE_USB
+int pd_phy_update_frame_filter(u8 frame_filter_val)
 {
 	return -ENODEV;
 }
+#endif
 
 static inline void pd_phy_close(void)
 {

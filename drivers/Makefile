@@ -188,3 +188,11 @@ obj-$(CONFIG_TEE)		+= tee/
 obj-$(CONFIG_MULTIPLEXER)	+= mux/
 obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 obj-$(CONFIG_ESOC)              += esoc/
+obj-$(CONFIG_TSPDRV)              += tspdrv/
+#TDMB
+obj-$(CONFIG_LGE_BROADCAST_TDMB) += broadcast/
+obj-$(CONFIG_LATTICE_ICE40)              += ice40/
+
+ifeq ($(KR_BUILD), true)
+obj-$(CONFIG_TRUSTONIC_TEE) += gud/
+endif

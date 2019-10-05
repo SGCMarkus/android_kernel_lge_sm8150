@@ -13,6 +13,9 @@
 #include <linux/highmem.h>
 
 extern int isolate_lru_page(struct page *page);
+#ifdef CONFIG_PROCESS_RECLAIM
+extern int isolate_evictable_lru_page(struct page *page);
+#endif
 extern void putback_lru_page(struct page *page);
 extern unsigned long reclaim_pages_from_list(struct list_head *page_list,
 					     struct vm_area_struct *vma);
@@ -304,7 +307,7 @@ static inline int page_referenced(struct page *page, int is_locked,
 	return 0;
 }
 
-#define try_to_unmap(page, refs, vma) false
+#define try_to_unmap(page, refs) SWAP_FAIL
 
 static inline int page_mkclean(struct page *page)
 {

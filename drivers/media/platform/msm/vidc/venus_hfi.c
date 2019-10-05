@@ -3999,17 +3999,14 @@ skip_reset_ahb2axi_bridge:
 	return rc;
 }
 
-static inline void __unprepare_ahb2axi_bridge(struct venus_hfi_device *device,
-						u32 version)
+static inline void __unprepare_ahb2axi_bridge(struct venus_hfi_device *device)
 {
 	u32 axi0_cbcr_status = 0, axi1_cbcr_status = 0;
 
 	if (!device)
 		return;
 
-	/* reset axi0 and axi1 as needed only for specific video hardware */
-	version &= ~GENMASK(15, 0);
-	if (version != (0x5 << 28 | 0x10 << 16))
+	if (!device->hal_data->gcc_reg_base)
 		return;
 
 	if (!(device->intr_status & VIDC_WRAPPER_INTR_STATUS_A2HWD_BMSK))
@@ -4037,6 +4034,7 @@ static inline void __unprepare_ahb2axi_bridge(struct venus_hfi_device *device,
 	__write_gcc_register(device, VIDEO_GCC_AXI0_CBCR, axi0_cbcr_status);
 	__write_gcc_register(device, VIDEO_GCC_AXI1_CBCR, axi1_cbcr_status);
 }
+
 
 static inline int __prepare_enable_clks(struct venus_hfi_device *device)
 {
@@ -4771,19 +4769,15 @@ fail_vote_buses:
 
 static void __venus_power_off(struct venus_hfi_device *device)
 {
-	u32 version;
-
 	if (!device->power_enabled)
 		return;
 
 	if (!(device->intr_status & VIDC_WRAPPER_INTR_STATUS_A2HWD_BMSK))
 		disable_irq_nosync(device->hal_data->irq);
 
-	version = __read_register(device, VIDC_WRAPPER_HW_VERSION);
-
 	__disable_unprepare_clks(device);
 
-	__unprepare_ahb2axi_bridge(device, version);
+	__unprepare_ahb2axi_bridge(device);
 
 	device->intr_status = 0;
 

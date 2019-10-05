@@ -37,7 +37,11 @@
 static DEFINE_MUTEX(pwm_lookup_lock);
 static LIST_HEAD(pwm_lookup_list);
 static DEFINE_MUTEX(pwm_lock);
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+LIST_HEAD(pwm_chips);
+#else
 static LIST_HEAD(pwm_chips);
+#endif
 static DECLARE_BITMAP(allocated_pwms, MAX_PWMS);
 static RADIX_TREE(pwm_tree, GFP_KERNEL);
 
@@ -468,13 +472,25 @@ EXPORT_SYMBOL_GPL(pwm_free);
 int pwm_apply_state(struct pwm_device *pwm, struct pwm_state *state)
 {
 	int err;
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	bool lut_pattern = false;
+#endif
 
 	if (!pwm || !state || !state->period ||
 	    state->duty_cycle > state->period)
 		return -EINVAL;
 
-	if (!memcmp(state, &pwm->state, sizeof(*state)))
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	if (!state->enabled) {
+		if (!memcmp(state, &pwm->state, sizeof(*state))) {
+			return 0;
+		}
+	}
+#else
+	if (!memcmp(state, &pwm->state, sizeof(*state))) {
 		return 0;
+	}
+#endif
 
 	if (pwm->chip->ops->apply) {
 		err = pwm->chip->ops->apply(pwm->chip, pwm, state);
@@ -508,6 +524,35 @@ int pwm_apply_state(struct pwm_device *pwm, struct pwm_state *state)
 			pwm->state.polarity = state->polarity;
 		}
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+		if ((state->output_type == pwm->state.output_type) &&
+				(state->output_type == PWM_OUTPUT_MODULATED))
+			lut_pattern = true;
+
+		if (lut_pattern) {
+			if (!pwm->chip->ops->set_output_type)
+				return -ENOTSUPP;
+
+			err = pwm->chip->ops->set_output_type(pwm->chip, pwm,
+					state->output_type);
+			if (err)
+				return err;
+
+			pwm->state.output_type = state->output_type;
+		} else {
+			if (state->output_type != pwm->state.output_type) {
+				if (!pwm->chip->ops->set_output_type)
+					return -ENOTSUPP;
+
+				err = pwm->chip->ops->set_output_type(pwm->chip, pwm,
+						state->output_type);
+				if (err)
+					return err;
+
+				pwm->state.output_type = state->output_type;
+			}
+		}
+#else
 		if (state->output_type != pwm->state.output_type) {
 			if (!pwm->chip->ops->set_output_type)
 				return -ENOTSUPP;
@@ -519,7 +564,7 @@ int pwm_apply_state(struct pwm_device *pwm, struct pwm_state *state)
 
 			pwm->state.output_type = state->output_type;
 		}
-
+#endif
 		if (state->output_pattern != pwm->state.output_pattern &&
 				state->output_pattern != NULL) {
 			if (!pwm->chip->ops->set_output_pattern)
@@ -533,6 +578,26 @@ int pwm_apply_state(struct pwm_device *pwm, struct pwm_state *state)
 			pwm->state.output_pattern = state->output_pattern;
 		}
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+		if (pwm->chip->ops->config_extend) {
+			err = pwm->chip->ops->config_extend(pwm->chip,
+					pwm, state->duty_cycle,
+					state->period);
+		} else {
+			if (state->period > UINT_MAX)
+				pr_warn("period %llu duty_cycle %llu will be truncated\n",
+						state->period,
+						state->duty_cycle);
+			err = pwm->chip->ops->config(pwm->chip, pwm,
+					state->duty_cycle,
+					state->period);
+		}
+		if (err)
+			return err;
+
+		pwm->state.duty_cycle = state->duty_cycle;
+		pwm->state.period = state->period;
+#else
 		if (state->period != pwm->state.period ||
 		    state->duty_cycle != pwm->state.duty_cycle) {
 			if (pwm->chip->ops->config_extend) {
@@ -554,8 +619,14 @@ int pwm_apply_state(struct pwm_device *pwm, struct pwm_state *state)
 			pwm->state.duty_cycle = state->duty_cycle;
 			pwm->state.period = state->period;
 		}
+#endif
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+		if ((state->output_type != PWM_OUTPUT_MODULATED) &&
+				(state->enabled != pwm->state.enabled)) {
+#else
 		if (state->enabled != pwm->state.enabled) {
+#endif
 			if (state->enabled) {
 				err = pwm->chip->ops->enable(pwm->chip, pwm);
 				if (err)

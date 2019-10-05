@@ -1,0 +1,23 @@
+#ifndef _LGE_BACKLIGHT_DEF_H_
+#define _LGE_BACKLIGHT_DEF_H_
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_USE_FSC)
+#define DEFAULT_LGE_FSC_U3 20000
+#define DEFAULT_LGE_FSC_U2 2500
+#endif
+
+#define DEFAULT_HBM_MODE 0x03;
+
+enum lge_blmap_type {
+	LGE_BLMAP_DEFAULT = 0,
+	LGE_BLMAP_VE,
+	LGE_BLMAP_EX,
+	LGE_BLMAP_BRIGHTER,
+	LGE_BLMAP_HDR,
+	LGE_BLMAP_VR,
+	LGE_BLMAP_TYPE_MAX
+};
+
+char *lge_get_blmapname(enum lge_blmap_type type);
+
+#endif // _LGE_BACKLIGHT_DEF_H_

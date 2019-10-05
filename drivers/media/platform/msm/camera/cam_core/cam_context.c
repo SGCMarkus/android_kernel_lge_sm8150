@@ -47,6 +47,9 @@ int cam_context_shutdown(struct cam_context *ctx)
 	if (ctx->state > CAM_CTX_AVAILABLE && ctx->state < CAM_CTX_STATE_MAX) {
 		cmd.session_handle = ctx->session_hdl;
 		cmd.dev_handle = ctx->dev_hdl;
+		CAM_ERR(CAM_CORE,
+			"enter cam_context_handle_release_dev  for dev_name %s",
+			ctx->dev_name);
 		rc = cam_context_handle_release_dev(ctx, &cmd);
 		if (rc)
 			CAM_ERR(CAM_CORE,
@@ -249,7 +252,7 @@ int cam_context_dump_pf_info(struct cam_context *ctx, unsigned long iova,
 		rc = ctx->state_machine[ctx->state].pagefault_ops(ctx, iova,
 			buf_info);
 	} else {
-		CAM_INFO(CAM_CORE, "No dump ctx in dev %d, state %d",
+		CAM_WARN(CAM_CORE, "No dump ctx in dev %d, state %d",
 			ctx->dev_hdl, ctx->state);
 	}
 	mutex_unlock(&ctx->ctx_mutex);
@@ -528,7 +531,7 @@ int cam_context_init(struct cam_context *ctx,
 	mutex_init(&ctx->sync_mutex);
 	spin_lock_init(&ctx->lock);
 
-	strlcpy(ctx->dev_name, dev_name, CAM_CTX_DEV_NAME_MAX_LENGTH);
+	ctx->dev_name = dev_name;
 	ctx->dev_id = dev_id;
 	ctx->ctx_id = ctx_id;
 	ctx->last_flush_req = 0;

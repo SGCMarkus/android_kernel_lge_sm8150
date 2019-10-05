@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,9 @@
 #include <linux/uaccess.h>
 #include <linux/mhi.h>
 #include "mhi_qcom.h"
+#ifdef CONFIG_LGE_DUAL_QFUSE
+#include "lge_qfuse.h"
+#endif
 
 struct firmware_info {
 	unsigned int dev_id;
@@ -39,6 +42,12 @@ static const struct firmware_info firmware_table[] = {
 	/* default, set to debug.mbn */
 	{.fw_image = "debug.mbn"},
 };
+
+#ifdef CONFIG_LGE_DUAL_QFUSE
+static const struct firmware_info fuse_firmware_table[] = {
+	{.dev_id = 0x305, .fw_image = "sdx50m/sbl_fuse.mbn"},
+};
+#endif
 
 static int debug_mode;
 module_param_named(debug_mode, debug_mode, int, 0644);
@@ -284,8 +293,12 @@ static int mhi_system_resume(struct device *dev)
 	struct mhi_controller *mhi_cntrl = dev_get_drvdata(dev);
 
 	ret = mhi_runtime_resume(dev);
-	if (ret)
+	if (ret) {
 		MHI_ERR("Failed to resume link\n");
+	} else {
+		pm_runtime_set_active(dev);
+		pm_runtime_enable(dev);
+	}
 
 	return ret;
 }
@@ -305,6 +318,9 @@ int mhi_system_suspend(struct device *dev)
 			return ret;
 		}
 	}
+
+	pm_runtime_set_suspended(dev);
+	pm_runtime_disable(dev);
 
 	MHI_LOG("Exit\n");
 	return 0;
@@ -605,7 +621,11 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 		if (!debug_mode && mhi_cntrl->dev_id == firmware_info->dev_id)
 			break;
 	}
-
+#ifdef CONFIG_LGE_DUAL_QFUSE
+	if (check_if_sbl_fuse_is_loaded()) {
+		firmware_info = fuse_firmware_table;
+	}
+#endif
 	mhi_cntrl->fw_image = firmware_info->fw_image;
 	mhi_cntrl->edl_image = firmware_info->edl_image;
 

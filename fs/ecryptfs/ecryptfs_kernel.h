@@ -39,6 +39,9 @@
 #include <linux/nsproxy.h>
 #include <linux/backing-dev.h>
 #include <linux/ecryptfs.h>
+#ifdef CONFIG_SD_ENCRYPTION_MANAGER
+#include "sdcard_encrypt_mgr.h"
+#endif
 
 #define ECRYPTFS_DEFAULT_IV_BYTES 16
 #define ECRYPTFS_DEFAULT_EXTENT_SIZE 4096
@@ -145,6 +148,9 @@ ecryptfs_get_key_payload_data(struct key *key)
 #define ECRYPTFS_DEFAULT_CIPHER "aes"
 #define ECRYPTFS_DEFAULT_KEY_BYTES 16
 #define ECRYPTFS_DEFAULT_HASH "md5"
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+#define ECRYPTFS_SHA256_HASH  "sha256"
+#endif //CONFIG_SD_ENCRYPTION_ADVANCED
 #define ECRYPTFS_TAG_70_DIGEST ECRYPTFS_DEFAULT_HASH
 #define ECRYPTFS_TAG_1_PACKET_TYPE 0x01
 #define ECRYPTFS_TAG_3_PACKET_TYPE 0x8C
@@ -171,6 +177,9 @@ ecryptfs_get_key_payload_data(struct key *key)
 #define ECRYPTFS_FILENAME_MIN_RANDOM_PREPEND_BYTES 16
 #define ECRYPTFS_NON_NULL 0x42 /* A reasonable substitute for NULL */
 #define MD5_DIGEST_SIZE 16
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+#define SHA256_HASH_SIZE 32
+#endif //CONFIG_SD_ENCRYPTION_ADVANCED
 #define ECRYPTFS_TAG_70_DIGEST_SIZE MD5_DIGEST_SIZE
 #define ECRYPTFS_TAG_70_MIN_METADATA_SIZE (1 + ECRYPTFS_MIN_PKT_LEN_SIZE \
 					   + ECRYPTFS_SIG_SIZE + 1 + 1)
@@ -354,11 +363,21 @@ struct ecryptfs_mount_crypt_stat {
 		ECRYPTFS_MAX_CIPHER_NAME_SIZE + 1];
 	char global_default_fnek_sig[ECRYPTFS_SIG_SIZE_HEX + 1];
 };
+#ifdef FEATURE_SDCARD_ENCRYPTION
+struct ecryptfs_mount_sd_crypt_stat {
+#define ECRYPTFS_DECRYPTION_ONLY               0x00000001
+#define ECRYPTFS_MEDIA_EXCEPTION               0x00000002
+	u32 flags;
+};
+#endif
 
 /* superblock private data. */
 struct ecryptfs_sb_info {
 	struct super_block *wsi_sb;
 	struct ecryptfs_mount_crypt_stat mount_crypt_stat;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_sd_crypt_stat mount_sd_crypt_stat;
+#endif
 };
 
 /* file private data. */

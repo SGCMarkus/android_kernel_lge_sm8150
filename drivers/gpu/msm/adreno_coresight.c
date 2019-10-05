@@ -427,8 +427,10 @@ int adreno_coresight_init(struct adreno_device *adreno_dev)
 
 	for_each_child_of_node(node, child) {
 		memset(&desc, 0, sizeof(desc));
+#if defined (CONFIG_CORESIGHT)
 		desc.pdata = of_get_coresight_platform_data(&device->pdev->dev,
 				child);
+#endif
 		if (IS_ERR_OR_NULL(desc.pdata))
 			return (desc.pdata == NULL) ? -ENODEV :
 				PTR_ERR(desc.pdata);

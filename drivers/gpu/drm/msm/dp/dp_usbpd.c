@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,7 +17,6 @@
 #include <linux/slab.h>
 #include <linux/device.h>
 #include <linux/delay.h>
-
 #include "dp_usbpd.h"
 
 /* DP specific VDM commands */
@@ -27,6 +26,23 @@
 /* USBPD-TypeC specific Macros */
 #define VDM_VERSION		0x0
 #define USB_C_DP_SID		0xFF01
+
+#undef pr_debug
+#define pr_debug pr_err
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#include <linux/gpio_keys.h>
+#include <linux/gpio.h>
+#include <asm/atomic.h>
+#include <linux/fpga/ice40-spi.h>
+extern bool is_dd_connected(void);
+extern void hallic_handle_5v_boost_gpios(int state);
+extern struct lge_dp_display *get_lge_dp(void);
+extern void call_disconnect_uevent(void);
+extern void dd_set_skip_uevent(int input);
+extern void dd_set_force_disconnection(bool val);
+extern bool dd_get_force_disconnection(void);
+#endif
 
 enum dp_usbpd_pin_assignment {
 	DP_USBPD_PIN_A,
@@ -247,6 +263,10 @@ static void dp_usbpd_send_event(struct dp_usbpd_private *pd,
 static void dp_usbpd_connect_cb(struct usbpd_svid_handler *hdlr)
 {
 	struct dp_usbpd_private *pd;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	struct lge_dp_display *lge_dp;
+#endif
+
 
 	pd = container_of(hdlr, struct dp_usbpd_private, svid_handler);
 	if (!pd) {
@@ -255,6 +275,43 @@ static void dp_usbpd_connect_cb(struct usbpd_svid_handler *hdlr)
 	}
 
 	pr_debug("\n");
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	if (is_dd_connected()) {
+		int max_disconnect_timeout_retry = 500;
+		int loop = 0;
+		pr_info("dd_connected >>>>> disconnect\n");
+
+		pd->alt_mode = DP_USBPD_ALT_MODE_NONE;
+		pd->dp_usbpd.base.alt_mode_cfg_done = false;
+		dd_set_skip_uevent(0);
+
+		if (pd->dp_cb && pd->dp_cb->disconnect)
+			pd->dp_cb->disconnect(pd->dev);
+
+		hallic_handle_5v_boost_gpios(0);
+
+		if (!dd_get_force_disconnection())
+			dd_set_force_disconnection(true);
+
+		do {
+			usleep_range(2000, 2100);
+			if (++loop > max_disconnect_timeout_retry)
+				break;
+		} while(is_dd_connected());
+
+		pr_info("dd disconnected : %d ms\n", (loop << 2));
+	}
+
+	lge_dp = get_lge_dp();
+	if (atomic_read(&lge_dp->dd_uevent_switch)) {
+		call_disconnect_uevent();
+		msleep(300);
+	}
+
+	ice40_set_lreset(1);
+#endif
+
 	dp_usbpd_send_event(pd, DP_USBPD_EVT_DISCOVER);
 }
 
@@ -274,6 +331,11 @@ static void dp_usbpd_disconnect_cb(struct usbpd_svid_handler *hdlr)
 
 	if (pd->dp_cb && pd->dp_cb->disconnect)
 		pd->dp_cb->disconnect(pd->dev);
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	ice40_set_lreset(0);
+	pr_info("check_lattice gpio pin 74 %d\n", gpio_get_value(74));
+#endif
 }
 
 static int dp_usbpd_validate_callback(u8 cmd,
@@ -319,8 +381,11 @@ end:
 static int dp_usbpd_get_ss_lanes(struct dp_usbpd_private *pd)
 {
 	int rc = 0;
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	int timeout = 10;
+#else
 	int timeout = 250;
-
+#endif
 	/*
 	 * By default, USB reserves two lanes for Super Speed.
 	 * Which means DP has remaining two lanes to operate on.
@@ -415,6 +480,7 @@ static void dp_usbpd_response_cb(struct usbpd_svid_handler *hdlr, u8 cmd,
 		pd->dp_usbpd.base.orientation =
 			usbpd_get_plug_orientation(pd->pd);
 
+
 		rc = dp_usbpd_get_ss_lanes(pd);
 		if (rc) {
 			pr_err("failed to get SuperSpeed lanes\n");
@@ -505,22 +571,6 @@ int dp_usbpd_register(struct dp_hpd *dp_hpd)
 	return rc;
 }
 
-static void dp_usbpd_wakeup_phy(struct dp_hpd *dp_hpd, bool wakeup)
-{
-	struct dp_usbpd *dp_usbpd;
-	struct dp_usbpd_private *usbpd;
-
-	dp_usbpd = container_of(dp_hpd, struct dp_usbpd, base);
-	usbpd = container_of(dp_usbpd, struct dp_usbpd_private, dp_usbpd);
-
-	if (!usbpd->pd) {
-		pr_err("usbpd pointer invalid");
-		return;
-	}
-
-	usbpd_vdm_in_suspend(usbpd->pd, wakeup);
-}
-
 struct dp_hpd *dp_usbpd_get(struct device *dev, struct dp_hpd_cb *cb)
 {
 	int rc = 0;
@@ -559,12 +609,14 @@ struct dp_hpd *dp_usbpd_get(struct device *dev, struct dp_hpd_cb *cb)
 	usbpd->pd = pd;
 	usbpd->svid_handler = svid_handler;
 	usbpd->dp_cb = cb;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	hallic_register_svid_handler(&usbpd->svid_handler);
+#endif
 
 	dp_usbpd = &usbpd->dp_usbpd;
 	dp_usbpd->base.simulate_connect = dp_usbpd_simulate_connect;
 	dp_usbpd->base.simulate_attention = dp_usbpd_simulate_attention;
 	dp_usbpd->base.register_hpd = dp_usbpd_register;
-	dp_usbpd->base.wakeup_phy = dp_usbpd_wakeup_phy;
 
 	return &dp_usbpd->base;
 error:

@@ -88,7 +88,11 @@ static unsigned int drm_timestamp_precision = 20;  /* Default to 20 usecs. */
  */
 unsigned int drm_timestamp_monotonic = 1;
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+static int drm_vblank_offdelay = -1;
+#else
 static int drm_vblank_offdelay = 5000;    /* Default to 5000 msecs. */
+#endif
 
 module_param_named(vblankoffdelay, drm_vblank_offdelay, int, 0600);
 module_param_named(timestamp_precision_usec, drm_timestamp_precision, int, 0600);

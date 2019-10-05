@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,6 +34,10 @@
 #include <soc/qcom/socinfo.h>
 #include <linux/soc/qcom/smem.h>
 #include <soc/qcom/boot_stats.h>
+
+#ifdef CONFIG_MACH_LGE
+#include <soc/qcom/lge/board_lge.h>
+#endif
 
 #define BUILD_ID_LENGTH 32
 #define CHIP_ID_LENGTH 32
@@ -344,9 +348,6 @@ static struct msm_soc_info cpu_of_id[] = {
 	/* sm6150 ID */
 	[355] = {MSM_CPU_SM6150, "SM6150"},
 
-	/* sm6150p ID */
-	[369] = {MSM_CPU_SM6150P, "SM6150P"},
-
 	/* qcs405 ID */
 	[352] = {MSM_CPU_QCS405, "QCS405"},
 
@@ -361,9 +362,6 @@ static struct msm_soc_info cpu_of_id[] = {
 
 	/* sdmmagpie ID */
 	[365] = {MSM_CPU_SDMMAGPIE, "SDMMAGPIE"},
-
-	/* sdmmagpiep ID */
-	[366] = {MSM_CPU_SDMMAGPIEP, "SDMMAGPIEP"},
 
 	/* trinket ID */
 	[394] = {MSM_CPU_TRINKET, "TRINKET"},
@@ -782,7 +780,7 @@ msm_get_serial_number(struct device *dev,
 			struct device_attribute *attr,
 			char *buf)
 {
-	return snprintf(buf, PAGE_SIZE, "%u\n",
+	return snprintf(buf, PAGE_SIZE, "0x%x\n",
 		socinfo_get_serial_number());
 }
 
@@ -1100,6 +1098,23 @@ msm_get_images(struct device *dev,
 	return pos;
 }
 
+#ifdef CONFIG_MACH_LGE
+static ssize_t
+msm_get_hw_rev(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	enum hw_rev_no revid = lge_get_board_rev_no();
+
+	pr_err("hw_rev called'\n");
+	pr_err("hw_rev id:%d\n",revid);
+	pr_err("hw_rev :%s",lge_get_board_revision());
+
+	return snprintf(buf, PAGE_SIZE, "%-.32s\n",
+			lge_get_board_revision());
+}
+#endif
+
 static struct device_attribute msm_soc_attr_raw_version =
 	__ATTR(raw_version, 0444, msm_get_raw_version,  NULL);
 
@@ -1210,6 +1225,11 @@ static struct device_attribute select_image =
 static struct device_attribute images =
 	__ATTR(images, 0444, msm_get_images, NULL);
 
+#ifdef CONFIG_MACH_LGE
+static struct device_attribute msm_soc_attr_hw_rev =
+	__ATTR(hw_rev, S_IRUGO, msm_get_hw_rev, NULL);
+#endif
+
 static void * __init setup_dummy_socinfo(void)
 {
 	if (early_machine_is_apq8084()) {
@@ -1252,10 +1272,6 @@ static void * __init setup_dummy_socinfo(void)
 		dummy_socinfo.id = 355;
 		strlcpy(dummy_socinfo.build_id, "sm6150 - ",
 		sizeof(dummy_socinfo.build_id));
-	} else if (early_machine_is_sm6150p()) {
-		dummy_socinfo.id = 369;
-		strlcpy(dummy_socinfo.build_id, "sm6150p - ",
-		sizeof(dummy_socinfo.build_id));
 	} else if (early_machine_is_qcs405()) {
 		dummy_socinfo.id = 352;
 		strlcpy(dummy_socinfo.build_id, "qcs405 - ",
@@ -1275,10 +1291,6 @@ static void * __init setup_dummy_socinfo(void)
 	} else if (early_machine_is_sdmmagpie()) {
 		dummy_socinfo.id = 365;
 		strlcpy(dummy_socinfo.build_id, "sdmmagpie - ",
-		sizeof(dummy_socinfo.build_id));
-	} else if (early_machine_is_sdmmagpiep()) {
-		dummy_socinfo.id = 366;
-		strlcpy(dummy_socinfo.build_id, "sdmmagpiep - ",
 		sizeof(dummy_socinfo.build_id));
 	} else if (early_machine_is_trinket()) {
 		dummy_socinfo.id = 394;
@@ -1360,6 +1372,10 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 	case SOCINFO_VERSION(0, 1):
 		device_create_file(msm_soc_device,
 					&msm_soc_attr_build_id);
+#ifdef CONFIG_MACH_LGE
+		device_create_file(msm_soc_device,
+					&msm_soc_attr_hw_rev);
+#endif
 		break;
 	default:
 		pr_err("Unknown socinfo format: v%u.%u\n",

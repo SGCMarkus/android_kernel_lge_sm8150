@@ -30,8 +30,7 @@
 
 static struct cam_fd_hw_mgr g_fd_hw_mgr;
 
-static int cam_fd_mgr_util_packet_validate(struct cam_packet *packet,
-	size_t remain_len)
+static int cam_fd_mgr_util_packet_validate(struct cam_packet *packet)
 {
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	int i, rc;
@@ -51,7 +50,7 @@ static int cam_fd_mgr_util_packet_validate(struct cam_packet *packet,
 		packet->patch_offset, packet->num_patches,
 		packet->kmd_cmd_buf_offset, packet->kmd_cmd_buf_index);
 
-	if (cam_packet_util_validate_packet(packet, remain_len)) {
+	if (cam_packet_util_validate_packet(packet)) {
 		CAM_ERR(CAM_FD, "invalid packet:%d %d %d %d %d",
 			packet->kmd_cmd_buf_index,
 			packet->num_cmd_buf, packet->cmd_buf_offset,
@@ -172,6 +171,23 @@ static int cam_fd_mgr_util_put_frame_req(
 
 	return rc;
 }
+
+/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+static int cam_fd_mgr_util_put_frame_req_unlocked(
+	struct list_head *src_list,
+	struct cam_fd_mgr_frame_request **frame_req)
+{
+	int rc = 0;
+	struct cam_fd_mgr_frame_request *req_ptr = NULL;
+
+	req_ptr = *frame_req;
+	if (req_ptr)
+		list_add_tail(&req_ptr->list, src_list);
+	*frame_req = NULL;
+
+	return rc;
+}
+/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
 
 static int cam_fd_mgr_util_get_frame_req(
 	struct list_head *src_list,
@@ -612,14 +628,7 @@ static int cam_fd_mgr_util_prepare_io_buf_info(int32_t iommu_hdl,
 						rc);
 					goto rel_cpu_buf;
 				}
-				if (io_cfg[i].offsets[plane] >= size) {
-					CAM_ERR(CAM_FD,
-						"Invalid cpu buf %d %d %d",
-						io_cfg[i].direction,
-						io_cfg[i].resource_type, plane);
-					rc = -EINVAL;
-					goto rel_cpu_buf;
-				}
+
 				cpu_addr[plane] += io_cfg[i].offsets[plane];
 			}
 
@@ -1365,6 +1374,15 @@ static int cam_fd_mgr_hw_flush_req(void *hw_mgr_priv,
 
 			list_del_init(&frame_req->list);
 
+			/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+			// nodes removed from frame_processing_list should be added to frame_free_list
+			rc = cam_fd_mgr_util_put_frame_req_unlocked(&hw_mgr->frame_free_list,
+				&frame_req);
+			if (rc) {
+				CAM_ERR(CAM_FD, "Failed in putting frame req in free list");
+			}
+			/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
+
 			mutex_lock(&hw_device->lock);
 			if ((hw_device->ready_to_process == true) ||
 				(hw_device->cur_hw_ctx != hw_ctx))
@@ -1450,6 +1468,16 @@ static int cam_fd_mgr_hw_flush_ctx(void *hw_mgr_priv,
 			continue;
 
 		list_del_init(&frame_req->list);
+
+		/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+		// nodes removed from frame_processing_list should be added to frame_free_list
+		rc = cam_fd_mgr_util_put_frame_req_unlocked(&hw_mgr->frame_free_list,
+			&frame_req);
+		if (rc) {
+			CAM_ERR(CAM_FD, "Failed in putting frame req in free list");
+		}
+		/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
+
 		mutex_lock(&hw_device->lock);
 		if ((hw_device->ready_to_process == true) ||
 			(hw_device->cur_hw_ctx != hw_ctx))
@@ -1600,8 +1628,7 @@ static int cam_fd_mgr_hw_prepare_update(void *hw_mgr_priv,
 		goto error;
 	}
 
-	rc = cam_fd_mgr_util_packet_validate(prepare->packet,
-		prepare->remain_len);
+	rc = cam_fd_mgr_util_packet_validate(prepare->packet);
 	if (rc) {
 		CAM_ERR(CAM_FD, "Error in packet validation %d", rc);
 		goto error;
@@ -1620,7 +1647,7 @@ static int cam_fd_mgr_hw_prepare_update(void *hw_mgr_priv,
 
 	/* We do not expect any patching, but just do it anyway */
 	rc = cam_packet_util_process_patches(prepare->packet,
-		hw_mgr->device_iommu.non_secure, -1, 0);
+		hw_mgr->device_iommu.non_secure, -1);
 	if (rc) {
 		CAM_ERR(CAM_FD, "Patch FD packet failed, rc=%d", rc);
 		return rc;

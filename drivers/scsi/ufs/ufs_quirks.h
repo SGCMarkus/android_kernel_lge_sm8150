@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -24,6 +24,10 @@
 #define UFS_VENDOR_TOSHIBA     0x198
 #define UFS_VENDOR_SAMSUNG     0x1CE
 #define UFS_VENDOR_SKHYNIX     0x1AD
+
+#ifdef CONFIG_UFS_LGE_FEATURE
+#define UFS_VENDOR_SANDISK     0x145
+#endif
 
 /**
  * ufs_dev_fix - ufs device quirk info
@@ -139,13 +143,5 @@ struct ufs_dev_fix {
  * device would apply this 2 steps gear switch workaround.
  */
 #define UFS_DEVICE_QUIRK_HS_G1_TO_HS_G3_SWITCH (1 << 8)
-
-/*
- * Some UFS devices need more delay after device reference clk is turned on
- * but before initiation of the state transition to STALL from a LS-MODE or
- * from the HIBERN8 state. Enable this quirk to give UFS devices 50us delay
- * instead of the default delay.
- */
-#define UFS_DEVICE_QUIRK_WAIT_AFTER_REF_CLK_UNGATE	(1 << 10)
 
 #endif /* UFS_QUIRKS_H_ */

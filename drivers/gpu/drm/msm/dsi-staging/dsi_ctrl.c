@@ -10,8 +10,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+#define pr_fmt(fmt)	"[Display][dsi-ctrl:%s:%d] " fmt, __func__, __LINE__
+#else
 #define pr_fmt(fmt)	"dsi-ctrl:[%s] " fmt, __func__
+#endif
 
 #include <linux/of_device.h>
 #include <linux/err.h>
@@ -40,6 +43,24 @@
 #define TO_ON_OFF(x) ((x) ? "ON" : "OFF")
 
 #define CEIL(x, y)              (((x) + ((y)-1)) / (y))
+
+#define TICKS_IN_MICRO_SECOND    1000000
+
+/**
+ * enum dsi_ctrl_driver_ops - controller driver ops
+ */
+enum dsi_ctrl_driver_ops {
+	DSI_CTRL_OP_POWER_STATE_CHANGE,
+	DSI_CTRL_OP_CMD_ENGINE,
+	DSI_CTRL_OP_VID_ENGINE,
+	DSI_CTRL_OP_HOST_ENGINE,
+	DSI_CTRL_OP_CMD_TX,
+	DSI_CTRL_OP_HOST_INIT,
+	DSI_CTRL_OP_TPG,
+	DSI_CTRL_OP_PHY_SW_RESET,
+	DSI_CTRL_OP_ASYNC_TIMING,
+	DSI_CTRL_OP_MAX
+};
 
 struct dsi_ctrl_list_item {
 	struct dsi_ctrl *ctrl;
@@ -815,7 +836,7 @@ static int dsi_ctrl_update_link_freqs(struct dsi_ctrl *dsi_ctrl,
 {
 	int rc = 0;
 	u32 num_of_lanes = 0;
-	u32 bpp;
+	u32 bpp, refresh_rate = TICKS_IN_MICRO_SECOND;
 	u64 h_period, v_period, bit_rate, pclk_rate, bit_rate_per_lane,
 	    byte_clk_rate;
 	struct dsi_host_common_cfg *host_cfg = &config->common_config;
@@ -840,7 +861,13 @@ static int dsi_ctrl_update_link_freqs(struct dsi_ctrl *dsi_ctrl,
 	if (config->bit_clk_rate_hz_override == 0) {
 		h_period = DSI_H_TOTAL_DSC(timing);
 		v_period = DSI_V_TOTAL(timing);
-		bit_rate = h_period * v_period * timing->refresh_rate * bpp;
+
+		if (config->panel_mode == DSI_OP_CMD_MODE)
+			do_div(refresh_rate, timing->mdp_transfer_time_us);
+		else
+			refresh_rate = timing->refresh_rate;
+
+		bit_rate = h_period * v_period * refresh_rate * bpp;
 	} else {
 		bit_rate = config->bit_clk_rate_hz_override * num_of_lanes;
 	}
@@ -1481,7 +1508,7 @@ static int dsi_message_rx(struct dsi_ctrl *dsi_ctrl,
 	cmd = buff[0];
 	switch (cmd) {
 	case MIPI_DSI_RX_ACKNOWLEDGE_AND_ERROR_REPORT:
-		pr_err("Rx ACK_ERROR 0x%x\n", cmd);
+		pr_err("Rx ACK_ERROR\n");
 		rc = 0;
 		break;
 	case MIPI_DSI_RX_GENERIC_SHORT_READ_RESPONSE_1BYTE:
@@ -1497,7 +1524,7 @@ static int dsi_message_rx(struct dsi_ctrl *dsi_ctrl,
 		rc = dsi_parse_long_read_resp(msg, buff);
 		break;
 	default:
-		pr_warn("Invalid response: 0x%x\n", cmd);
+		pr_warn("Invalid response\n");
 		rc = 0;
 	}
 
@@ -2603,37 +2630,27 @@ int dsi_ctrl_host_timing_update(struct dsi_ctrl *dsi_ctrl)
 }
 
 /**
- * dsi_ctrl_update_host_state() - Update the host state.
+ * dsi_ctrl_update_host_init_state() - Update the host initialization state.
  * @dsi_ctrl:        DSI controller handle.
- * @op:            ctrl driver ops
  * @enable:        boolean signifying host state.
  *
- * Update the host status only while exiting from ulps during
+ * Update the host initialization status only while exiting from ulps during
  * suspend state.
  *
  * Return: error code.
  */
-int dsi_ctrl_update_host_state(struct dsi_ctrl *dsi_ctrl,
-			       enum dsi_ctrl_driver_ops op, bool enable)
+int dsi_ctrl_update_host_init_state(struct dsi_ctrl *dsi_ctrl, bool enable)
 {
 	int rc = 0;
 	u32 state = enable ? 0x1 : 0x0;
 
-	if (!dsi_ctrl)
-		return rc;
-
-	mutex_lock(&dsi_ctrl->ctrl_lock);
-	rc = dsi_ctrl_check_state(dsi_ctrl, op, state);
+	rc = dsi_ctrl_check_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, state);
 	if (rc) {
 		pr_err("[DSI_%d] Controller state check failed, rc=%d\n",
 		       dsi_ctrl->cell_index, rc);
-		mutex_unlock(&dsi_ctrl->ctrl_lock);
 		return rc;
 	}
-
-	dsi_ctrl_update_state(dsi_ctrl, op, state);
-	mutex_unlock(&dsi_ctrl->ctrl_lock);
-
+	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, state);
 	return rc;
 }
 
@@ -2698,8 +2715,13 @@ int dsi_ctrl_host_init(struct dsi_ctrl *dsi_ctrl, bool is_splash_enabled)
 	dsi_ctrl->hw.ops.enable_status_interrupts(&dsi_ctrl->hw, 0x0);
 	dsi_ctrl->hw.ops.enable_error_interrupts(&dsi_ctrl->hw, 0xFF00E0);
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	pr_info("[DSI_%d]Host initialization complete, continuous splash status:%d\n",
+		dsi_ctrl->cell_index, is_splash_enabled);
+#else
 	pr_debug("[DSI_%d]Host initialization complete, continuous splash status:%d\n",
 		dsi_ctrl->cell_index, is_splash_enabled);
+#endif
 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, 0x1);
 error:
 	mutex_unlock(&dsi_ctrl->ctrl_lock);
@@ -2722,16 +2744,6 @@ void dsi_ctrl_isr_configure(struct dsi_ctrl *dsi_ctrl, bool enable)
 	else
 		_dsi_ctrl_destroy_isr(dsi_ctrl);
 
-	mutex_unlock(&dsi_ctrl->ctrl_lock);
-}
-
-void dsi_ctrl_hs_req_sel(struct dsi_ctrl *dsi_ctrl, bool sel_phy)
-{
-	if (!dsi_ctrl)
-		return;
-
-	mutex_lock(&dsi_ctrl->ctrl_lock);
-	dsi_ctrl->hw.ops.hs_req_sel(&dsi_ctrl->hw, sel_phy);
 	mutex_unlock(&dsi_ctrl->ctrl_lock);
 }
 
@@ -2842,8 +2854,13 @@ int dsi_ctrl_host_deinit(struct dsi_ctrl *dsi_ctrl)
 		goto error;
 	}
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	pr_info("<-- %pS [DSI_%d] Host deinitization complete\n",
+		__builtin_return_address(0), dsi_ctrl->cell_index);
+#else
 	pr_debug("[DSI_%d] Host deinitization complete\n",
 		dsi_ctrl->cell_index);
+#endif
 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, 0x0);
 error:
 	mutex_unlock(&dsi_ctrl->ctrl_lock);
@@ -2960,6 +2977,14 @@ int dsi_ctrl_cmd_transfer(struct dsi_ctrl *dsi_ctrl,
 
 	mutex_lock(&dsi_ctrl->ctrl_lock);
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if (((msg->flags) & MIPI_DSI_MSG_REQ_ACK) &&
+			(msg->rx_buf && (msg->rx_len > 0)))
+	{
+		flags |= DSI_CTRL_CMD_READ;
+	}
+#endif
+
 	rc = dsi_ctrl_check_state(dsi_ctrl, DSI_CTRL_OP_CMD_TX, 0x0);
 	if (rc) {
 		pr_err("[DSI_%d] Controller state check failed, rc=%d\n",
@@ -2971,6 +2996,10 @@ int dsi_ctrl_cmd_transfer(struct dsi_ctrl *dsi_ctrl,
 		rc = dsi_message_rx(dsi_ctrl, msg, flags);
 		if (rc <= 0)
 			pr_err("read message failed read length, rc=%d\n", rc);
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+		if (rc > 0)
+			rc = 0;
+#endif
 	} else {
 		rc = dsi_message_tx(dsi_ctrl, msg, flags);
 		if (rc)

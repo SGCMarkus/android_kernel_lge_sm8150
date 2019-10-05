@@ -17,6 +17,10 @@
 #include "sde_formats.h"
 #include "dsi_display.h"
 #include "sde_trace.h"
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#include <asm/atomic.h>
+#include "../lge/dp/lge_dp_def.h"
+#endif
 
 #define SDE_DEBUG_VIDENC(e, fmt, ...) SDE_DEBUG("enc%d intf%d " fmt, \
 		(e) && (e)->base.parent ? \
@@ -946,6 +950,11 @@ static int _sde_encoder_phys_vid_wait_for_vblank(
 		struct sde_encoder_phys *phys_enc, bool notify)
 {
 	struct sde_encoder_wait_info wait_info;
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	extern void call_disconnect_uevent(void);
+	extern struct lge_dp_display* get_lge_dp(void);
+	struct lge_dp_display* lge_dp = get_lge_dp();
+#endif
 	int ret = 0;
 	u32 event = 0;
 	u32 event_helper = 0;
@@ -993,6 +1002,12 @@ end:
 		phys_enc->parent_ops.handle_frame_done(
 				phys_enc->parent, phys_enc,
 				event);
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (ret == -ETIMEDOUT && atomic_read(&lge_dp->dd_uevent_switch)) {
+		pr_err("%s : CoverDisplay unexpected error happens\n", __func__);
+		call_disconnect_uevent();
+	}
+#endif
 	return ret;
 }
 

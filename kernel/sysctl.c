@@ -107,6 +107,9 @@ extern unsigned int core_pipe_limit;
 extern int pid_max;
 extern int extra_free_kbytes;
 extern int pid_max_min, pid_max_max;
+#ifdef CONFIG_HSWAP
+extern int wmark_tune_level;
+#endif
 extern int percpu_pagelist_fraction;
 extern int latencytop_enabled;
 extern unsigned int sysctl_nr_open_min, sysctl_nr_open_max;
@@ -594,6 +597,15 @@ static struct ctl_table kern_table[] = {
 		.maxlen		= LIB_PATH_LENGTH,
 		.mode		= 0644,
 		.proc_handler	= proc_dostring,
+	},
+	{
+		.procname	= "sched_lib_mask_check",
+		.data		= &sched_lib_mask_check,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_douintvec_minmax,
+		.extra1		= &zero,
+		.extra2		= &two_hundred_fifty_five,
 	},
 	{
 		.procname	= "sched_lib_mask_force",
@@ -1732,6 +1744,15 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_jiffies,
 	},
+#ifdef CONFIG_HSWAP
+{
+		.procname = "wmark_tune_level",
+		.data = &wmark_tune_level,
+		.maxlen = sizeof(wmark_tune_level),
+		.mode = 0644,
+		.proc_handler = wmark_tune_level_sysctl_handler,
+	},
+#endif
 	{
 		.procname	= "stat_refresh",
 		.data		= NULL,

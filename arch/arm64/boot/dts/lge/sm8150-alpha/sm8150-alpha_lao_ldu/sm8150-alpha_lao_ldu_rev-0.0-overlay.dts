@@ -1,0 +1,63 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-alpha_lao_ldu.dtsi"
+#include "sm8150-alpha_lao_ldu-sound.dtsi"
+#include "sm8150-alpha_lao_ldu-tdmb_rev-a.dtsi"
+
+/ {
+	model = "LG Electronics, Alpha_lao, rev_0.0(HDK)";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x01030008 0>;
+};
+
+&sde_dp {
+    vdda-0p9-supply = <&pm8150_l5>;
+    qcom,phy-supply-entries {
+        qcom,phy-supply-entry@0 {
+            qcom,supply-min-voltage = <880000>;
+            qcom,supply-max-voltage = <880000>;
+        };
+    };
+};
+
+&soc{
+	fingerprint@0 {
+		goodix,gpio_vddio = <&tlmm 21 0x00>;
+		gf,vddio-uV = <2800000>;
+	};
+};
+
+&lge_sbu_switch {
+	lge,oe-gpio = <&tlmm 119 0>;
+
+	pinctrl-0 = <&lge_sbu_switch_oe_active &lge_sbu_switch_sel_active>;
+};
+
+&tlmm {
+	lge_sbu_switch_oe_active: lge_sbu_switch_oe_active {
+		mux {
+			pins = "gpio119";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio119";
+			drive-strength = <6>;
+			bias-bus-hold;
+		};
+	};
+};

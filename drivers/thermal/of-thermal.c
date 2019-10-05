@@ -37,6 +37,11 @@
 
 #include "thermal_core.h"
 
+#ifdef CONFIG_LGE_PM
+#include <soc/qcom/lge/board_lge.h>
+enum lge_sku_carrier_type carrier = HW_SKU_MAX;
+#endif
+
 /***   Private data structures to represent thermal device tree data ***/
 
 /**
@@ -81,7 +86,6 @@ struct __sensor_param {
  * @slope: slope of the temperature adjustment curve
  * @offset: offset of the temperature adjustment curve
  * @default_disable: Keep the thermal zone disabled by default
- * @is_wakeable: Ignore post suspend thermal zone re-evaluation
  * @tzd: thermal zone device pointer for this sensor
  * @ntrips: number of trip points
  * @trips: an array of trip points (0..ntrips - 1)
@@ -99,7 +103,6 @@ struct __thermal_zone {
 	int offset;
 	struct thermal_zone_device *tzd;
 	bool default_disable;
-	bool is_wakeable;
 
 	/* trip data */
 	int ntrips;
@@ -514,13 +517,6 @@ static int of_thermal_get_crit_temp(struct thermal_zone_device *tz,
 	return -EINVAL;
 }
 
-static bool of_thermal_is_wakeable(struct thermal_zone_device *tz)
-{
-	struct __thermal_zone *data = tz->devdata;
-
-	return data->is_wakeable;
-}
-
 static int of_thermal_aggregate_trip_types(struct thermal_zone_device *tz,
 		unsigned int trip_type_mask, int *low, int *high)
 {
@@ -646,8 +642,6 @@ static struct thermal_zone_device_ops of_thermal_ops = {
 
 	.bind = of_thermal_bind,
 	.unbind = of_thermal_unbind,
-
-	.is_wakeable = of_thermal_is_wakeable,
 };
 
 static struct thermal_zone_of_device_ops of_virt_ops = {
@@ -1198,6 +1192,13 @@ static int thermal_of_populate_trip(struct device_node *np,
 	}
 	trip->temperature = prop;
 
+#ifdef CONFIG_LGE_PM
+	if (!strncmp(np->name, "sdx50m-sub6", 11) && carrier == HW_SKU_NA_CDMA_VZW)
+		trip->temperature = 120000;
+	else if (!strncmp(np->name, "sdx50m-mmw", 10) && carrier != HW_SKU_NA_CDMA_VZW)
+		trip->temperature = 120000;
+#endif
+
 	ret = of_property_read_u32(np, "hysteresis", &prop);
 	if (ret < 0) {
 		pr_err("missing hysteresis property\n");
@@ -1266,9 +1267,6 @@ __init *thermal_of_build_thermal_zone(struct device_node *np)
 
 	tz->default_disable = of_property_read_bool(np,
 					"disable-thermal-zone");
-
-	tz->is_wakeable = of_property_read_bool(np,
-					"wake-capable-sensor");
 	/*
 	 * REVIST: for now, the thermal framework supports only
 	 * one sensor per thermal zone. Thus, we are considering
@@ -1386,6 +1384,12 @@ int __init of_parse_thermal_zones(void)
 	struct device_node *np, *child;
 	struct __thermal_zone *tz;
 	struct thermal_zone_device_ops *ops;
+
+#ifdef CONFIG_LGE_PM
+	carrier = lge_get_sku_carrier();
+	pr_info("operator is %s\n",
+		carrier == HW_SKU_NA_CDMA_VZW ? "VZW" : "Non-VZW");
+#endif
 
 	np = of_find_node_by_name(NULL, "thermal-zones");
 	if (!np) {

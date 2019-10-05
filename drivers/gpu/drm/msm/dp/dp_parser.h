@@ -233,6 +233,9 @@ struct dp_parser {
 	u32 max_dp_dsc_blks;
 	u32 max_dp_dsc_input_width_pixs;
 	bool lphw_hpd;
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	bool lge_dp_use;
+#endif
 
 	int (*parse)(struct dp_parser *parser);
 	struct dp_io_data *(*get_io)(struct dp_parser *parser, char *name);

@@ -18,9 +18,16 @@
 #include <linux/list.h>
 #include <drm/drmP.h>
 #include <drm/msm_drm.h>
-
 #include "dp_panel.h"
-
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#include <linux/usb/usbpd.h>
+#include <linux/hall_ic.h>
+#include <linux/extcon.h>
+#define EXT_DD_MAX_COUNT 2
+#endif
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+#include "../lge/dp/lge_dp_def.h"
+#endif
 #define DP_MST_SIM_MAX_PORTS	2
 
 enum dp_drv_state {
@@ -77,7 +84,9 @@ struct dp_display {
 	bool is_mst_supported;
 	u32 max_pclk_khz;
 	void *dp_mst_prv_info;
-
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	struct extcon_dev *dd_extcon_sdev[EXT_DD_MAX_COUNT];
+#endif
 	int (*enable)(struct dp_display *dp_display, void *panel);
 	int (*post_enable)(struct dp_display *dp_display, void *panel);
 
@@ -121,11 +130,16 @@ struct dp_display {
 			struct dp_display_mode *dp_mode);
 	int (*update_pps)(struct dp_display *dp_display,
 			struct drm_connector *connector, char *pps_cmd);
-	void (*wakeup_phy_layer)(struct dp_display *dp_display,
-			bool wakeup);
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	struct lge_dp_display lge_dp;
+#endif
+
 };
 
 int dp_display_get_num_of_displays(void);
 int dp_display_get_displays(void **displays, int count);
 int dp_display_get_num_of_streams(void);
+#ifdef CONFIG_LGE_COVER_DISPLAY
+extern void hallic_register_svid_handler(struct usbpd_svid_handler *hdlr);
+#endif
 #endif /* _DP_DISPLAY_H_ */

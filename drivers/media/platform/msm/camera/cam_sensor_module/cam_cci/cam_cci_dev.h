@@ -70,8 +70,12 @@
 #define CCI_I2C_READ_MAX_RETRIES 3
 #define CCI_I2C_MAX_READ 8192
 #define CCI_I2C_MAX_WRITE 8192
+#ifndef CONFIG_MACH_LGE
 #define CCI_I2C_MAX_BYTE_COUNT 65535
-
+#else
+/* To avoid word cnt mismatch, Must be removed after CN03580423 */
+#define CCI_I2C_MAX_BYTE_COUNT 128
+#endif
 #define CAMX_CCI_DEV_NAME "cam-cci-driver"
 
 #define MAX_CCI 2
@@ -234,6 +238,10 @@ struct cci_device {
 	spinlock_t lock_status;
 	bool is_burst_read;
 	uint32_t irqs_disabled;
+#ifdef CONFIG_MACH_LGE
+	struct mutex global_mutex;
+	struct completion sensor_complete;
+#endif
 };
 
 enum cam_cci_i2c_cmd_type {

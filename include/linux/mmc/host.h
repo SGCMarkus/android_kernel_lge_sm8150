@@ -682,6 +682,10 @@ struct mmc_host {
 	struct extcon_dev	*extcon;
 	struct notifier_block card_detect_nb;
 
+#ifdef CONFIG_LGE_TRAY_EVENT
+	struct work_struct tray_work;
+#endif
+
 #ifdef CONFIG_MMC_PERF_PROFILING
 	struct {
 
@@ -710,7 +714,6 @@ struct mmc_host {
 	struct mmc_request	*err_mrq;
 
 	bool inlinecrypt_support;  /* Inline encryption support */
-	bool inlinecrypt_reset_needed;  /* Inline crypto reset */
 
 	atomic_t rpmb_req_pending;
 	struct mutex		rpmb_req_mutex;

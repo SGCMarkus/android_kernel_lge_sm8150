@@ -1,0 +1,65 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-alpha_lao_ldu.dtsi"
+#include "sm8150-alpha_lao_ldu-sound_rev-a.dtsi"
+#include "../sm8150-camera/sm8150-alpha-camera_rev-a.dtsi"
+#include "sm8150-alpha_lao_ldu-tdmb_rev-a.dtsi"
+
+/ {
+	model = "LG Electronics, Alpha_lao_kr, rev_a";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x01060008 0>;
+};
+
+&usb_qmp_dp_phy {
+	vdd-supply = <&pm8150_l18>;
+	qcom,vdd-voltage-level = <0 912000 912000>;
+};
+
+&pm8150b_charger {
+	lge-extension-usb {
+		lge,usbid-parallel-kohm = <2000>;		// parallel resistance
+	};
+};
+
+&soc{
+	fingerprint@0 {
+		goodix,gpio_vddio = <&tlmm 21 0x00>;
+		gf,vddio-uV = <2800000>;
+	};
+};
+
+&lge_sbu_switch {
+	lge,oe-gpio = <&tlmm 119 0>;
+
+	pinctrl-0 = <&lge_sbu_switch_oe_active &lge_sbu_switch_sel_active>;
+};
+
+&tlmm {
+	lge_sbu_switch_oe_active: lge_sbu_switch_oe_active {
+		mux {
+			pins = "gpio119";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio119";
+			drive-strength = <6>;
+			bias-bus-hold;
+		};
+	};
+};

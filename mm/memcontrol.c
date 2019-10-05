@@ -5363,12 +5363,12 @@ static int memory_stat_show(struct seq_file *m, void *v)
 	seq_printf(m, "pglazyfree %lu\n", events[PGLAZYFREE]);
 	seq_printf(m, "pglazyfreed %lu\n", events[PGLAZYFREED]);
 
-	seq_printf(m, "workingset_refault %lu\n",
-		   stat[WORKINGSET_REFAULT]);
-	seq_printf(m, "workingset_activate %lu\n",
-		   stat[WORKINGSET_ACTIVATE]);
-	seq_printf(m, "workingset_nodereclaim %lu\n",
-		   stat[WORKINGSET_NODERECLAIM]);
+	seq_printf(m, "refault_inactive_filet %lu\n",
+		   stat[REFAULT_INACTIVE_FILE]);
+	seq_printf(m, "refault_active_file %lu\n",
+		   stat[REFAULT_ACTIVE_FILE]);
+	seq_printf(m, "refault_nodereclaim %lu\n",
+		   stat[REFAULT_NODERECLAIM]);
 
 	return 0;
 }

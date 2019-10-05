@@ -165,6 +165,9 @@ void ion_heap_freelist_add(struct ion_heap *heap, struct ion_buffer *buffer)
 	spin_lock(&heap->free_lock);
 	list_add(&buffer->list, &heap->free_list);
 	heap->free_list_size += buffer->size;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+	heap->free_highorder_size += buffer->highorder_size;
+#endif
 	spin_unlock(&heap->free_lock);
 	wake_up(&heap->waitqueue);
 }
@@ -179,6 +182,19 @@ size_t ion_heap_freelist_size(struct ion_heap *heap)
 
 	return size;
 }
+
+#ifdef CONFIG_MIGRATE_HIGHORDER
+size_t ion_heap_free_highorder_size(struct ion_heap *heap)
+{
+	size_t size;
+
+	spin_lock(&heap->free_lock);
+	size = heap->free_highorder_size;
+	spin_unlock(&heap->free_lock);
+
+	return size;
+}
+#endif
 
 static size_t _ion_heap_freelist_drain(struct ion_heap *heap, size_t size,
 				       bool skip_pools)
@@ -200,9 +216,16 @@ static size_t _ion_heap_freelist_drain(struct ion_heap *heap, size_t size,
 					  list);
 		list_del(&buffer->list);
 		heap->free_list_size -= buffer->size;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+		heap->free_highorder_size -= buffer->highorder_size;
+#endif
 		if (skip_pools)
 			buffer->private_flags |= ION_PRIV_FLAG_SHRINKER_FREE;
 		total_drained += buffer->size;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+		if (skip_pools)
+			total_drained -= buffer->highorder_size;
+#endif
 		spin_unlock(&heap->free_lock);
 		ion_buffer_destroy(buffer);
 		spin_lock(&heap->free_lock);
@@ -241,6 +264,9 @@ static int ion_heap_deferred_free(void *data)
 					  list);
 		list_del(&buffer->list);
 		heap->free_list_size -= buffer->size;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+		heap->free_highorder_size -= buffer->highorder_size;
+#endif
 		spin_unlock(&heap->free_lock);
 		ion_buffer_destroy(buffer);
 	}
@@ -276,6 +302,9 @@ static unsigned long ion_heap_shrink_count(struct shrinker *shrinker,
 	int total = 0;
 
 	total = ion_heap_freelist_size(heap) / PAGE_SIZE;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+	total -= ion_heap_free_highorder_size(heap) / PAGE_SIZE;
+#endif
 	if (heap->ops->shrink)
 		total += heap->ops->shrink(heap, sc->gfp_mask, 0);
 	return total;

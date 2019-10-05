@@ -984,7 +984,7 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	int save_req_uid = 0;
 	struct diag_dci_pkt_rsp_header_t pkt_rsp_header;
 
-	if (!buf || len <= 0) {
+	if (!buf) {
 		pr_err("diag: Invalid pointer in %s\n", __func__);
 		return;
 	}
@@ -998,8 +998,6 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 								dci_cmd_code);
 		return;
 	}
-	if (len < (cmd_code_len + sizeof(int)))
-		return;
 	temp += cmd_code_len;
 	tag = *(int *)temp;
 	temp += sizeof(int);
@@ -1008,16 +1006,10 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	 * The size of the response is (total length) - (length of the command
 	 * code, the tag (int)
 	 */
-	if (len >= cmd_code_len + sizeof(int)) {
-		rsp_len = len - (cmd_code_len + sizeof(int));
-		if ((rsp_len == 0) || (rsp_len > (len - 5))) {
-			pr_err("diag: Invalid length in %s, len: %d, rsp_len: %d\n",
-					__func__, len, rsp_len);
-			return;
-		}
-	} else {
-		pr_err("diag:%s: Invalid length(%d) for calculating rsp_len\n",
-			__func__, len);
+	rsp_len = len - (cmd_code_len + sizeof(int));
+	if ((rsp_len == 0) || (rsp_len > (len - 5))) {
+		pr_err("diag: Invalid length in %s, len: %d, rsp_len: %d",
+						__func__, len, rsp_len);
 		return;
 	}
 
@@ -1056,7 +1048,9 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 	 */
 	if ((rsp_buf->data_len + 9 + rsp_len) > rsp_buf->capacity) {
 		pr_alert("diag: create capacity for pkt rsp\n");
-		temp_buf = vzalloc(rsp_buf->capacity + 9 + rsp_len);
+		rsp_buf->capacity += 9 + rsp_len;
+		temp_buf = krealloc(rsp_buf->data, rsp_buf->capacity,
+				    GFP_KERNEL);
 		if (!temp_buf) {
 			pr_err("diag: DCI realloc failed\n");
 			mutex_unlock(&rsp_buf->data_mutex);
@@ -1064,10 +1058,6 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 			mutex_unlock(&driver->dci_mutex);
 			return;
 		}
-		rsp_buf->capacity += 9 + rsp_len;
-		if (rsp_buf->capacity > rsp_buf->data_len)
-			memcpy(temp_buf, rsp_buf->data, rsp_buf->data_len);
-		vfree(rsp_buf->data);
 		rsp_buf->data = temp_buf;
 	}
 
@@ -1857,8 +1847,7 @@ static int diag_dci_process_apps_pkt(struct diag_pkt_header_t *pkt_header,
 							DIAG_MAX_REQ_SIZE;
 			write_len += sizeof(uint32_t);
 		} else if (ss_cmd_code == DIAG_DIAG_STM) {
-			write_len = diag_process_stm_cmd(req_buf, req_len,
-				payload_ptr);
+			write_len = diag_process_stm_cmd(req_buf, payload_ptr);
 		}
 	} else if (subsys_id == DIAG_SS_PARAMS) {
 		if (ss_cmd_code == DIAG_DIAG_POLL) {
@@ -2075,9 +2064,9 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 	uint8_t *event_mask_ptr;
 	struct diag_dci_client_tbl *dci_entry = NULL;
 
-	if (!temp || len < sizeof(int)) {
-		pr_err("diag: Invalid input in %s\n", __func__);
-		return -EINVAL;
+	if (!temp) {
+		pr_err("diag: Invalid buffer in %s\n", __func__);
+		return -ENOMEM;
 	}
 
 	/* This is Pkt request/response transaction */
@@ -2133,7 +2122,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 		count = 0; /* iterator for extracting log codes */
 
 		while (count < num_codes) {
-			if (read_len + sizeof(uint16_t) > len) {
+			if (read_len >= USER_SPACE_DATA) {
 				pr_err("diag: dci: Invalid length for log type in %s",
 								__func__);
 				mutex_unlock(&driver->dci_mutex);
@@ -2247,7 +2236,7 @@ int diag_process_dci_transaction(unsigned char *buf, int len)
 		pr_debug("diag: head of dci event mask %pK\n", event_mask_ptr);
 		count = 0; /* iterator for extracting log codes */
 		while (count < num_codes) {
-			if (read_len + sizeof(int) > len) {
+			if (read_len >= USER_SPACE_DATA) {
 				pr_err("diag: dci: Invalid length for event type in %s",
 								__func__);
 				mutex_unlock(&driver->dci_mutex);

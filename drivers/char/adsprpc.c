@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2142,8 +2142,6 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 		if (!strcmp(proc_name, "audiopd")) {
 			fl->spdname = AUDIO_PDR_SERVICE_LOCATION_CLIENT_NAME;
 			VERIFY(err, !fastrpc_mmap_remove_pdr(fl));
-			if (err)
-				goto bail;
 		}
 
 		if (!me->staticpd_flags && !(me->legacy_remote_heap)) {
@@ -3375,24 +3373,12 @@ static long fastrpc_device_ioctl(struct file *file, unsigned int ioctl_num,
 	} i;
 	void *param = (char *)ioctl_param;
 	struct fastrpc_file *fl = (struct fastrpc_file *)file->private_data;
-	struct fastrpc_apps *me = &gfa;
-	int size = 0, err = 0, session = 0;
+	int size = 0, err = 0;
 	uint32_t info;
 
 	p.inv.fds = NULL;
 	p.inv.attrs = NULL;
 	p.inv.crc = NULL;
-	if (fl->spdname &&
-		!strcmp(fl->spdname, AUDIO_PDR_SERVICE_LOCATION_CLIENT_NAME)) {
-		VERIFY(err, !fastrpc_get_adsp_session(
-			AUDIO_PDR_SERVICE_LOCATION_CLIENT_NAME, &session));
-		if (err)
-			goto bail;
-		if (!me->channel[fl->cid].spd[session].ispdup) {
-			err = -ENOTCONN;
-			goto bail;
-		}
-	}
 	spin_lock(&fl->hlock);
 	if (fl->file_close == 1) {
 		err = EBADF;

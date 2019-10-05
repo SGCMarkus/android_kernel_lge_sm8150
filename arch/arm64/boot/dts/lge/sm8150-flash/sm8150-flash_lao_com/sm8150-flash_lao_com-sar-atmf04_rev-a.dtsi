@@ -1,0 +1,47 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&pm8150_gpios {
+	atmf04_wake_in {
+		atmf04_wake_in_default: atmf04_wake_in_default {
+			pins = "gpio1"; /* PM855 GPIO 1 */
+			function = "normal";
+			bias-pull-up;
+			qcom,pull-up-strength = <0>;
+			power-source = <0>;
+			input-enable;
+		};
+	};
+};
+
+&qupv3_se0_i2c { /* QUPV3 SE0  */
+	status = "ok";
+	qcom,clk-freq-out = <100000>;
+	qcom,clk-freq-in  = <19200000>;
+	adsemicon_atmf04@5a {
+		compatible = "adsemicon,atmf04";
+		status = "ok";
+		reg = <0x5a>;
+		interrupt-parent = <&spmi_bus>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&atmf04_wake_in_default>;
+		//Adsemicon,vdd_ana-supply = <&pm8150_s4>; /* Always on */
+		Adsemicon,irq-gpio = <&pm8150_gpios 1 0x00>;	/* Interrupt Pin */
+		Adsemicon,vdd_ana_supply_min = <1800000>;
+		Adsemicon,vdd_ana_supply_max = <1800000>;
+		Adsemicon,vdd_ana_load_ua = <15000>;
+		Adsemicon,chip_enable = <&tlmm 79 0x00>;  /* enable pin */
+		Adsemicon,InputPinsNum = <1>;
+		Adsemicon,fw_name = "atmf04/atmf04_2CH_V0.37.fw";
+	};
+};

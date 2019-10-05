@@ -1,0 +1,7 @@
+menu "TouchSense dw7800 driver support"
+
+config PM8150B_HAPTICS
+	tristate "Qualcomm pm8150b haptics driver support"
+	default n
+
+endmenu

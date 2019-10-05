@@ -1,0 +1,139 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-alpha_common/sm8150-alpha_common-sound.dtsi"
+#include "../sm8150-alpha_common/sm8150-alpha_common-sound-es9218.dtsi"
+#include "../sm8150-alpha_common/sm8150-alpha_common-sound-sma6101.dtsi"
+#include "../sm8150-alpha_common/sm8150-alpha_common-sound-tfa9872.dtsi"
+#include "../sm8150-alpha_common/sm8150-alpha_common-sound-vibrator.dtsi"
+
+&audio_apr {
+	sound-tavil {
+		pinctrl-names = "sec-mi2s-sleep", "sec-mi2s-active", "tert-mi2s-sleep", "tert-mi2s-active", 
+                        "tert-tdm-sleep", "tert-tdm-active";
+		pinctrl-0 = <&sec_mi2s_sleep &sec_mi2s_sd0_sleep &sec_mi2s_sd1_sleep>;
+		pinctrl-1 = <&sec_mi2s_active &sec_mi2s_sd0_active &sec_mi2s_sd1_active>;
+		pinctrl-2 = <&tert_mi2s_sleep &tert_mi2s_sd1_sleep>;
+		pinctrl-3 = <&tert_mi2s_active &tert_mi2s_sd1_active>;
+        pinctrl-4 = <&tert_tdm_sleep &tert_tdm_dout_sleep>;
+        pinctrl-5 = <&tert_tdm_active &tert_tdm_dout_active>;
+
+		asoc-codec = <&stub_codec>,  <&ext_disp_audio_codec>, <&tfa98xx_spk1>, <&sma6101_amp_se4>, <&es9218_dac_se4>;
+		asoc-codec-names = "msm-stub-codec.1",
+				"msm-ext-disp-audio-codec-rx",
+				"tfa98xx-codec.0-0034",
+				"sma6101-codec.0-001e",
+				"es9218-codec.0-0048";
+	};
+};
+
+&tlmm {
+	sma_intr {
+		sma_intr_default: sma_intr_default {
+			mux {
+				pins = "gpio125";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio125";
+				drive-strength = <2>; /* 2 mA */
+				bias-disable;  /* NO pull */
+			};
+		};
+	};
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	status = "ok";
+	sma6101_amp_se4: sma6101_se4@1e {
+		sm,reset-gpio = <&tlmm 135 0x0>;
+
+		pinctrl-names = "sec_mi2s_mclk_active", "sec_mi2s_mclk_sleep", "default";
+		pinctrl-0 = <&sec_mi2s_mclk_active>;
+		pinctrl-1 = <&sec_mi2s_mclk_sleep>;
+		pinctrl-2 = <&sma_intr_default>;
+
+		status = "ok";
+	};
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	es9218_dac_se4: es9218-codec@48{
+		status = "ok";
+	};
+};
+
+&soc {
+/* Comparator Regulator : 3V3_VREG_L7C */
+/* It will be changed from RevB */
+        rpmh-regulator-ldoc7 {
+                pm8150l_l7: regulator-pm8150l-l7 {
+                        regulator-min-microvolt = <2856000>;
+                        regulator-max-microvolt = <3300000>;
+                        qcom,init-voltage = <3300000>;
+			regulator-always-on;
+                };
+        };
+};
+
+
+&tlmm {
+	dw7912_enable_default: dw7912_enable_default {
+		mux {
+			pins = "gpio139";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio139";
+			drive-strength = <2>;
+			bias-pull-down;
+			output-low;
+		};	
+	};
+
+	dw7912_trig_default: dw7912_trig_default {
+		mux {
+			pins = "gpio49";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio49";
+			drive-strength = <2>;
+			bias-pull-down;
+			output-low;
+		};	
+	};
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	status = "ok";
+	dw7912_vibrator_se4: dw7912_se4@59 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&dw7912_enable_default>,<&dw7912_trig_default>;
+		status = "ok";
+	};
+};
+
+/* FM Radio */
+/* lge,fmradio-lna-enable-gpio = DMB_FM_LNA_EN gpio (PON line on LNA circuit) */
+/* lna-supply = VCC line on LNA circuit */
+/* lge,fmradio-rf-ctrl-gpio = DMB_FM_SPDT (VCTL line on SPDT circuit) */
+/* spdt-supply = VDD line on SPDT circuit */
+
+&snd_934x {
+	lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
+	lna-supply = <&pm8150_l16>;
+	lge,fmradio-rf-ctrl-gpio = <&tlmm 163 0x00>;
+	spdt-supply = <&pm8150_l16>;
+};

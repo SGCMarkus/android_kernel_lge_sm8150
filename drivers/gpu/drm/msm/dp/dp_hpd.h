@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -27,6 +27,14 @@
  * @DP_HPD_GPIO:    GPIO based HPD
  * @DP_HPD_BUILTIN: Controller built-in HPD
  */
+
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+#include <linux/ktime.h>
+
+#define CONSECUTIVE_RECOVERY_TIME 10000
+#define MAX_RECOVERY_COUNT 1
+#endif
 
 enum dp_hpd_type {
 	DP_HPD_USBPD,
@@ -63,7 +71,6 @@ struct dp_hpd_cb {
  * @host_deinit: source or host side de-initializations
  * @simulate_connect: simulate disconnect or connect for debug mode
  * @simulate_attention: simulate attention messages for debug mode
- * @wakeup_phy: wakeup USBPD phy layer
  */
 struct dp_hpd {
 	enum dp_hpd_type type;
@@ -72,6 +79,13 @@ struct dp_hpd {
 	bool hpd_irq;
 	bool alt_mode_cfg_done;
 	bool multi_func;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	ktime_t last_recovery_time;
+	int recovery_count;
+	int need_to_recovery;
+	bool need_to_wait_real_disconnect;
+	int need_to_skip_real_disconnect;
+#endif
 
 	void (*isr)(struct dp_hpd *dp_hpd);
 	int (*register_hpd)(struct dp_hpd *dp_hpd);
@@ -79,7 +93,6 @@ struct dp_hpd {
 	void (*host_deinit)(struct dp_hpd *hpd, struct dp_catalog_hpd *catalog);
 	int (*simulate_connect)(struct dp_hpd *dp_hpd, bool hpd);
 	int (*simulate_attention)(struct dp_hpd *dp_hpd, int vdo);
-	void (*wakeup_phy)(struct dp_hpd *dp_hpd, bool wakeup);
 };
 
 /**

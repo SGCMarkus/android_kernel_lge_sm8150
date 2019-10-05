@@ -16,6 +16,11 @@
 #include "cam_actuator_core.h"
 #include "cam_trace.h"
 
+#ifdef CONFIG_MACH_LGE
+extern void actuator_create_sysfs(struct cam_actuator_ctrl_t *a_ctrl);
+extern void actuator_destroy_sysfs(struct cam_actuator_ctrl_t *a_ctrl);
+#endif
+
 static long cam_actuator_subdev_ioctl(struct v4l2_subdev *sd,
 	unsigned int cmd, void *arg)
 {
@@ -219,6 +224,13 @@ static int32_t cam_actuator_driver_i2c_probe(struct i2c_client *client,
 	a_ctrl->last_flush_req = 0;
 	a_ctrl->cam_act_state = CAM_ACTUATOR_INIT;
 
+#ifdef CONFIG_MACH_LGE
+	spin_lock_init(&a_ctrl->hall_lock);
+	a_ctrl->camera_class = NULL;
+	CAM_INFO(CAM_ACTUATOR, "Create act_normal_hall_class!! ");
+	actuator_create_sysfs(a_ctrl);
+#endif
+
 	return rc;
 
 unreg_subdev:
@@ -243,6 +255,9 @@ static int32_t cam_actuator_platform_remove(struct platform_device *pdev)
 		return 0;
 	}
 
+#ifdef CONFIG_MACH_LGE
+	actuator_destroy_sysfs(a_ctrl);
+#endif
 	CAM_INFO(CAM_ACTUATOR, "platform remove invoked");
 	mutex_lock(&(a_ctrl->actuator_mutex));
 	cam_actuator_shutdown(a_ctrl);
@@ -278,6 +293,10 @@ static int32_t cam_actuator_driver_i2c_remove(struct i2c_client *client)
 		CAM_ERR(CAM_ACTUATOR, "Actuator device is NULL");
 		return -EINVAL;
 	}
+
+#ifdef CONFIG_MACH_LGE
+	actuator_destroy_sysfs(a_ctrl);
+#endif
 
 	CAM_INFO(CAM_ACTUATOR, "i2c remove invoked");
 	mutex_lock(&(a_ctrl->actuator_mutex));
@@ -381,6 +400,13 @@ static int32_t cam_actuator_driver_platform_probe(
 
 	platform_set_drvdata(pdev, a_ctrl);
 	a_ctrl->cam_act_state = CAM_ACTUATOR_INIT;
+
+#ifdef CONFIG_MACH_LGE
+	spin_lock_init(&a_ctrl->hall_lock);
+	a_ctrl->camera_class = NULL;
+	CAM_INFO(CAM_ACTUATOR, "Create act_tele_hall_class!! index : %d",a_ctrl->soc_info.index);
+	actuator_create_sysfs(a_ctrl);
+#endif
 
 	return rc;
 

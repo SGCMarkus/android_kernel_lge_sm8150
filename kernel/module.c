@@ -70,6 +70,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#ifdef CONFIG_LGE_PKM
+#include "../include/soc/qcom/lge/lge_pkm_drv.h"
+#endif
+
 #ifndef ARCH_SHF_SMALL
 #define ARCH_SHF_SMALL 0
 #endif
@@ -969,6 +973,15 @@ SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 
 	if (mutex_lock_interruptible(&module_mutex) != 0)
 		return -EINTR;
+
+#ifdef CONFIG_LGE_PKM
+    ret = lge_pkm_delete_module(name);
+    if (ret != 0) {
+        pr_err("[LGE_PKM] Cannot delete from PKM(%d)\n", ret);
+        ret = -ENOENT;
+        goto out;
+    }
+#endif
 
 	mod = find_module(name);
 	if (!mod) {
@@ -3446,6 +3459,15 @@ static noinline int do_init_module(struct module *mod)
 {
 	int ret = 0;
 	struct mod_initfree *freeinit;
+
+#ifdef CONFIG_LGE_PKM
+    ret = lge_pkm_add_module(mod);
+    if (ret != 0) {
+        pr_err("[LGE_PKM] Cannot add to PKM\n");
+        ret = -ENOENT;
+        goto fail;
+    }
+#endif
 
 	freeinit = kmalloc(sizeof(*freeinit), GFP_KERNEL);
 	if (!freeinit) {

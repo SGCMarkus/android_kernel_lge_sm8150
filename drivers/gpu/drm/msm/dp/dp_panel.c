@@ -26,6 +26,35 @@
 #define VSC_SDP_EXTENSION_FOR_COLORIMETRY_SUPPORTED BIT(3)
 #define VSC_EXT_VESA_SDP_SUPPORTED BIT(4)
 #define VSC_EXT_VESA_SDP_CHAINING_SUPPORTED BIT(5)
+#undef pr_debug
+#define pr_debug pr_err
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+extern struct ice40 *global_ice40;
+extern int ice40_mcu_reg_read(struct ice40 *ice40, uint addr, char *data, int len);
+extern bool is_dd_connected(void);
+extern void request_cover_recovery(int num);
+u8 dd_edid_tianma[128] = {
+	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x3F, 0x30, 0x75, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x1B, 0x01, 0x04, 0xA5, 0x07, 0x0E, 0x76, 0x0E, 0xC7, 0xEB, 0xAA, 0x55, 0x3C, 0xB7, 0x23,
+	0x0B, 0x4C, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+	0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7C, 0x3C, 0x38, 0x40, 0x40, 0x70, 0x60, 0x80, 0x1A, 0x02,
+	0x42, 0x00, 0x44, 0x88, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1D};
+u8 dd_edid_tovis[128] = {
+	0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x05, 0x3F, 0x30, 0x75, 0x01, 0x00, 0x00, 0x00,
+	0x01, 0x1B, 0x01, 0x04, 0xA5, 0x07, 0x0E, 0x76, 0x0E, 0xC7, 0xEB, 0xAA, 0x55, 0x3C, 0xB7, 0x23,
+	0x0B, 0x4C, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+	0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x7C, 0x3D, 0x38, 0x40, 0x40, 0x70, 0x98, 0x80, 0x1A, 0x02,
+	0x08, 0x0C, 0x44, 0x88, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x12};
+u8 dd_dpcd[16] = {
+	0x12, 0x14, 0xc1, 0x01, 0x01, 0x00, 0x01, 0x00, 0x02, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00};
+#endif
 
 enum dp_panel_hdr_pixel_encoding {
 	RGB,
@@ -82,6 +111,9 @@ struct dp_panel_private {
 	u8 spd_product_description[16];
 	u8 major;
 	u8 minor;
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	bool used_dd_edid;
+#endif
 };
 
 static const struct dp_panel_info fail_safe = {
@@ -1602,6 +1634,14 @@ static int dp_panel_read_dpcd(struct dp_panel *dp_panel, bool multi_func)
 		goto skip_dpcd_read;
 	}
 
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	if (is_dd_connected()) {
+		pr_info("Force set DD DPCD, skip dpcd read\n");
+		memcpy(dp_panel->dpcd, dd_dpcd, sizeof(dd_dpcd));
+		goto skip_dpcd_read;
+	}
+#endif
+
 	rlen = drm_dp_dpcd_read(drm_aux, DP_TRAINING_AUX_RD_INTERVAL, &temp, 1);
 	if (rlen != 1) {
 		pr_err("error reading DP_TRAINING_AUX_RD_INTERVAL\n");
@@ -1659,7 +1699,12 @@ skip_dpcd_read:
 
 	link_info->num_lanes = dp_panel->dpcd[DP_MAX_LANE_COUNT] &
 				DP_MAX_LANE_COUNT_MASK;
-
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (is_dd_connected()) {
+		link_info->num_lanes = 1;
+		pr_info("%s: [DD] lane = 1\n", __func__);
+	}
+#endif
 	if (multi_func)
 		link_info->num_lanes = min_t(unsigned int,
 			link_info->num_lanes, 2);
@@ -1764,8 +1809,13 @@ static int dp_panel_read_edid(struct dp_panel *dp_panel,
 	struct drm_connector *connector)
 {
 	int ret = 0;
+	int count = 0;
 	struct dp_panel_private *panel;
 	struct edid *edid;
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	int read_dd_edid_count = 0;
+	char display_id = 0;
+#endif
 
 	if (!dp_panel) {
 		pr_err("invalid input\n");
@@ -1778,9 +1828,27 @@ static int dp_panel_read_edid(struct dp_panel *dp_panel,
 		pr_debug("skip edid read in debug mode\n");
 		goto end;
 	}
-
-	sde_get_edid(connector, &panel->aux->drm_aux->ddc,
-		(void **)&dp_panel->edid_ctrl);
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (is_dd_connected()) {
+		while ((ice40_mcu_reg_read(global_ice40, 0x0C, &display_id, 1) < 0) && (read_dd_edid_count < 10)) {
+			pr_err("Failed to read DD Display ID, #%d\n", read_dd_edid_count);
+			read_dd_edid_count++;
+		}
+		pr_info("Force set DD edid %d, skip edid read\n", display_id);
+		if (display_id == 3)
+			dp_panel->edid_ctrl->edid = (struct edid *)dd_edid_tovis;
+		else
+			dp_panel->edid_ctrl->edid = (struct edid *)dd_edid_tianma;
+		goto end;
+	}
+#endif
+	do {
+		sde_get_edid(connector, &panel->aux->drm_aux->ddc,
+			(void **)&dp_panel->edid_ctrl);
+		pr_err(" %s %d EDID read %s, count=%d", __func__, __LINE__, !dp_panel->edid_ctrl->edid?"failed":"successed",count);
+		if (!dp_panel->edid_ctrl->edid)
+			msleep(50);
+	} while (!dp_panel->edid_ctrl->edid && (count++ < 10));
 	if (!dp_panel->edid_ctrl->edid) {
 		pr_err("EDID read failed\n");
 		ret = -EINVAL;
@@ -1789,6 +1857,9 @@ static int dp_panel_read_edid(struct dp_panel *dp_panel,
 end:
 	edid = dp_panel->edid_ctrl->edid;
 	dp_panel->audio_supported = drm_detect_monitor_audio(edid);
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	panel->used_dd_edid = is_dd_connected();
+#endif
 
 	return ret;
 }
@@ -2370,8 +2441,13 @@ static int dp_panel_deinit_panel_info(struct dp_panel *dp_panel, u32 flags)
 	panel = container_of(dp_panel, struct dp_panel_private, dp_panel);
 	hdr = &panel->catalog->hdr_data;
 
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	if (!(panel->custom_edid || panel->used_dd_edid) && dp_panel->edid_ctrl->edid)
+		sde_free_edid((void **)&dp_panel->edid_ctrl);
+#else
 	if (!panel->custom_edid && dp_panel->edid_ctrl->edid)
 		sde_free_edid((void **)&dp_panel->edid_ctrl);
+#endif
 
 	dp_panel_set_stream_info(dp_panel, DP_STREAM_MAX, 0, 0, 0, 0);
 	memset(&dp_panel->pinfo, 0, sizeof(dp_panel->pinfo));
@@ -2591,22 +2667,47 @@ static void dp_panel_config_misc(struct dp_panel *dp_panel)
 	catalog->config_misc(catalog);
 }
 
+static bool dp_panel_use_fixed_nvid(struct dp_panel *dp_panel)
+{
+	u8 *dpcd = dp_panel->dpcd;
+	struct sde_connector *c_conn = to_sde_connector(dp_panel->connector);
+
+	/* use fixe mvid and nvid for MST streams */
+	if (c_conn->mst_port)
+		return true;
+
+	/*
+	 * For better interop experience, used a fixed NVID=0x8000
+	 * whenever connected to a VGA dongle downstream.
+	 */
+	if (dpcd[DP_DOWNSTREAMPORT_PRESENT] & DP_DWN_STRM_PORT_PRESENT) {
+		u8 type = dpcd[DP_DOWNSTREAMPORT_PRESENT] &
+			DP_DWN_STRM_PORT_TYPE_MASK;
+		if (type == DP_DWN_STRM_PORT_TYPE_ANALOG)
+			return true;
+	}
+
+	return false;
+}
+
 static void dp_panel_config_msa(struct dp_panel *dp_panel)
 {
 	struct dp_panel_private *panel;
 	struct dp_catalog_panel *catalog;
 	u32 rate;
 	u32 stream_rate_khz;
+	bool fixed_nvid;
 
 	panel = container_of(dp_panel, struct dp_panel_private, dp_panel);
 	catalog = panel->catalog;
 
 	catalog->widebus_en = dp_panel->widebus_en;
 
+	fixed_nvid = dp_panel_use_fixed_nvid(dp_panel);
 	rate = drm_dp_bw_code_to_link_rate(panel->link->link_params.bw_code);
 	stream_rate_khz = dp_panel->pinfo.pixel_clk_khz;
 
-	catalog->config_msa(catalog, rate, stream_rate_khz);
+	catalog->config_msa(catalog, rate, stream_rate_khz, fixed_nvid);
 }
 
 static int dp_panel_hw_cfg(struct dp_panel *dp_panel, bool enable)

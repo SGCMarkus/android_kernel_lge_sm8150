@@ -1,0 +1,74 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+/{
+	aliases {
+		spi7 = &qupv3_se7_spi;
+	};
+/*
+	reserved-memory {
+		removed_regions: removed_regions@85800000 {
+			reg = <0 0x85800000 0 0x2800000>;
+		};
+	};*/
+};
+
+&soc {
+/*	qcom_seecom: qseecom@86600000 {
+		reg = <0x86600000 0x1A00000>;
+	};
+*/
+	/* PIN CONTROL for gf3208 */
+
+	qupv3_se7_spi: spi@89c000 { /* QUP7 */
+		compatible = "qcom,spi-geni";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x89c000 0x4000>;
+		reg-names = "se_phys";
+		clock-names = "se-clk", "m-ahb", "s-ahb";
+		clocks = <&clock_gcc GCC_QUPV3_WRAP0_S7_CLK>,
+			<&clock_gcc GCC_QUPV3_WRAP_0_M_AHB_CLK>,
+			<&clock_gcc GCC_QUPV3_WRAP_0_S_AHB_CLK>;
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&qupv3_se7_spi_active>;
+		pinctrl-1 = <&qupv3_se7_spi_sleep>;
+		interrupts = <GIC_SPI 608 0>;
+		spi-max-frequency = <50000000>;
+		status = "disable";
+	};
+};
+
+&soc{
+	fingerprint@0 {
+		status = "ok";
+    		compatible = "goodix,fingerprint";
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <118>;
+
+		goodix,gpio_irq = <&tlmm 118 0x00>;
+		goodix,gpio_reset = <&tlmm 116 0x00>;
+		goodix,gpio_cs  = <&tlmm 101 0x00>;
+	};
+
+	qcom,qbt1000 {
+		status = "disabled";
+		compatible = "qcom,qbt1000";
+		clock-names = "core", "iface";
+		clock-frequency = <25000000>;
+		qcom,ipc-gpio = <&tlmm 118 0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&key_home_default>;
+		qcom,finger-detect-gpio = <&pm8150_gpios 1 0>;
+	};
+};

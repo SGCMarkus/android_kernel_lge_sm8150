@@ -1,0 +1,32 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/clock/qcom,gcc-sm8150.h>
+#include <dt-bindings/clock/qcom,camcc-sm8150.h>
+#include <dt-bindings/clock/qcom,rpmh.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+#include "../sm8150-beta_common/sm8150-beta_common.dtsi"
+#include "sm8150-beta-pinctrl.dtsi"
+#include "sm8150-beta-panel.dtsi"
+#include "sm8150-beta-misc.dtsi"
+#include "sm8150-beta-pm.dtsi"
+#include "sm8150-beta-connectivity.dtsi"
+#include "sm8150-beta-nfc.dtsi"
+#include "sm8150-beta-mme.dtsi"
+#include "sm8150-beta-touch.dtsi"
+#include "sm8150-beta-fingerprint.dtsi"
+#include "sm8150-beta-usb.dtsi"
+#include "sm8150-beta-storage.dtsi"

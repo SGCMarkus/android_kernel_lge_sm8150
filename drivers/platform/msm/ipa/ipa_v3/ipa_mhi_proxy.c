@@ -656,7 +656,7 @@ struct ipa_mhi_clk_vote_resp_msg_v01
 	 */
 	if (vote) {
 		ret = mhi_device_get_sync(imp_ctx->md.mhi_dev);
-		if (ret) {
+		if (ret){
 			IMP_ERR("mhi_sync_get failed %d\n", ret);
 			resp->resp.result = IPA_QMI_RESULT_FAILURE_V01;
 			/* return INCOMPATIBLE_STATE in any case */

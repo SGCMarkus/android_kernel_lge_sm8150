@@ -1,0 +1,36 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+	qcom,msm-dai-mi2s {
+		compatible = "qcom,msm-dai-mi2s";
+
+		qcom,msm-dai-q6-mi2s-tert {
+                       compatible = "qcom,msm-dai-q6-mi2s";
+                       qcom,msm-dai-q6-mi2s-dev-id = <2>;
+                       qcom,msm-mi2s-rx-lines = <2>; /* SD1 used as output */
+                       qcom,msm-mi2s-tx-lines = <0>; /* SD0 used as input */
+		};
+		
+		qcom,msm-dai-q6-mi2s-quat {
+			compatible = "qcom,msm-dai-q6-mi2s";
+			qcom,msm-dai-q6-mi2s-dev-id = <3>;
+			qcom,msm-mi2s-rx-lines = <2>;
+			qcom,msm-mi2s-tx-lines = <0>;
+		};
+	};
+};
+
+&qupv3_se0_i2c{ /* QUPV3 SE0  */
+
+};

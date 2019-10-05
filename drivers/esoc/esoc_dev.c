@@ -267,8 +267,8 @@ static long esoc_dev_ioctl(struct file *file, unsigned int cmd,
 			esoc_mdm_log("ESOC_WAIT_FOR_REQ: Failed to access\n");
 			return -EACCES;
 		}
-		esoc_mdm_log(
-		"ESOC_WAIT_FOR_REQ: Waiting for req event to arrive.\n");
+		//esoc_mdm_log(
+		//"ESOC_WAIT_FOR_REQ: Waiting for req event to arrive.\n");
 		err = wait_event_interruptible(esoc_udev->req_wait,
 					!kfifo_is_empty(&esoc_udev->req_fifo));
 		if (!err) {

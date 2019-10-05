@@ -1,0 +1,211 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-flash_lao_ldu.dtsi"
+#include "sm8150-flash_lao_ldu-sound_rev-0.1.dtsi"
+#include "sm8150-flash_lao_ldu-fingerprint_rev-0.1.dtsi"
+#include "../sm8150-camera/sm8150-flash-camera_rev-a.dtsi"
+#include "sm8150-flash_lao_ldu-tdmb_rev-a.dtsi"
+
+/ {
+	model = "LG Electronics, flash_lao, rev_0.1";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x01040008 0>;
+};
+
+&soc {
+	gpio_keys {
+		pinctrl-0 = <&smartcover_gpio_default>;
+		cover_display_back {
+			status = "disabled";
+		};
+	};
+};
+
+&qupv3_se0_i2c{ /* QUPV3 SE0  */
+	status = "ok";
+	lp5523@32 {
+		status = "ok";
+		compatible = "national,lp5523";
+		reg = <0x32>;
+		clock-mode = /bits/ 8 <1>;
+		enable-gpio = <&tlmm 82 0x00>;
+
+		chan0 {
+			chan-name = "d1";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan1 {
+			chan-name = "d2";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan2 {
+			chan-name = "d3";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan3 {
+			chan-name = "d4";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan4 {
+			chan-name = "d5";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan5 {
+			chan-name = "d6";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan6 {
+			chan-name = "d7";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan7 {
+			chan-name = "d8";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan8 {
+			chan-name = "d9";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+	};
+};
+
+&storage_cd {
+    mux {
+        pins = "gpio96";
+        function = "gpio";
+    };
+
+    config {
+        pins = "gpio96";
+        bias-pull-up;           /* pull up */
+        drive-strength = <2>;   /* 2 MA */
+    };
+};
+
+&sdhc_2 {
+    vdd-supply = <&pm8150l_l9>;
+    qcom,vdd-voltage-level = <2950000 2960000>;
+    qcom,vdd-current-level = <200 800000>;
+
+    vdd-io-supply = <&pm8150l_l6>;
+    qcom,vdd-io-voltage-level = <1808000 2960000>;
+    qcom,vdd-io-current-level = <200 22000>;
+
+    pinctrl-names = "active", "sleep";
+    pinctrl-0 = <&sdc2_clk_on  &sdc2_cmd_on &sdc2_data_on &storage_cd>;
+    pinctrl-1 = <&sdc2_clk_off &sdc2_cmd_off &sdc2_data_off &storage_cd>;
+
+    cd-gpios = <&tlmm 96 GPIO_ACTIVE_HIGH>;
+
+    status = "ok";
+};
+
+//displayport pin set
+
+&sde_dp {
+	pinctrl-0 = <&sde_dp_aux_active &sde_dp_usbplug_cc_active>;
+	pinctrl-1 = <&sde_dp_aux_suspend &sde_dp_usbplug_cc_suspend>;
+
+	qcom,aux-en-gpio = <&tlmm 42 0>;
+	qcom,aux-sel-gpio = <&tlmm 148 0>;
+
+};
+
+&tlmm {
+	sde_dp_aux_active:sde_dp_aux_active {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-disable = <0>;
+			driver-strength = <8>;
+		};
+	};
+
+	sde_dp_aux_suspend:sde_dp_aux_suspend {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-pull-down;
+			driver-strength = <8>;
+		};
+	};
+};
+
+&vendor {
+	lge-battery-supplement {
+		default-battery-name = "FLASH_QDM_Tocad_3250mAh";
+		default-battery-kohm = <63>;
+	};
+};
+
+&hot_key {
+	status = "disabled";
+};
+
+&slim_aud {
+	tavil_codec {
+		cdc-vdd-3v3-supply = <&pm8150l_l7>;
+		qcom,cdc-vdd-3v3-voltage = <3300000 3300000>;
+		qcom,cdc-vdd-3v3-current = <16800>;
+	};
+};
+
+&lge_sbu_switch {
+	lge,oe-gpio = <&tlmm 119 0>;
+
+	pinctrl-0 = <&lge_sbu_switch_oe_active &lge_sbu_switch_sel_active>;
+};
+
+&tlmm {
+	lge_sbu_switch_oe_active: lge_sbu_switch_oe_active {
+		mux {
+			pins = "gpio119";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio119";
+			drive-strength = <6>;
+			bias-bus-hold;
+		};
+	};
+};
