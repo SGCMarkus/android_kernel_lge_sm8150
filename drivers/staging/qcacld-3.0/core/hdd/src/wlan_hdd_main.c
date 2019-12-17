@@ -175,6 +175,7 @@ static unsigned int dev_num = 1;
 static struct cdev wlan_hdd_state_cdev;
 static struct class *class;
 static dev_t device;
+static bool hdd_loaded = false;
 #ifndef MODULE
 static struct gwlan_loader *wlan_loader;
 static ssize_t wlan_boot_cb(struct kobject *kobj,
@@ -13088,6 +13089,7 @@ static int wlan_hdd_state_ctrl_param_open(struct inode *inode,
 	return 0;
 }
 
+static int hdd_driver_load(void);
 static ssize_t wlan_hdd_state_ctrl_param_write(struct file *filp,
 						const char __user *user_buf,
 						size_t count,
@@ -13116,6 +13118,13 @@ static ssize_t wlan_hdd_state_ctrl_param_write(struct file *filp,
 	if (strncmp(buf, wlan_on_str, strlen(wlan_on_str)) != 0) {
 		pr_err("Invalid value received from framework");
 		goto exit;
+	}
+
+	if (!hdd_loaded) {
+		if (hdd_driver_load()) {
+			pr_err("%s: Failed to init hdd module\n", __func__);
+			goto exit;
+		}
 	}
 
 	if (!cds_is_driver_loaded()) {
@@ -13340,12 +13349,6 @@ static int hdd_driver_load(void)
 
 	hdd_set_conparam(con_mode);
 
-	errno = wlan_hdd_state_ctrl_param_create();
-	if (errno) {
-		hdd_fln("Failed to create ctrl param; errno:%d", errno);
-		goto wakelock_destroy;
-	}
-
 	errno = pld_init();
 	if (errno) {
 		hdd_fln("Failed to init PLD; errno:%d", errno);
@@ -13358,6 +13361,7 @@ static int hdd_driver_load(void)
 		goto pld_deinit;
 	}
 
+	hdd_loaded = true;
 	pr_info("%s: driver loaded\n", WLAN_MODULE_NAME);
 
 	return 0;
@@ -13366,8 +13370,6 @@ pld_deinit:
 	pld_deinit();
 param_destroy:
 	wlan_hdd_state_ctrl_param_destroy();
-wakelock_destroy:
-	qdf_wake_lock_destroy(&wlan_wake_lock);
 comp_deinit:
 	hdd_component_deinit();
 hdd_deinit:
@@ -13553,10 +13555,14 @@ static int wlan_deinit_sysfs(void)
  */
 static int hdd_module_init(void)
 {
-	if (hdd_driver_load())
-		return -EINVAL;
+	int ret;
+	
+	ret = wlan_hdd_state_ctrl_param_create();
+	if (ret) {
+		hdd_fln("Failed to create ctrl param; errno:%d", ret);
+	}
 
-	return 0;
+	return ret;
 }
 #else
 static int __init hdd_module_init(void)
@@ -13566,6 +13572,11 @@ static int __init hdd_module_init(void)
 	ret = wlan_init_sysfs();
 	if (ret)
 		hdd_fln("Failed to create sysfs entry");
+
+	ret = wlan_hdd_state_ctrl_param_create();
+	if (ret) {
+		hdd_fln("Failed to create ctrl param; errno:%d", ret);
+	}
 
 	return ret;
 }
