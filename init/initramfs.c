@@ -608,6 +608,17 @@ static void __init clean_rootfs(void)
 }
 #endif
 
+static int __initdata disable_skip_initramfs;
+
+static int __init disable_skip_initramfs_param(char *str)
+{
+	if (*str)
+		return 0;
+	disable_skip_initramfs = 1;
+	return 1;
+}
+__setup("disable_skip_initramfs", disable_skip_initramfs_param);
+
 static int __initdata do_skip_initramfs;
 
 static int __init skip_initramfs_param(char *str)
@@ -623,7 +634,7 @@ static int __init populate_rootfs(void)
 {
 	char *err;
 
-	if (do_skip_initramfs) {
+	if (!disable_skip_initramfs && do_skip_initramfs) {
 		if (initrd_start)
 			free_initrd();
 		return default_rootfs();
