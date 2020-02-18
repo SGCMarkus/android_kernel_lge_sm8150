@@ -30,7 +30,4 @@
 #include "sm8150-flash_lao_ldu-usb.dtsi"
 #include "sm8150-flash_lao_ldu-storage.dtsi"
 #include "sm8150-flash_lao_ldu-5G_modem.dtsi"
-<<<<<<< HEAD
-=======
 #include "sm8150-flash_lao_ldu-pkm.dtsi"
->>>>>>> e912b64... [Build][flash] Bring-up Flash LDU Kernel

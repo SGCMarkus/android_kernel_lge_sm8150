@@ -31,10 +31,3 @@
 &lge_sbu_switch {
 	lge,reverse-sbu-switch;
 };
-<<<<<<< HEAD
-
-&pm8150b_charger {
-	qcom,lpd-disable;
-};
-=======
->>>>>>> e912b64... [Build][flash] Bring-up Flash LDU Kernel
