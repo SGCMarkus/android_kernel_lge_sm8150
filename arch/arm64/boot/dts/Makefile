@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+ifneq ($(CONFIG_MACH_LGE), y)
 dts-dirs += actions
 dts-dirs += al
 dts-dirs += allwinner
@@ -24,6 +25,10 @@ dts-dirs += sprd
 dts-dirs += xilinx
 dts-dirs += lg
 dts-dirs += zte
+else
+dts-dirs += qcom
+dts-dirs += lge
+endif
 
 subdir-y	:= $(dts-dirs)
 

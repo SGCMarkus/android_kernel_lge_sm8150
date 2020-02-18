@@ -60,6 +60,10 @@ struct dp_aux {
 	void (*dpcd_updated)(struct dp_aux *aux);
 	void (*set_sim_mode)(struct dp_aux *aux, bool en, u8 *edid, u8 *dpcd);
 	int (*aux_switch)(struct dp_aux *aux, bool enable, int orientation);
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+	void (*set_cfg)(struct drm_dp_aux *drm_aux, u32 index);
+	void (*set_recfg)(struct drm_dp_aux *drm_aux);
+#endif
 };
 
 struct dp_aux *dp_aux_get(struct device *dev, struct dp_catalog_aux *catalog,

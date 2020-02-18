@@ -20,3 +20,22 @@ config ECRYPT_FS_MESSAGING
 	  Enables the /dev/ecryptfs entry for use by ecryptfsd. This allows
 	  for userspace to wrap/unwrap file encryption keys by other
 	  backends, like OpenSSL.
+
+config SD_ENCRYPTION_MANAGER
+	bool "Enable LG SDCard encryption for media exception/decryption only"
+	depends on ECRYPT_FS
+	default y
+	help
+	  LG provides SD card encryption to protect external SD card data.
+	  all created data on the external SD card is automatically encrypted by
+	  file system (eCryptfs) before committing it to SD card and all reads
+	  automatically decrypt data before returning it to the calling process.
+
+config SD_ENCRYPTION_ADVANCED
+	bool "Switch to advanced algorithm for LG SDCard encryption"
+	depends on SD_ENCRYPTION_MANAGER
+	default y
+	help
+	  Switches hash algorithm from MD5 to SHA256 to strengthen security
+	  when making initial vector for AES(CBC). And switches block encryption
+	  algorithm from ecb to cbc when encrypting file encryption key.

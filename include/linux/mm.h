@@ -2375,7 +2375,7 @@ int __must_check write_one_page(struct page *page);
 void task_dirty_inc(struct task_struct *tsk);
 
 /* readahead.c */
-#define VM_MAX_READAHEAD	512	/* kbytes */
+#define VM_MAX_READAHEAD	128	/* kbytes */
 #define VM_MIN_READAHEAD	16	/* kbytes (includes current page) */
 
 int force_page_cache_readahead(struct address_space *mapping, struct file *filp,
@@ -2532,6 +2532,7 @@ static inline struct page *follow_page(struct vm_area_struct *vma,
 #define FOLL_REMOTE	0x2000	/* we are working on non-current tsk/mm */
 #define FOLL_COW	0x4000	/* internal GUP flag */
 #define FOLL_ANON	0x8000	/* don't do file mappings */
+#define FOLL_CMA	0x80000 /* migrate if the page is from cma pageblock */
 
 static inline int vm_fault_to_errno(int vm_fault, int foll_flags)
 {
@@ -2559,6 +2560,13 @@ static inline bool page_poisoning_enabled(void) { return false; }
 static inline void kernel_poison_pages(struct page *page, int numpages,
 					int enable) { }
 static inline bool page_is_poisoned(struct page *page) { return false; }
+#endif
+
+#ifdef CONFIG_CMA_PINPAGE_MIGRATION
+long get_user_pages_foll_cma(struct task_struct *tsk, struct mm_struct *mm,
+		unsigned long start, unsigned long nr_pages,
+		int write, int force, struct page **pages,
+		struct vm_area_struct **vmas);
 #endif
 
 #ifdef CONFIG_DEBUG_PAGEALLOC
@@ -2768,7 +2776,6 @@ static inline void setup_nr_node_ids(void) {}
 #endif
 
 extern int want_old_faultaround_pte;
-
 #ifdef CONFIG_PROCESS_RECLAIM
 struct reclaim_param {
 	struct vm_area_struct *vma;
@@ -2780,6 +2787,8 @@ struct reclaim_param {
 	int nr_reclaimed;
 };
 extern struct reclaim_param reclaim_task_anon(struct task_struct *task,
+		int nr_to_reclaim);
+extern struct reclaim_param reclaim_task_file_anon(struct task_struct *task,
 		int nr_to_reclaim);
 #endif
 

@@ -6,5 +6,10 @@ config MHI_QCOM
        help
 	  If you say yes to this option, MHI bus support for QCOM modem chipsets
 	  will be enabled.
-
+config LGE_DUAL_QFUSE
+       tristate "LGE DUAL QFUSE"
+       depends on MHI_BUS
+       help
+	  If you say yes to this option, sbl_fuse.mbn modified by LGE will be loaded
+	  when we want fusing to modem.
 endmenu

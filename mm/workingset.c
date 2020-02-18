@@ -257,6 +257,7 @@ void workingset_refault(struct page *page, void *shadow)
 	unsigned long eviction;
 	struct lruvec *lruvec;
 	unsigned long refault;
+	unsigned long anon;
 	bool workingset;
 	int memcgid;
 
@@ -285,6 +286,11 @@ void workingset_refault(struct page *page, void *shadow)
 	lruvec = mem_cgroup_lruvec(pgdat, memcg);
 	refault = atomic_long_read(&lruvec->inactive_age);
 	active_file = lruvec_lru_size(lruvec, LRU_ACTIVE_FILE, MAX_NR_ZONES);
+	if (mem_cgroup_get_nr_swap_pages(memcg) > 0)
+		anon = lruvec_lru_size(lruvec, LRU_ACTIVE_ANON, MAX_NR_ZONES) +
+			lruvec_lru_size(lruvec, LRU_INACTIVE_ANON, MAX_NR_ZONES);
+	else
+		anon = 0;
 
 	/*
 	 * Calculate the refault distance
@@ -311,7 +317,7 @@ void workingset_refault(struct page *page, void *shadow)
 	 * don't act on pages that couldn't stay resident even if all
 	 * the memory was available to the page cache.
 	 */
-	if (refault_distance > active_file)
+	if (refault_distance > active_file + anon)
 		goto out;
 
 	SetPageActive(page);

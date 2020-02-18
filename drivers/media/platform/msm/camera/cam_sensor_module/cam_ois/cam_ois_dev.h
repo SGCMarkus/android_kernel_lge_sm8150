@@ -128,7 +128,16 @@ struct cam_ois_ctrl_t {
 	char ois_name[32];
 	uint8_t ois_fw_flag;
 	uint8_t is_ois_calib;
+	uint8_t is_poweredup;
+	uint8_t is_ois_aat; /* LGE_CHANGE, OIS AAT, hongs.lee@lge.com */
 	struct cam_ois_opcode opcode;
+#ifdef CONFIG_MACH_LGE
+	struct msm_ois_readout_buffer buf;
+	uint16_t gyro_gain_x;
+	uint16_t gyro_gain_y;
+	spinlock_t gyro_lock;
+	bool ois_thread_running;
+#endif
 };
 
 #endif /*_CAM_OIS_DEV_H_ */

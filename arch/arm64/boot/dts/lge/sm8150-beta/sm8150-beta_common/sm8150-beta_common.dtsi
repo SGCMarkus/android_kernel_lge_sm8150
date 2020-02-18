@@ -1,0 +1,126 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+&soc {
+
+	lge,prmd {
+		compatible = "lge,prm";
+		lge,vfps-enabled;
+		lge,sben-enabled;
+		lge,fbcn-enabled;
+	};
+
+};
+
+&soc {
+	wdog: qcom,wdt@17c10000{
+		qcom,bark-time = <16000>;
+	};
+
+	ramoops {
+		compatible = "ramoops";
+		mem-size = <0x80000>;
+		mem-address = <0xb0000000>;
+		record-size = <4096>;
+		console-size = <0x40000>;
+		ftrace-size = <0x40000>;
+		pmsg-size = <0>;
+		ecc-size = <0>;
+	};
+
+	bootlog {
+		compatible = "bootlog";
+	};
+
+	dcc: dcc_v2@10a2000 {
+		status = "disabled";
+	};
+
+	pcie0: qcom,pcie@1c00000 {
+		status = "disabled";
+	};
+
+	pcie1: qcom,pcie@1c08000 {
+		status = "disabled";
+	};
+};
+
+&reserved_memory {
+		ramoops_mem: ramoops_region@b0000000 {
+			compatible = "removed-dma-pool";
+			no-map;
+			reg = <0 0xb0000000 0 0x100000>;
+		};
+
+};
+
+&qseecom_mem {
+	reg = <0 0x9e400000 0 0x1c00000>;
+};
+
+&cont_splash_memory {
+	reg = <0x0 0x9D200000 0x0 0x01200000>;
+};
+
+&disp_rdump_memory {
+        reg = <0x0 0x9D200000 0x0 0x01200000>;
+};
+
+&pil_adsp_mem {
+	reg = <0 0x8be00000 0 0x2200000>;
+};
+
+&pil_modem_mem {
+	reg = <0 0x8e000000 0 0xA000000>;
+};
+
+&pil_video_mem {
+	reg = <0 0x98000000 0 0x500000>;
+};
+
+&pil_slpi_mem {
+	reg = <0 0x98500000 0 0x1400000>;
+};
+
+&pil_ipa_fw_mem {
+	reg = <0x0 0x99900000 0x0 0x10000>;
+};
+
+&pil_ipa_gsi_mem {
+	reg = <0x0 0x99910000 0x0 0x5000>;
+};
+
+&pil_gpu_mem {
+	reg = <0x0 0x99915000 0x0 0x2000>;
+};
+
+&pil_spss_mem {
+	reg = <0x0 0x99a00000 0x0 0x100000>;
+};
+
+&pil_cdsp_mem {
+	reg = <0x0 0x99b00000 0x0 0x3700000>;
+};
+
+&cdsp_sec_mem {
+	reg = <0x0 0xa4c00000 0x0 0x4000000>;
+};
+
+&mhi_0 {
+	mhi,fw-name = "debug.mbn";
+};
+
+&usb1 {
+        status = "disabled";
+};

@@ -175,6 +175,10 @@ enum { ecryptfs_opt_sig, ecryptfs_opt_ecryptfs_sig,
        ecryptfs_opt_fn_cipher, ecryptfs_opt_fn_cipher_key_bytes,
        ecryptfs_opt_unlink_sigs, ecryptfs_opt_mount_auth_tok_only,
        ecryptfs_opt_check_dev_ruid,
+#ifdef FEATURE_SDCARD_ENCRYPTION
+       ecryptfs_opt_decryption_only,
+       ecryptfs_opt_media_exception,
+#endif
        ecryptfs_opt_err };
 
 static const match_table_t tokens = {
@@ -192,6 +196,10 @@ static const match_table_t tokens = {
 	{ecryptfs_opt_unlink_sigs, "ecryptfs_unlink_sigs"},
 	{ecryptfs_opt_mount_auth_tok_only, "ecryptfs_mount_auth_tok_only"},
 	{ecryptfs_opt_check_dev_ruid, "ecryptfs_check_dev_ruid"},
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	{ecryptfs_opt_decryption_only, "decryption_only"},
+	{ecryptfs_opt_media_exception, "media_exception=%s"},
+#endif
 	{ecryptfs_opt_err, NULL}
 };
 
@@ -224,10 +232,19 @@ out:
 }
 
 static void ecryptfs_init_mount_crypt_stat(
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_crypt_stat *mount_crypt_stat,
+	struct ecryptfs_mount_sd_crypt_stat *mount_sd_crypt_stat)
+#else
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat)
+#endif
 {
 	memset((void *)mount_crypt_stat, 0,
 	       sizeof(struct ecryptfs_mount_crypt_stat));
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	memset((void *)mount_sd_crypt_stat, 0,
+			sizeof(struct ecryptfs_mount_sd_crypt_stat));
+#endif
 	INIT_LIST_HEAD(&mount_crypt_stat->global_auth_tok_list);
 	mutex_init(&mount_crypt_stat->global_auth_tok_list_mutex);
 	mount_crypt_stat->flags |= ECRYPTFS_MOUNT_CRYPT_STAT_INITIALIZED;
@@ -267,6 +284,10 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 	int fn_cipher_key_bytes_set = 0;
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat =
 		&sbi->mount_crypt_stat;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	struct ecryptfs_mount_sd_crypt_stat *mount_sd_crypt_stat =
+		&sbi->mount_sd_crypt_stat;
+#endif
 	substring_t args[MAX_OPT_ARGS];
 	int token;
 	char *sig_src;
@@ -286,7 +307,11 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 		rc = -EINVAL;
 		goto out;
 	}
+#ifdef FEATURE_SDCARD_ENCRYPTION
+	ecryptfs_init_mount_crypt_stat(mount_crypt_stat, mount_sd_crypt_stat);
+#else
 	ecryptfs_init_mount_crypt_stat(mount_crypt_stat);
+#endif
 	while ((p = strsep(&options, ",")) != NULL) {
 		if (!*p)
 			continue;
@@ -386,6 +411,15 @@ static int ecryptfs_parse_options(struct ecryptfs_sb_info *sbi, char *options,
 			mount_crypt_stat->flags |=
 				ECRYPTFS_GLOBAL_MOUNT_AUTH_TOK_ONLY;
 			break;
+#ifdef FEATURE_SDCARD_ENCRYPTION
+		case ecryptfs_opt_decryption_only:
+			mount_sd_crypt_stat->flags |= ECRYPTFS_DECRYPTION_ONLY;
+			break;
+		case ecryptfs_opt_media_exception:
+			mount_sd_crypt_stat->flags |= ECRYPTFS_MEDIA_EXCEPTION;
+			set_media_ext(args[0].from);
+			break;
+#endif
 		case ecryptfs_opt_check_dev_ruid:
 			*check_ruid = 1;
 			break;

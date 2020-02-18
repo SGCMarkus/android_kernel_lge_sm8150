@@ -10,8 +10,11 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+#define pr_fmt(fmt)	"[Display][dsi-ctrl:%s:%d] " fmt, __func__, __LINE__
+#else
 #define pr_fmt(fmt)	"dsi-ctrl:[%s] " fmt, __func__
+#endif
 
 #include <linux/of_device.h>
 #include <linux/err.h>
@@ -2742,8 +2745,13 @@ int dsi_ctrl_host_init(struct dsi_ctrl *dsi_ctrl, bool is_splash_enabled)
 
 	dsi_ctrl_enable_error_interrupts(dsi_ctrl);
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	pr_info("[DSI_%d]Host initialization complete, continuous splash status:%d\n",
+		dsi_ctrl->cell_index, is_splash_enabled);
+#else
 	pr_debug("[DSI_%d]Host initialization complete, continuous splash status:%d\n",
 		dsi_ctrl->cell_index, is_splash_enabled);
+#endif
 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, 0x1);
 error:
 	mutex_unlock(&dsi_ctrl->ctrl_lock);
@@ -2886,8 +2894,13 @@ int dsi_ctrl_host_deinit(struct dsi_ctrl *dsi_ctrl)
 		goto error;
 	}
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	pr_info("<-- %pS [DSI_%d] Host deinitization complete\n",
+		__builtin_return_address(0), dsi_ctrl->cell_index);
+#else
 	pr_debug("[DSI_%d] Host deinitization complete\n",
 		dsi_ctrl->cell_index);
+#endif
 	dsi_ctrl_update_state(dsi_ctrl, DSI_CTRL_OP_HOST_INIT, 0x0);
 error:
 	mutex_unlock(&dsi_ctrl->ctrl_lock);
@@ -3006,6 +3019,14 @@ int dsi_ctrl_cmd_transfer(struct dsi_ctrl *dsi_ctrl,
 
 	mutex_lock(&dsi_ctrl->ctrl_lock);
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if (((msg->flags) & MIPI_DSI_MSG_REQ_ACK) &&
+			(msg->rx_buf && (msg->rx_len > 0)))
+	{
+		flags |= DSI_CTRL_CMD_READ;
+	}
+#endif
+
 	rc = dsi_ctrl_check_state(dsi_ctrl, DSI_CTRL_OP_CMD_TX, 0x0);
 	if (rc) {
 		pr_err("[DSI_%d] Controller state check failed, rc=%d\n",
@@ -3017,6 +3038,10 @@ int dsi_ctrl_cmd_transfer(struct dsi_ctrl *dsi_ctrl,
 		rc = dsi_message_rx(dsi_ctrl, msg, flags);
 		if (rc <= 0)
 			pr_err("read message failed read length, rc=%d\n", rc);
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+		if (rc > 0)
+			rc = 0;
+#endif
 	} else {
 		rc = dsi_message_tx(dsi_ctrl, msg, flags);
 		if (rc)

@@ -52,6 +52,11 @@ extern void machine_restart(char *cmd);
 extern void machine_halt(void);
 extern void machine_power_off(void);
 
+#ifdef CONFIG_LGE_POWEROFF_TIMEOUT
+extern void machine_restart_timeout(char *cmd);
+extern void machine_power_off_timeout(void);
+#endif
+
 extern void machine_shutdown(void);
 struct pt_regs;
 extern void machine_crash_shutdown(struct pt_regs *);
@@ -64,6 +69,11 @@ extern void kernel_restart_prepare(char *cmd);
 extern void kernel_restart(char *cmd);
 extern void kernel_halt(void);
 extern void kernel_power_off(void);
+
+#ifdef CONFIG_LGE_POWEROFF_TIMEOUT
+extern void kernel_restart_timeout(char *cmd);
+extern void kernel_power_off_timeout(void);
+#endif
 
 extern int C_A_D; /* for sysctl */
 void ctrl_alt_del(void);

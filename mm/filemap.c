@@ -39,6 +39,7 @@
 #include <linux/delayacct.h>
 #include <linux/psi.h>
 #include "internal.h"
+#include "../fs/sreadahead_prof.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/filemap.h>
@@ -466,6 +467,28 @@ int filemap_fdatawait_range(struct address_space *mapping, loff_t start_byte,
 	return filemap_check_errors(mapping);
 }
 EXPORT_SYMBOL(filemap_fdatawait_range);
+
+/**
+ * filemap_fdatawait_range_keep_errors - wait for writeback to complete
+ * @mapping:		address space structure to wait for
+ * @start_byte:		offset in bytes where the range starts
+ * @end_byte:		offset in bytes where the range ends (inclusive)
+ *
+ * Walk the list of under-writeback pages of the given address space in the
+ * given range and wait for all of them.  Unlike filemap_fdatawait_range(),
+ * this function does not clear error status of the address space.
+ *
+ * Use this function if callers don't handle errors themselves.  Expected
+ * call sites are system-wide / filesystem-wide data flushers: e.g. sync(2),
+ * fsfreeze(8)
+ */
+int filemap_fdatawait_range_keep_errors(struct address_space *mapping,
+		loff_t start_byte, loff_t end_byte)
+{
+	__filemap_fdatawait_range(mapping, start_byte, end_byte);
+	return filemap_check_and_keep_errors(mapping);
+}
+EXPORT_SYMBOL(filemap_fdatawait_range_keep_errors);
 
 /**
  * file_fdatawait_range - wait for writeback to complete
@@ -2492,6 +2515,15 @@ int filemap_fault(struct vm_fault *vmf)
 	} else if (!page) {
 		/* No page in the page cache at all */
 		count_vm_event(PGMAJFAULT);
+		/* LGE_CHANGE_S
+		*
+		* Profile files related to pgmajfault during 1st booting
+		* in order to use the data as readahead args
+		*
+		* matia.kim@lge.com 20130612
+		*/
+		sreadahead_prof(file, 0, 0);
+		/* LGE_CHANGE_E */
 		count_memcg_event_mm(vmf->vma->vm_mm, PGMAJFAULT);
 		ret = VM_FAULT_MAJOR;
 		fpin = do_sync_mmap_readahead(vmf);

@@ -1904,6 +1904,11 @@ int drm_atomic_set_property(struct drm_atomic_state *state,
 	if (!drm_property_change_valid_get(prop, prop_value, &ref))
 		return -EINVAL;
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+	if (prop->base.id == 40)
+		pr_info("[Display] prop id = %d, prop->name = %s, prop_value = %lld\n", prop->base.id, prop->name, prop_value);
+#endif
+
 	switch (obj->type) {
 	case DRM_MODE_OBJECT_CONNECTOR: {
 		struct drm_connector *connector = obj_to_connector(obj);

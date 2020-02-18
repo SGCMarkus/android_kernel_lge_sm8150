@@ -108,6 +108,10 @@ struct bio {
 	int bi_crypt_skip;
 #endif
 
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+	unsigned short		bi_excontrol;
+#endif
+
 	unsigned short		bi_vcnt;	/* how many bio_vec's */
 
 	/*
@@ -241,6 +245,7 @@ enum req_flag_bits {
 
 	__REQ_SORTED = __REQ_RAHEAD, /* elevator knows about this request */
 	/* command specific flags for REQ_OP_WRITE_ZEROES: */
+	__REQ_PREEMPT,		/* set for "ide_preempt" requests and also*/
 	__REQ_NOUNMAP,		/* do not free blocks when zeroing */
 
 	__REQ_URGENT,		/* urgent request */
@@ -279,6 +284,18 @@ enum req_flag_bits {
 
 #define REQ_NOMERGE_FLAGS \
 	(REQ_NOMERGE | REQ_PREFLUSH | REQ_FUA)
+#define REQ_PREEMPT		(1ULL << __REQ_PREEMPT)
+
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+#define __REQ_EX_MAX 15
+enum req_exflag_bits {
+	__REQ_EX_ORDERED,
+
+	__REQ_EX_NR_BITS = __REQ_EX_MAX,
+};
+
+#define REQ_EX_ORDERED (1 << __REQ_EX_ORDERED)
+#endif
 
 #define bio_op(bio) \
 	((bio)->bi_opf & REQ_OP_MASK)

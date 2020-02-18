@@ -1,0 +1,7 @@
+menu "TouchSense dw7800 driver support"
+
+config A2V
+	tristate "A2V"
+	default n
+
+endmenu

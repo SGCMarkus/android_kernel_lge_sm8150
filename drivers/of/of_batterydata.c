@@ -378,6 +378,9 @@ struct device_node *of_batterydata_get_best_profile(
 
 	if (best_node == NULL) {
 		pr_err("No battery data found\n");
+#ifdef CONFIG_LGE_PM
+		pr_info("No battery data found...%s: %d kohm\n", batt_type, batt_id_kohm);
+#endif
 		return best_node;
 	}
 
@@ -386,15 +389,26 @@ struct device_node *of_batterydata_get_best_profile(
 			((best_id_kohm * id_range_pct) / 100)) {
 		pr_err("out of range: profile id %d batt id %d pct %d",
 			best_id_kohm, batt_id_kohm, id_range_pct);
+#ifdef CONFIG_LGE_PM
+		pr_info("No battery data found...%s: %d kohm(best: %d ohm)\n",
+			batt_type, batt_id_kohm, best_id_kohm);
+#endif
 		return NULL;
 	}
 
 	rc = of_property_read_string(best_node, "qcom,battery-type",
 							&battery_type);
+#ifdef CONFIG_LGE_PM
+	if (!rc)
+		pr_info("%s (%d kohm) found\n", battery_type, batt_id_kohm);
+	else
+		pr_info("%s (%d kohm) found\n", best_node->name, batt_id_kohm);
+#else
 	if (!rc)
 		pr_info("%s found\n", battery_type);
 	else
 		pr_info("%s found\n", best_node->name);
+#endif
 
 	return best_node;
 }

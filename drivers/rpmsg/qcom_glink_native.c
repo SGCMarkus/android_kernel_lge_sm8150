@@ -35,6 +35,10 @@
 #include "rpmsg_internal.h"
 #include "qcom_glink_native.h"
 
+#ifdef CONFIG_LGE_PM
+#include <linux/suspend.h>
+#endif
+
 #define GLINK_LOG_PAGE_CNT 2
 #define GLINK_INFO(ctxt, x, ...)					  \
 do {									  \
@@ -1150,6 +1154,13 @@ static irqreturn_t qcom_glink_native_intr(int irq, void *data)
 	unsigned int avail;
 	unsigned int cmd;
 	int ret = 0;
+
+
+#ifdef CONFIG_LGE_PM
+	if (suspend_debug_irq_pin()) {
+		pr_err("%s : irq = %d, name = %s\n",__func__, irq, dev_name(glink->dev));
+	}
+#endif
 
 	for (;;) {
 		avail = qcom_glink_rx_avail(glink);

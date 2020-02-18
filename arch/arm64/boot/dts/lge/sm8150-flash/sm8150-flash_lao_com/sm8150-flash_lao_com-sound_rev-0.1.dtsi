@@ -1,0 +1,73 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-flash_common/sm8150-flash_common-sound.dtsi"
+#include "../sm8150-flash_common/sm8150-flash_common-sound-tfa9872.dtsi"
+#include "../sm8150-flash_common/sm8150-flash_common-sound-es9218.dtsi"
+
+&audio_apr {
+	sound-tavil {
+		pinctrl-names = "sec-mi2s-sleep", "sec-mi2s-active", "tert-mi2s-sleep", "tert-mi2s-active";
+		pinctrl-0 = <&sec_mi2s_sleep &sec_mi2s_sd0_sleep &sec_mi2s_sd1_sleep>;
+		pinctrl-1 = <&sec_mi2s_active &sec_mi2s_sd0_active &sec_mi2s_sd1_active>;
+		pinctrl-2 = <&tert_mi2s_sleep &tert_mi2s_sd1_sleep>;
+		pinctrl-3 = <&tert_mi2s_active &tert_mi2s_sd1_active>;
+/*				
+		asoc-codec = <&stub_codec>,  <&ext_disp_audio_codec>, <&tfa98xx_spk1> ,<&tfa98xx_spk2>;
+		asoc-codec-names = "msm-stub-codec.1",
+				"msm-ext-disp-audio-codec-rx",
+				"tfa98xx-codec.0-0034",	"tfa98xx-codec.0-0036";				
+*/
+		asoc-codec = <&stub_codec>,  <&ext_disp_audio_codec>, <&tfa98xx_spk1> ;
+		asoc-codec-names = "msm-stub-codec.1",
+				"msm-ext-disp-audio-codec-rx",
+				"tfa98xx-codec.0-0034";				
+
+	};
+};
+
+&qupv3_se0_i2c{ /* QUPV3 SE0  */
+	status = "ok";
+	dw7912_vibrator: dw7912@59 {
+		compatible = "dwanatech,dw7912";
+		reg = <0x59>;
+		use_en_pin = <1>; /* 1 = use en pin, 0 = do not use en pin */
+		dw7912,en-gpio = <&tlmm 139 0x0>; /* gpx0_0, set to output(0x1) */
+	};
+};
+
+
+&soc {
+/* Comparator Regulator : 3V3_VREG_L7C */
+        rpmh-regulator-ldoc7 {
+                pm8150l_l7: regulator-pm8150l-l7 {
+                        regulator-min-microvolt = <2856000>;
+                        regulator-max-microvolt = <3300000>;
+                        qcom,init-voltage = <3300000>;
+			regulator-always-on;
+                };
+        };
+};
+
+/* FM Radio */
+/* lge,fmradio-lna-enable-gpio = DMB_FM_LNA_EN gpio (PON line on LNA circuit) */
+/* lna-supply = VCC line on LNA circuit */
+/* lge,fmradio-rf-ctrl-gpio = DMB_FM_SPDT (VCTL line on SPDT circuit) */
+/* spdt-supply = VDD line on SPDT circuit */
+
+&snd_934x {
+        lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
+        lna-supply = <&pm8150_l16>;
+        lge,fmradio-rf-ctrl-gpio = <&tlmm 163 0x00>;
+        spdt-supply = <&pm8150_l16>;
+};

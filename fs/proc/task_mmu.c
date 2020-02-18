@@ -1708,7 +1708,10 @@ cont:
 		if (!page)
 			continue;
 
-		if (isolate_lru_page(page))
+		if (PageTail(page))
+			continue;
+
+		if (isolate_evictable_lru_page(page))
 			continue;
 
 		/* MADV_FREE clears pte dirty bit and then marks the page
@@ -1786,6 +1789,47 @@ struct reclaim_param reclaim_task_anon(struct task_struct *task,
 		rp.vma = vma;
 		walk_page_range(vma->vm_start, vma->vm_end,
 			&reclaim_walk);
+	}
+
+	flush_tlb_mm(mm);
+	up_read(&mm->mmap_sem);
+	mmput(mm);
+out:
+	put_task_struct(task);
+	return rp;
+}
+
+struct reclaim_param reclaim_task_file_anon(struct task_struct *task,
+		int nr_to_reclaim)
+{
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+	struct mm_walk reclaim_walk = {};
+	struct reclaim_param rp = {
+		.nr_to_reclaim = nr_to_reclaim,
+	};
+
+	get_task_struct(task);
+	mm = get_task_mm(task);
+	if (!mm)
+		goto out;
+
+	reclaim_walk.mm = mm;
+	reclaim_walk.pmd_entry = reclaim_pte_range;
+
+	reclaim_walk.private = &rp;
+
+	down_read(&mm->mmap_sem);
+	for (vma = mm->mmap; vma; vma = vma->vm_next) {
+		if (is_vm_hugetlb_page(vma))
+			continue;
+
+		if (!rp.nr_to_reclaim)
+			break;
+
+		rp.vma = vma;
+		walk_page_range(vma->vm_start, vma->vm_end,
+				&reclaim_walk);
 	}
 
 	flush_tlb_mm(mm);

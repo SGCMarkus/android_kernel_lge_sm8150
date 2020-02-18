@@ -29,6 +29,10 @@
 #include <soc/qcom/tcs.h>
 #include <soc/qcom/cmd-db.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC_RPMH_TIMEOUT
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
+
 #define RPMH_MAX_MBOXES			2
 #define RPMH_MAX_FAST_RES		32
 #define RPMH_MAX_REQ_IN_BATCH		10
@@ -206,7 +210,15 @@ static inline void wait_for_tx_done(struct rpmh_client *rc,
 			dev_err(rc->dev,
 				"RPMH waiting for interrupt from AOSS\n");
 			mbox_chan_debug(rc->chan);
-			BUG();
+#ifdef CONFIG_LGE_HANDLE_PANIC_RPMH_TIMEOUT
+			if (rc->dev != NULL	&& rc->dev->kobj.name != NULL) {
+				lge_set_rphm_timeout_panic(rc->dev->kobj.name);
+			}
+			panic("RPMH Timeout");
+#else
+			dev_err(rc->dev,
+				"Skip kernel crash due to RPMh Timeout!!!\n");
+#endif
 		} else {
 			dev_err(rc->dev,
 			"RPMH response timeout (%d) addr=0x%x,data=0x%x\n",

@@ -169,5 +169,12 @@ config SND_USB_AUDIO_QMI
 	  to perform operations like enable or disable particular audio
 	  stream on a connected USB device.
 
+config LGE_SND_USB_ESS014
+	bool "ESS High performance USB DAC driver"
+	select SND_USB_AUDIO
+	help
+	  Say Y here to include support for ESS High performance USB DAC
+	  interfaces.
+
 endif	# SND_USB
 

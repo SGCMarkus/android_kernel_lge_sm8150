@@ -945,6 +945,10 @@ void xhci_free_virt_devices_depth_first(struct xhci_hcd *xhci, int slot_id)
 	struct xhci_tt_bw_info *tt_info, *next;
 	int i;
 
+#ifdef CONFIG_LGE_USB
+	if (!xhci)
+		return;
+#endif
 	vdev = xhci->devs[slot_id];
 	if (!vdev)
 		return;

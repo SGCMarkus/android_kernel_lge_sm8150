@@ -848,6 +848,9 @@ config QMP_DEBUGFS_CLIENT
 	  This options enables a driver which allows clients to send messages
 	  to Alway On processor using QMP transport.
 
+
+source "drivers/soc/qcom/lge/Kconfig"
+
 config QCOM_QHEE_ENABLE_MEM_PROTECTION
 	bool "QHEE enable kernel memory protection"
 	depends on QCOM_SCM
@@ -905,3 +908,4 @@ config QCOM_HYP_CORE_CTL
 	  CPUs can be assigned to the other guest OS by the hypervisor.
 	  An offline CPU is considered as a reserved CPU since this OS can't use
 	  it.
+source "drivers/soc/qcom/lge/Kconfig"

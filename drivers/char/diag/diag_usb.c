@@ -29,7 +29,14 @@
 #include "diag_usb.h"
 #include "diag_mux.h"
 #include "diagmem.h"
+#ifdef CONFIG_LGE_DIAG_BYPASS
+int diag_bypass_enable = 1;
+#endif
 #include "diag_ipc_logging.h"
+
+#ifdef CONFIG_LGE_USB_DIAG_LOCK
+#include "diag_lock.h"
+#endif
 
 #define DIAG_USB_STRING_SZ	10
 #define DIAG_USB_MAX_SIZE	16384
@@ -305,6 +312,11 @@ static void usb_read_done_work_fn(struct work_struct *work)
 	struct diag_request *req = NULL;
 	struct diag_usb_info *ch = container_of(work, struct diag_usb_info,
 						read_done_work);
+/* [LGE_S][BSP_Modem] LGSSL to support testmode cmd */
+#ifdef CONFIG_LGE_DM_APP
+	int proc = 0;
+#endif
+/* [LGE_E][BSP_Modem] LGSSL to support testmode cmd */
 	if (!ch)
 		return;
 
@@ -312,9 +324,26 @@ static void usb_read_done_work_fn(struct work_struct *work)
 	 * USB is disconnected/Disabled before the previous read completed.
 	 * Discard the packet and don't do any further processing.
 	 */
+/* [LGE_S][BSP_Modem] LGSSL to support testmode cmd */
+#ifdef CONFIG_LGE_DM_APP
+	// temporary
+	for (proc = 0; proc < NUM_MUX_PROC; proc++) {
+		if (diag_mux->mode[proc] == DIAG_MEMORY_DEVICE_MODE)
+		{
+			goto keep_read_done;
+		}
+	}
+#endif
+/* [LGE_E][BSP_Modem] LGSSL to support testmode cmd */
 	if (!atomic_read(&ch->connected) || !ch->enabled ||
 	    !atomic_read(&ch->diag_state))
 		return;
+
+	/* [LGE_S][BSP_Modem] LGSSL to support testmode cmd */
+#ifdef CONFIG_LGE_DM_APP
+keep_read_done:
+#endif
+	/* [LGE_E][BSP_Modem] LGSSL to support testmode cmd */
 
 	req = ch->read_ptr;
 	ch->read_cnt++;
@@ -386,11 +415,22 @@ static void diag_usb_notifier(void *priv, unsigned int event,
 	case USB_DIAG_CONNECT:
 		pr_info("diag: USB channel %s: Received Connect event\n",
 			usb_info->name);
+#ifdef CONFIG_LGE_DIAG_BYPASS
+        diag_bypass_enable = 0;
+#endif
+#ifdef CONFIG_LGE_USB_DIAG_LOCK
+		pr_info("diag: USB channel %s: Diag is %salllowed\n",
+			usb_info->name,
+			diag_lock_is_allowed() ? "" : "not ");
+#endif
 		if (!atomic_read(&usb_info->connected))
 			queue_work(usb_info->usb_wq,
 			   &usb_info->connect_work);
 		break;
 	case USB_DIAG_DISCONNECT:
+#ifdef CONFIG_LGE_DIAG_BYPASS
+        diag_bypass_enable = 1;
+#endif
 		pr_info("diag: USB channel %s: Received Disconnect event\n",
 			usb_info->name);
 		queue_work(usb_info->usb_wq,

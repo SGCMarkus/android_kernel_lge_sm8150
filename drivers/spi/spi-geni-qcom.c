@@ -1147,9 +1147,10 @@ static void setup_fifo_xfer(struct spi_transfer *xfer,
 		geni_write_reg(spi_tx_cfg, mas->base, SE_SPI_TRANS_CFG);
 	geni_setup_m_cmd(mas->base, m_cmd, m_param);
 	GENI_SE_DBG(mas->ipc, false, mas->dev,
-	"%s: trans_len %d xferlen%d tx_cfg 0x%x cmd 0x%x cs%d mode%d\n",
+	"%s: trans_len %d xferlen%d tx_cfg 0x%x cmd 0x%x cs%d mode%d, rx_buf: %p, tx_buf: %p\n",
 		__func__, trans_len, xfer->len, spi_tx_cfg, m_cmd,
-			xfer->cs_change, mas->cur_xfer_mode);
+			xfer->cs_change, mas->cur_xfer_mode,
+			xfer->rx_buf, xfer->tx_buf);
 	if ((m_cmd & SPI_RX_ONLY) && (mas->cur_xfer_mode == SE_DMA)) {
 		int ret = 0;
 
@@ -1354,6 +1355,8 @@ static void geni_spi_handle_tx(struct spi_geni_master *mas)
 	tx_buf = mas->cur_xfer->tx_buf;
 	tx_buf += (mas->cur_xfer->len - mas->tx_rem_bytes);
 	max_bytes = min_t(int, mas->tx_rem_bytes, max_bytes);
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "%s: tx_buf: %p, tx_bytes: %x\n",
+			__func__, tx_buf, max_bytes);
 	while (i < max_bytes) {
 		int j;
 		u32 fifo_word = 0;
@@ -1397,8 +1400,10 @@ static void geni_spi_handle_rx(struct spi_geni_master *mas)
 	if (!mas->cur_xfer)
 		return;
 
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "DBG1 rx_buf = 0x%x\n",rx_buf);
 	rx_fifo_status = geni_read_reg(mas->base, SE_GENI_RX_FIFO_STATUS);
 	rx_buf = mas->cur_xfer->rx_buf;
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "DBG2 rx_buf = 0x%x\n",rx_buf);
 	rx_wc = (rx_fifo_status & RX_FIFO_WC_MSK);
 	if (rx_fifo_status & RX_LAST) {
 		int rx_last_byte_valid =
@@ -1415,7 +1420,11 @@ static void geni_spi_handle_rx(struct spi_geni_master *mas)
 		rx_bytes += rx_wc *
 			((mas->cur_word_len / BITS_PER_BYTE) + 1);
 	rx_bytes = min_t(int, mas->rx_rem_bytes, rx_bytes);
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "DBG3 rx_buf = 0x%x\n",rx_buf);
 	rx_buf += (mas->cur_xfer->len - mas->rx_rem_bytes);
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "DBG4 rx_buf = 0x%x rx_rem_bytes: %d",rx_buf, mas->rx_rem_bytes);
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "%s: rx_buf: %p, rx_bytes: %x\n",
+			__func__, rx_buf, rx_bytes);
 	while (i < rx_bytes) {
 		u32 fifo_word = 0;
 		u8 *fifo_byte;
@@ -1455,6 +1464,7 @@ static irqreturn_t geni_spi_irq(int irq, void *data)
 		return IRQ_HANDLED;
 	}
 	m_irq = geni_read_reg(mas->base, SE_GENI_M_IRQ_STATUS);
+	GENI_SE_DBG(mas->ipc, false, mas->dev, "%s:m_irq = 0x%x\n", __func__, m_irq);
 
 	if (mas->cur_xfer_mode == FIFO_MODE) {
 		if ((m_irq & M_RX_FIFO_WATERMARK_EN) ||

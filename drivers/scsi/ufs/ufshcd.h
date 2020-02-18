@@ -259,6 +259,9 @@ struct ufs_desc_size {
 	int interc_desc;
 	int unit_desc;
 	int conf_desc;
+#ifdef CONFIG_UFS_LGE_FEATURE
+	int health_desc;
+#endif
 };
 
 /**
@@ -572,6 +575,15 @@ struct debugfs_files {
 	u32 err_inj_scenario_mask;
 	struct fault_attr fail_attr;
 #endif
+#ifdef CONFIG_UFS_LGE_FEATURE
+    struct dentry *dump_config_desc;
+    struct dentry *dump_unit_desc;
+    struct dentry *dump_geo_desc;
+    struct dentry *dump_inter_desc;
+    struct dentry *dump_power_desc;
+    struct dentry *dump_string_desc;
+    struct dentry *dump_health_desc;
+#endif
 };
 
 /* tag stats statistics types */
@@ -799,6 +811,11 @@ struct ufs_hba {
 	int spm_lvl;
 	struct device_attribute rpm_lvl_attr;
 	struct device_attribute spm_lvl_attr;
+
+#ifdef CONFIG_UFSDBG_SYSFS_COMMON
+	struct device_attribute health_desc_attr;
+#endif
+
 	int pm_op_in_progress;
 
 	struct ufshcd_lrb *lrb;
@@ -1041,6 +1058,9 @@ struct ufs_hba {
 
 	int latency_hist_enabled;
 	struct io_latency_state io_lat_s;
+#ifdef CONFIG_UFSDBG_TUNABLES
+	void *ufsdbg_tunables;
+#endif
 
 	bool reinit_g4_rate_A;
 	bool force_g4;
@@ -1264,6 +1284,15 @@ out:
 
 int ufshcd_read_device_desc(struct ufs_hba *hba, u8 *buf, u32 size);
 
+#ifdef CONFIG_UFS_LGE_FEATURE
+int ufshcd_read_geo_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+int ufshcd_read_config_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+int ufshcd_read_unit_desc(struct ufs_hba *hba, int u_index, u8 *buf, u32 size);
+int ufshcd_read_inter_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+int ufshcd_read_power_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+int ufshcd_read_health_desc(struct ufs_hba *hba, u8 *buf, u32 size);
+#endif
+
 static inline bool ufshcd_is_hs_mode(struct ufs_pa_layer_attr *pwr_info)
 {
 	return (pwr_info->pwr_rx == FAST_MODE ||
@@ -1288,6 +1317,11 @@ static inline void ufshcd_init_req_stats(struct ufs_hba *hba)
 #else
 static inline void ufshcd_init_req_stats(struct ufs_hba *hba) {}
 #endif
+
+#define ASCII_STD true
+#define UTF16_STD false
+int ufshcd_read_string_desc(struct ufs_hba *hba, int desc_index, u8 *buf, 
+				u32 size, bool ascii);
 
 /* Expose Query-Request API */
 int ufshcd_query_flag(struct ufs_hba *hba, enum query_opcode opcode,

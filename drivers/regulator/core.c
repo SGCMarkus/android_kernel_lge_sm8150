@@ -320,6 +320,14 @@ static int regulator_mode_constrain(struct regulator_dev *rdev,
 	case REGULATOR_MODE_NORMAL:
 	case REGULATOR_MODE_IDLE:
 	case REGULATOR_MODE_STANDBY:
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	case REGULATOR_MODE_SHUTDOWN:
+	case REGULATOR_MODE_SPARE_ON:
+	case REGULATOR_MODE_TTW_ON:
+	case REGULATOR_MODE_TTW_OFF:
+	case REGULATOR_MODE_ENABLE_PULLDOWN:
+	case REGULATOR_MODE_DISABLE_PULLDOWN:
+#endif
 		break;
 	default:
 		rdev_err(rdev, "invalid mode %x specified\n", *mode);

@@ -34,6 +34,10 @@ struct f_hid_opts {
 	 */
 	 struct mutex			lock;
 	 int				refcnt;
+
+#ifdef CONFIG_LGE_USB_GADGET
+	 bool				is_charge;
+#endif
 };
 
 int ghid_setup(struct usb_gadget *g, int count);

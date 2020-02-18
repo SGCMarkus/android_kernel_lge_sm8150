@@ -262,6 +262,8 @@ struct cam_hw_dump_pf_args {
 	bool                           *mem_found;
 };
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 /**
  * struct cam_hw_reset_args -hw reset arguments
  *
@@ -271,6 +273,8 @@ struct cam_hw_dump_pf_args {
 struct cam_hw_reset_args {
 	void                           *ctxt_to_hw_map;
 };
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 /**
  * struct cam_hw_dump_args - Dump arguments
@@ -360,7 +364,11 @@ struct cam_hw_mgr_intf {
 	int (*hw_open)(void *hw_priv, void *fw_download_args);
 	int (*hw_close)(void *hw_priv, void *hw_close_args);
 	int (*hw_flush)(void *hw_priv, void *hw_flush_args);
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 	int (*hw_reset)(void *hw_priv, void *hw_reset_args);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 	int (*hw_dump)(void *hw_priv, void *hw_dump_args);
 };
 

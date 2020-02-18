@@ -33,6 +33,9 @@
  */
 extern void (*pm_power_off)(void);
 extern void (*pm_power_off_prepare)(void);
+#ifdef CONFIG_LGE_POWEROFF_TIMEOUT
+extern void (*pm_power_off_timeout)(void);
+#endif
 
 struct device; /* we have a circular dep with device.h */
 #ifdef CONFIG_VT_CONSOLE_SLEEP

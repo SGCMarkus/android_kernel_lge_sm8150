@@ -781,6 +781,10 @@ static void mhi_create_time_sync_dev(struct mhi_controller *mhi_cntrl)
 	/* add if there is a matching DT node */
 	mhi_assign_of_node(mhi_cntrl, mhi_dev);
 
+	/* init wake source */
+	if (mhi_dev->dl_chan && mhi_dev->dl_chan->wake_capable)
+	device_init_wakeup(&mhi_dev->dev, true);
+
 	ret = device_add(&mhi_dev->dev);
 	if (ret) {
 		MHI_ERR("Failed to register dev for  chan:%s\n",
@@ -1688,7 +1692,9 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 {
 	int ret = 0;
 
-	MHI_LOG("Entered: preparing channel:%d\n", mhi_chan->chan);
+// Change the log level to debug (case#03999942, TD#132232)
+//	MHI_LOG("Entered: preparing channel:%d\n", mhi_chan->chan);
+	MHI_ERR("Entered: preparing channel:%d\n", mhi_chan->chan);
 
 	if (!(BIT(mhi_cntrl->ee) & mhi_chan->ee_mask)) {
 		MHI_ERR("Current EE:%s Required EE Mask:0x%x for chan:%s\n",
@@ -1702,7 +1708,9 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 	/* if channel is not disable state do not allow to start */
 	if (mhi_chan->ch_state != MHI_CH_STATE_DISABLED) {
 		ret = -EIO;
-		MHI_LOG("channel:%d is not in disabled state, ch_state%d\n",
+// Change the log level to debug (case#03999942, TD#132232)
+//		MHI_LOG("channel:%d is not in disabled state, ch_state%d\n",
+		MHI_ERR("channel:%d is not in disabled state, ch_state%d\n",
 			mhi_chan->chan, mhi_chan->ch_state);
 		goto error_init_chan;
 	}
@@ -1786,7 +1794,9 @@ int mhi_prepare_channel(struct mhi_controller *mhi_cntrl,
 
 	mutex_unlock(&mhi_chan->mutex);
 
-	MHI_LOG("Chan:%d successfully moved to start state\n", mhi_chan->chan);
+// Change the log level to debug (case#03999942, TD#132232)
+//	MHI_LOG("Chan:%d successfully moved to start state\n", mhi_chan->chan);
+	MHI_ERR("Chan:%d successfully moved to start state\n", mhi_chan->chan);
 
 	return 0;
 

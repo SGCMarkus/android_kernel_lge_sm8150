@@ -362,6 +362,9 @@ extern int fat_alloc_clusters(struct inode *inode, int *cluster,
 			      int nr_cluster);
 extern int fat_free_clusters(struct inode *inode, int cluster);
 extern int fat_count_free_clusters(struct super_block *sb);
+#ifdef CONFIG_MACH_LGE
+extern int fat_ent_update_badclusters_after(struct super_block *sb, int entry);
+#endif
 
 /* fat/file.c */
 extern long fat_generic_ioctl(struct file *filp, unsigned int cmd,

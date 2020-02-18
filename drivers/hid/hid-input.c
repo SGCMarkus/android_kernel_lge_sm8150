@@ -1288,6 +1288,7 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 		input_event(input, EV_MSC, MSC_SCAN, usage->hid);
 
 	input_event(input, usage->type, usage->code, value);
+	pr_info("[Input_HID] Key[%d] %s\n", usage->code, value ? "Pressed" : "Released" );
 
 	if ((field->flags & HID_MAIN_ITEM_RELATIVE) &&
 	    usage->type == EV_KEY && value) {

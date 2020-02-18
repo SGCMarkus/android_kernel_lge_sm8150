@@ -542,7 +542,6 @@ static void mhi_uci_remove(struct mhi_device *mhi_dev)
 
 	MSG_LOG("Enter\n");
 
-
 	mutex_lock(&mhi_uci_drv.lock);
 	mutex_lock(&uci_dev->mutex);
 
@@ -573,7 +572,6 @@ static void mhi_uci_remove(struct mhi_device *mhi_dev)
 	MSG_LOG("Exit\n");
 	mutex_unlock(&uci_dev->mutex);
 	mutex_unlock(&mhi_uci_drv.lock);
-
 }
 
 static int mhi_uci_probe(struct mhi_device *mhi_dev,

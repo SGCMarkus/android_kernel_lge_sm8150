@@ -1,0 +1,22 @@
+#
+# ice40 devices
+#
+
+if HAS_IOMEM
+menu "ice40 device drivers"
+
+config LATTICE_CORE
+	tristate
+	select IRQ_DOMAIN
+	default n
+
+config LATTICE_ICE40
+	bool "LATTICE ICE40"
+	select LATTICE_CORE
+	select REGMAP_I2C
+	select REGMAP_IRQ
+	depends on I2C=y
+	help
+	  Support for the ICE40 accessory communication interface IC
+endmenu
+endif

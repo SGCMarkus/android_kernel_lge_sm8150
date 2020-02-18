@@ -97,27 +97,27 @@ void dma_buf_ref_mod(struct dma_buf *dmabuf, int nr)
  */
 int dma_buf_ref_show(struct seq_file *s, struct dma_buf *dmabuf)
 {
-	char *buf;
+//	char *buf;
 	struct dma_buf_ref *ref;
 	int count = 0;
-	struct stack_trace trace;
+//	struct stack_trace trace;
 
-	buf = (void *)__get_free_page(GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
+//	buf = (void *)__get_free_page(GFP_KERNEL);
+//	if (!buf)
+//		return -ENOMEM;
 
 	list_for_each_entry(ref, &dmabuf->refs, list) {
 		count += ref->count;
 
-		seq_printf(s, "References: %d\n", ref->count);
-		depot_fetch_stack(ref->handle, &trace);
-		snprint_stack_trace(buf, PAGE_SIZE, &trace, 0);
-		seq_puts(s, buf);
-		seq_putc(s, '\n');
+//		seq_printf(s, "References: %d\n", ref->count);
+//		depot_fetch_stack(ref->handle, &trace);
+//		snprint_stack_trace(buf, PAGE_SIZE, &trace, 0);
+//		seq_puts(s, buf);
+//		seq_putc(s, '\n');
 	}
 
 	seq_printf(s, "Total references: %d\n\n\n", count);
-	free_page((unsigned long)buf);
+//	free_page((unsigned long)buf);
 
 	return 0;
 }

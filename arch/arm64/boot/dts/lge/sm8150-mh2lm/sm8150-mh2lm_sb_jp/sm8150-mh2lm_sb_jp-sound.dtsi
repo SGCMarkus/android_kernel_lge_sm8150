@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound.dtsi"
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound-es9218.dtsi"
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound-cs35l41.dtsi"
+
+&audio_apr {
+	sound-tavil {
+		pinctrl-names = "sec-mi2s-sleep", "sec-mi2s-active", "tert-mi2s-sleep", "tert-mi2s-active",
+				"tert-tdm-sleep", "tert-tdm-active", "fm_lna";
+		pinctrl-0 = <&sec_mi2s_sleep &sec_mi2s_sd0_sleep &sec_mi2s_sd1_sleep>;
+		pinctrl-1 = <&sec_mi2s_active &sec_mi2s_sd0_active &sec_mi2s_sd1_active>;
+		pinctrl-2 = <&tert_mi2s_sleep &tert_mi2s_sd1_sleep>;
+		pinctrl-3 = <&tert_mi2s_active &tert_mi2s_sd1_active>;
+		pinctrl-4 = <&tert_tdm_sleep &tert_tdm_dout_sleep>;
+		pinctrl-5 = <&tert_tdm_active &tert_tdm_dout_active>;
+		pinctrl-6 = <&fm_lna_default>;
+
+		asoc-codec = <&stub_codec>, <&ext_disp_audio_codec>, <&cs35l41_l>, <&cs35l41_r>;
+		asoc-codec-names = "msm-stub-codec.1",
+				"msm-ext-disp-audio-codec-rx",
+				"cs35l41-codec.0-0040",	"cs35l41-codec.0-0041";
+	};
+};
+
+&soc {
+/* Comparator Regulator : VREG_BOB */
+        rpmh-regulator-bobc1 {
+                BOB: pm8150l_bob: regulator-pm8150l-bob {
+                        qcom,init-voltage = <3312000>;
+                };
+        };
+};
+
+/* FM Radio */
+/* lge,fmradio-lna-enable-gpio = DMB_FM_LNA_EN gpio (PON line on LNA circuit) */
+/* lna-supply = VCC line on LNA circuit */
+/* lge,fmradio-rf-ctrl-gpio = DMB_FM_SPDT (VCTL line on SPDT circuit) */
+/* spdt-supply = VDD line on SPDT circuit */
+/* SPDT circuit is removed on RevB*/
+&tlmm {
+	fm_lna_default: fm_lna_default {
+		mux {
+			pins = "gpio164";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio164";
+			drive-strength = <2>;
+			output-low;
+			bias-disable;
+		};
+	};
+};
+
+&snd_934x {
+	lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
+	lna-supply = <&pm8150_l16>;
+};

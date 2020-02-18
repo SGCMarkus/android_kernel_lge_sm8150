@@ -60,7 +60,11 @@
 #define QCOM_ICE_ENCRYPT	0x1
 #define QCOM_ICE_DECRYPT	0x2
 #define QCOM_SECT_LEN_IN_BYTE	512
+#ifdef CONFIG_MACH_LGE
+#define QCOM_UD_FOOTER_SIZE	0x0000 /* LGE does not include the footer in userdata */
+#else
 #define QCOM_UD_FOOTER_SIZE	0x4000
+#endif
 #define QCOM_UD_FOOTER_SECS	(QCOM_UD_FOOTER_SIZE / QCOM_SECT_LEN_IN_BYTE)
 
 #define ICE_CRYPTO_CXT_FDE 1

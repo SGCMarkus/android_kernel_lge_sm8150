@@ -801,8 +801,8 @@ static int pil_alloc_region(struct pil_priv *priv, phys_addr_t min_addr,
 				priv->desc->attrs);
 
 	if (region == NULL) {
-		pil_err(priv->desc, "Failed to allocate relocatable region of size %zx\n",
-					size);
+        pr_err("desc : %s : Failed to allocate relocatable region of size %zx\n",
+                priv->desc,size);
 		priv->region_start = 0;
 		priv->region_end = 0;
 		return -ENOMEM;
@@ -813,6 +813,7 @@ static int pil_alloc_region(struct pil_priv *priv, phys_addr_t min_addr,
 	priv->base_addr = min_addr;
 	priv->region_size = aligned_size;
 
+    pr_err("##### %s : %d : priv->region - %p : priv->region_start - %p ##### \n", __func__, __LINE__, priv->region, priv->region_start);
 	return 0;
 }
 
@@ -868,6 +869,7 @@ static int pil_setup_region(struct pil_priv *priv, const struct pil_mdt *mdt)
 		priv->base_addr = min_addr_n;
 	}
 
+    pr_err("##### %s : %d : priv->region_start - %p ##### \n", __func__, __LINE__, priv->region_start);
 	if (priv->info) {
 		__iowrite32_copy(&priv->info->start, &priv->region_start,
 					sizeof(priv->region_start) / 4);
@@ -1226,12 +1228,12 @@ int pil_boot(struct pil_desc *desc)
 
 	ret = pil_notify_aop(desc, "on");
 	if (ret < 0) {
-		pil_err(desc, "Failed to send ON message to AOP rc:%d\n", ret);
+        pr_err("Failed to send ON message to AOP rc:%d\n", ret);
 		return ret;
 	}
 
 	if (desc->shutdown_fail)
-		pil_err(desc, "Subsystem shutdown failed previously!\n");
+        pr_err("Subsystem shutdown failed previously!\n");
 
 	/* Reinitialize for new image */
 	pil_release_mmap(desc);
@@ -1240,12 +1242,12 @@ int pil_boot(struct pil_desc *desc)
 	snprintf(fw_name, sizeof(fw_name), "%s.mdt", desc->fw_name);
 	ret = request_firmware(&fw, fw_name, desc->dev);
 	if (ret) {
-		pil_err(desc, "Failed to locate %s(rc:%d)\n", fw_name, ret);
+        pr_err("Failed to locate %s(rc:%d)\n", fw_name, ret);
 		goto out;
 	}
 
 	if (fw->size < sizeof(*ehdr)) {
-		pil_err(desc, "Not big enough to be an elf header\n");
+        pr_err("Not big enough to be an elf header\n");
 		ret = -EIO;
 		goto release_fw;
 	}
@@ -1254,13 +1256,13 @@ int pil_boot(struct pil_desc *desc)
 	ehdr = &mdt->hdr;
 
 	if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG)) {
-		pil_err(desc, "Not an elf header\n");
+        pr_err("Not an elf header\n");
 		ret = -EIO;
 		goto release_fw;
 	}
 
 	if (ehdr->e_phnum == 0) {
-		pil_err(desc, "No loadable segments\n");
+        pr_err("No loadable segments\n");
 		ret = -EIO;
 		goto release_fw;
 	}
@@ -1278,7 +1280,7 @@ int pil_boot(struct pil_desc *desc)
 	desc->priv->unvoted_flag = 0;
 	ret = pil_proxy_vote(desc);
 	if (ret) {
-		pil_err(desc, "Failed to proxy vote(rc:%d)\n", ret);
+        pr_err("Failed to proxy vote(rc:%d)\n", ret);
 		goto release_fw;
 	}
 
@@ -1286,7 +1288,7 @@ int pil_boot(struct pil_desc *desc)
 	if (desc->ops->init_image)
 		ret = desc->ops->init_image(desc, fw->data, fw->size);
 	if (ret) {
-		pil_err(desc, "Initializing image failed(rc:%d)\n", ret);
+        pr_err("Initializing image failed(rc:%d)\n", ret);
 		goto err_boot;
 	}
 
@@ -1295,7 +1297,7 @@ int pil_boot(struct pil_desc *desc)
 		ret = desc->ops->mem_setup(desc, priv->region_start,
 				priv->region_end - priv->region_start);
 	if (ret) {
-		pil_err(desc, "Memory setup error(rc:%d)\n", ret);
+        pr_err("Memory setup error(rc:%d)\n", ret);
 		goto err_deinit_image;
 	}
 
@@ -1311,14 +1313,14 @@ int pil_boot(struct pil_desc *desc)
 			ret = pil_assign_mem_to_linux(desc, priv->region_start,
 				(priv->region_end - priv->region_start));
 			if (ret)
-				pil_err(desc, "Failed to assign to linux, ret- %d\n",
+                pr_err("Failed to assign to linux, ret- %d\n",
 								ret);
 		}
 		ret = pil_assign_mem_to_subsys_and_linux(desc,
 				priv->region_start,
 				(priv->region_end - priv->region_start));
 		if (ret) {
-			pil_err(desc, "Failed to assign memory, ret - %d\n",
+            pr_err("Failed to assign memory, ret - %d\n",
 								ret);
 			goto err_deinit_image;
 		}
@@ -1349,7 +1351,7 @@ int pil_boot(struct pil_desc *desc)
 				(priv->region_end - priv->region_start),
 				desc->subsys_vmid);
 		if (ret) {
-			pil_err(desc, "Failed to assign %s memory, ret - %d\n",
+            pr_err("Failed to assign %s memory, ret - %d\n",
 							desc->name, ret);
 			goto err_deinit_image;
 		}
@@ -1359,7 +1361,7 @@ int pil_boot(struct pil_desc *desc)
 	trace_pil_event("before_auth_reset", desc);
 	ret = desc->ops->auth_and_reset(desc);
 	if (ret) {
-		pil_err(desc, "Failed to bring out of reset(rc:%d)\n", ret);
+        pr_err("Failed to bring out of reset(rc:%d)\n", ret);
 		goto err_auth_and_reset;
 	}
 	trace_pil_event("reset_done", desc);
@@ -1375,6 +1377,7 @@ err_deinit_image:
 	if (ret && desc->ops->deinit_image)
 		desc->ops->deinit_image(desc);
 err_boot:
+    pr_err("##### %s : %d ##### \n",__func__,__LINE__);
 	if (ret && desc->proxy_unvote_irq)
 		disable_irq(desc->proxy_unvote_irq);
 	pil_proxy_unvote(desc, ret);
@@ -1391,8 +1394,10 @@ out:
 						priv->region_start),
 					VMID_HLOS);
 			}
-			if (desc->clear_fw_region && priv->region_start)
+            if (desc->clear_fw_region && priv->region_start) {
+                pr_err("##### %s : %d : desc->clear_fw_region - %p : priv->region_start - %p : ##### \n", __func__, __LINE__, desc->clear_fw_region, priv->region_start);
 				pil_clear_segment(desc);
+            }
 			dma_free_attrs(desc->dev, priv->region_size,
 					priv->region, priv->region_start,
 					desc->attrs);

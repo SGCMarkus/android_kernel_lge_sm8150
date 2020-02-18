@@ -1,0 +1,50 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-flash_dcm_jp.dtsi"
+#include "sm8150-flash_dcm_jp-sound_rev-a_kr.dtsi"
+#include "sm8150-flash_dcm_jp-fingerprint.dtsi"
+#include "sm8150-flash_dcm_jp-lattice_single.dtsi"
+#include "sm8150-flash_dcm_jp-lattice_rev-b.dtsi"
+#include "../sm8150-camera/sm8150-flash-camera_rev-b.dtsi"
+
+/ {
+	model = "LG Electronics, flash_dcm_jp, rev_a";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x03060008 0>;
+};
+
+&lge_sbu_switch {
+	lge,reverse-sbu-switch;
+        lge,ldo-en-gpio = <&tlmm 119 0>;
+
+        pinctrl-0 = <&lge_sbu_switch_sel_active &lge_ldo_en_active>;
+};
+
+&tlmm {
+        lge_ldo_en_active: lge_ldo_en_active {
+                mux {
+                        pins = "gpio119";
+                        function = "gpio";
+                };
+
+                config {
+                        pins = "gpio119";
+                        deive-strength = <2>;
+                        bias-disable;
+                };
+        };
+};

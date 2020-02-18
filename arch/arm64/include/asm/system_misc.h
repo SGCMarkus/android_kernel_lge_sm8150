@@ -44,6 +44,9 @@ extern void show_pte(unsigned long addr);
 extern void __show_regs(struct pt_regs *);
 
 extern void (*arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd);
+#ifdef CONFIG_LGE_POWEROFF_TIMEOUT
+extern void (*arm_pm_restart_timeout)(enum reboot_mode reboot_mode, const char *cmd);
+#endif
 extern char* (*arch_read_hardware_id)(void);
 
 const char * __init arch_read_machine_name(void);

@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+&qupv3_se8_spi {
+	lattice@2 {
+		compatible = "lattice,ice40-fpga-mgr";
+		reg = <2>;
+		spi-max-frequency = <10000000>;
+		reset-gpios = <&tlmm 42 0>;
+		lreset-gpios = <&tlmm 74 0>;
+		fw = "lattice/lg_singlewire_m48_impl_1.img";
+		status = "disabled";
+	};
+};
+
+&qupv3_se10_i2c {
+	latticei2c@58 {
+		compatible = "lattice,ice40-i2c";
+		reg = <0x58>;
+		status = "disabled";
+	};
+};

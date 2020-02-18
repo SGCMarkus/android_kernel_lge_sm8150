@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/clock/qcom,gcc-sm8150.h>
+#include <dt-bindings/clock/qcom,camcc-sm8150.h>
+#include <dt-bindings/clock/qcom,rpmh.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common.dtsi"
+#include "sm8150-mh2lm-pinctrl.dtsi"
+#include "sm8150-mh2lm-panel.dtsi"
+#include "sm8150-mh2lm-misc.dtsi"
+#include "sm8150-mh2lm-pm.dtsi"
+#include "sm8150-mh2lm-connectivity.dtsi"
+#include "sm8150-mh2lm-nfc.dtsi"
+#include "sm8150-mh2lm-mme.dtsi"
+#include "sm8150-mh2lm-touch.dtsi"
+#include "sm8150-mh2lm-usb.dtsi"
+#include "sm8150-mh2lm-storage.dtsi"
+#include "sm8150-mh2lm-pkm.dtsi"
+#include "sm8150-mh2lm-flicker.dtsi"

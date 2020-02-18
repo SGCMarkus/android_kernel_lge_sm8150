@@ -22,6 +22,21 @@ static inline int __debug_locks_off(void)
  */
 extern int debug_locks_off(void);
 
+#ifdef CONFIG_DEBUG_LOCKS_ON_BUG
+#define DEBUG_LOCKS_WARN_ON(c)                                          \
+({                                                                      \
+        int __ret = 0;                                                  \
+                                                                        \
+        if (!oops_in_progress && unlikely(c)) {                         \
+                if (debug_locks_off() && !debug_locks_silent) {         \
+                        WARN(1, "DEBUG_LOCKS_WARN_ON(%s)", #c);         \
+			 BUG();						 \
+		 }							 \
+                __ret = 1;                                              \
+        }                                                               \
+        __ret;                                                          \
+})
+#else
 #define DEBUG_LOCKS_WARN_ON(c)						\
 ({									\
 	int __ret = 0;							\
@@ -33,6 +48,7 @@ extern int debug_locks_off(void);
 	}								\
 	__ret;								\
 })
+#endif
 
 #ifdef CONFIG_SMP
 # define SMP_DEBUG_LOCKS_WARN_ON(c)			DEBUG_LOCKS_WARN_ON(c)

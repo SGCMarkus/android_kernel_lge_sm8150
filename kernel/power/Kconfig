@@ -29,6 +29,10 @@ config SUSPEND_SKIP_SYNC
 	  of suspend, or they are content with invoking sync() from
 	  user-space before invoking suspend.  Say Y if that's your case.
 
+config PM_SUSPEND_BG_SYNC
+	bool "Background sync in supsend"
+	def_bool y
+
 config HIBERNATE_CALLBACKS
 	bool
 
@@ -167,7 +171,7 @@ config PM_WAKELOCKS_LIMIT
 config PM_WAKELOCKS_GC
 	bool "Garbage collector for user space wakeup sources"
 	depends on PM_WAKELOCKS
-	default y
+	default n
 
 config PM
 	bool "Device power management core functionality"

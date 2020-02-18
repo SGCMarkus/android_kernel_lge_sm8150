@@ -159,7 +159,6 @@
 		qcom,sde-pipe-order-version = <0x1>;
 		qcom,sde-has-dim-layer;
 		qcom,sde-has-idle-pc;
-		qcom,sde-has-dest-scaler;
 		qcom,sde-max-dest-scaler-input-linewidth = <2048>;
 		qcom,sde-max-dest-scaler-output-linewidth = <2560>;
 		qcom,sde-max-bw-low-kbps = <12800000>;
@@ -640,7 +639,7 @@
 
 		qcom,max-pclk-frequency-khz = <675000>;
 
-		qcom,mst-enable;
+	//	qcom,mst-enable;
 		qcom,dsc-feature-enable;
 		qcom,fec-feature-enable;
 		qcom,max-dp-dsc-blks = <2>;

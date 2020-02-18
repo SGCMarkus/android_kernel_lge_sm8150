@@ -37,6 +37,9 @@
 
 #define USB_VENDOR_GENESYS_LOGIC		0x05e3
 #define HUB_QUIRK_CHECK_PORT_AUTOSUSPEND	0x01
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+extern bool usb_super_speed;
+#endif
 
 /* Protect struct usb_device->state and ->children members
  * Note: Both are also protected by ->dev.sem, except that ->state can
@@ -2135,6 +2138,9 @@ void usb_disconnect(struct usb_device **pdev)
 	usb_set_device_state(udev, USB_STATE_NOTATTACHED);
 	dev_info(&udev->dev, "USB disconnect, device number %d\n",
 			udev->devnum);
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	usb_super_speed = false;
+#endif
 
 	/*
 	 * Ensure that the pm runtime code knows that the USB device
@@ -4608,6 +4614,9 @@ hub_port_init(struct usb_hub *hub, struct usb_device *udev, int port1,
 				goto fail;
 			}
 			if (udev->speed >= USB_SPEED_SUPER) {
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+				usb_super_speed = true;
+#endif
 				devnum = udev->devnum;
 				dev_info(&udev->dev,
 						"%s SuperSpeed%s USB device number %d using %s\n",
@@ -4998,6 +5007,10 @@ loop:
 			usb_hub_set_port_power(hdev, hub, port1, true);
 			msleep(hub_power_on_good_delay(hub));
 		}
+#ifdef CONFIG_LGE_USB
+		if (status == -ESHUTDOWN)
+			goto done;
+#endif
 	}
 	if (hub->hdev->parent ||
 			!hcd->driver->port_handed_over ||

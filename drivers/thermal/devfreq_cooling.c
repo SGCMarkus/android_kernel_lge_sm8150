@@ -189,6 +189,11 @@ static int devfreq_cooling_set_cur_state(struct thermal_cooling_device *cdev,
 
 	dfc->cooling_state = state;
 
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("%s: cdev[%s] set state=%d\n",
+			__func__, cdev->type, state);
+#endif
+
 	return 0;
 }
 

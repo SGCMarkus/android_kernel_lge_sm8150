@@ -1250,6 +1250,9 @@ void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap)
 
 	spin_lock_init(&heap->free_lock);
 	heap->free_list_size = 0;
+#ifdef CONFIG_MIGRATE_HIGHORDER
+	heap->free_highorder_size = 0;
+#endif
 
 	if (heap->flags & ION_HEAP_FLAG_DEFER_FREE)
 		ion_heap_init_deferred_free(heap);

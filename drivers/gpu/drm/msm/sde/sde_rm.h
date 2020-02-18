@@ -302,6 +302,8 @@ static inline bool sde_rm_topology_is_dual_ctl(struct sde_rm *rm,
 	return rm->topology_tbl[topology].num_ctl == DUAL_CTL;
 }
 
+int sde_rm_get_nmixer(struct sde_rm *rm,struct drm_encoder *enc);
+
 /**
  * sde_rm_ext_blk_create_reserve - Create external HW blocks
  *	in resource manager and reserve for specific encoder.

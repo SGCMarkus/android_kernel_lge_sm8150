@@ -429,6 +429,9 @@ struct sde_connector {
 
 	struct backlight_device *bl_device;
 	struct delayed_work status_work;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	u32 force_panel_dead;
+#endif
 	u32 esd_status_interval;
 	bool panel_dead;
 	bool esd_status_check;

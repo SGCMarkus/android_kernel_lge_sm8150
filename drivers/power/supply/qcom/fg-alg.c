@@ -316,6 +316,17 @@ static void cap_learning_post_process(struct cap_learning *cl)
 	int64_t max_inc_val, min_dec_val, old_cap;
 	int rc;
 
+#ifdef CONFIG_LGE_PM
+	int64_t subtraction =
+		div_s64(cl->final_cap_uah * cl->dt.skew_decipct, 1000) + cl->dt.skew_cc;
+
+	pr_info("FG: applying skew_ratio=%d, skew_cc=%dmAh..."
+			"Final, %lldmAh - %lldmAh = %lldmAh\n",
+		cl->dt.skew_decipct, cl->dt.skew_cc/1000, cl->final_cap_uah/1000,
+		subtraction/1000, (cl->final_cap_uah - subtraction)/1000);
+	if (cl->dt.skew_decipct || cl->dt.skew_cc)
+		cl->final_cap_uah -= subtraction;
+#else
 	if (cl->dt.skew_decipct) {
 		pr_debug("applying skew %d on current learnt capacity %lld\n",
 			cl->dt.skew_decipct, cl->final_cap_uah);
@@ -323,6 +334,7 @@ static void cap_learning_post_process(struct cap_learning *cl)
 					(1000 + cl->dt.skew_decipct);
 		cl->final_cap_uah = div64_u64(cl->final_cap_uah, 1000);
 	}
+#endif
 
 	max_inc_val = cl->learned_cap_uah * (1000 + cl->dt.max_cap_inc);
 	max_inc_val = div64_u64(max_inc_val, 1000);

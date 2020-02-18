@@ -61,11 +61,39 @@ enum pon_restart_reason {
 	PON_RESTART_REASON_DMVERITY_CORRUPTED	= 0x04,
 	PON_RESTART_REASON_DMVERITY_ENFORCE	= 0x05,
 	PON_RESTART_REASON_KEYS_CLEAR		= 0x06,
+#ifdef CONFIG_MACH_LGE
+	/* sync with QcomModulePkg/Include/Library/ShutdownServices.h */
+	PON_RESTART_REASON_NORMAL		= 0x20,
+	PON_RESTART_REASON_WALLPAPER_FAIL	= 0x21,
+	PON_RESTART_REASON_FOTA			= 0x22,
+	PON_RESTART_REASON_FOTA_LCD_OFF		= 0x23,
+	PON_RESTART_REASON_FOTA_OUT_LCD_OFF	= 0x24,
+	PON_RESTART_REASON_LCD_OFF		= 0x25,
+	PON_RESTART_REASON_CHARGE_RESET		= 0x26,
+	PON_RESTART_REASON_LAF_DLOAD_MODE	= 0x27,
+	PON_RESTART_REASON_LAF_RESTART_MODE	= 0x28,
+	PON_RESTART_REASON_LAF_ONRS		= 0x29,
+	PON_RESTART_REASON_XBOOT_AAT_WRITE	= 0x30,
+	PON_RESTART_REASON_SHIP_MODE		= 0x31,
+	PON_RESTART_REASON_OPID_MISMATCHED	= 0x32,
+	PON_RESTART_REASON_APDP_UPDATE		= 0x33,
+	PON_RESTART_REASON_APDP_FAIL		= 0x34,
+	PON_RESTART_REASON_APDP_SDCARD		= 0x35,
+#ifdef CONFIG_LGE_USB_GADGET
+	PON_RESTART_REASON_LAF_DLOAD_BOOT	= 0x40,
+	PON_RESTART_REASON_LAF_DLOAD_MTP	= 0x41,
+	PON_RESTART_REASON_LAF_DLOAD_TETHER	= 0x42,
+	PON_RESTART_REASON_LAF_DLOAD_FACTORY	= 0x43,
+#endif
+#endif
 };
 
 #ifdef CONFIG_INPUT_QPNP_POWER_ON
 int qpnp_pon_system_pwr_off(enum pon_power_off_type type);
 int qpnp_pon_is_warm_reset(void);
+#ifdef CONFIG_LGE_PM_SMPL_COUNTER
+int qpnp_pon_read_poff_sts(void);
+#endif
 int qpnp_pon_trigger_config(enum pon_trigger_source pon_src, bool enable);
 int qpnp_pon_wd_config(bool enable);
 int qpnp_pon_set_restart_reason(enum pon_restart_reason reason);
@@ -80,6 +108,9 @@ static inline int qpnp_pon_is_warm_reset(void)
 {
 	return -ENODEV;
 }
+#ifdef CONFIG_LGE_PM_SMPL_COUNTER
+static inline int qpnp_pon_read_poff_sts(void) { return -ENODEV; }
+#endif
 static inline int qpnp_pon_trigger_config(enum pon_trigger_source pon_src,
 							bool enable)
 {

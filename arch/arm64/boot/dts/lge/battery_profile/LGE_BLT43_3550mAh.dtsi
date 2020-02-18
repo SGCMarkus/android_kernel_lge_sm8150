@@ -1,0 +1,123 @@
+
+qcom,LGE_BLT43_3550mAh {
+	qcom,profile-revision = <24>;
+	/* #3883460_LGE_BLT43_3550mAh_averaged_MasterSlave_Mar13th2019*/
+	qcom,max-voltage-uv = <4400000>;
+	qcom,fg-cc-cv-threshold-mv = <4390>;
+	qcom,fastchg-current-ma = <2600>;
+	qcom,batt-id-kohm = <63>;
+	qcom,battery-type = "LGE_BLT43_3550mAh";
+	qcom,therm-coefficients = <0x230d 0xcf0 0x42 0xccbe 0x81ca>;
+	qcom,therm-center-offset = <0x5b>;
+	qcom,therm-pull-up = <100>;
+	qcom,rslow-normal-coeffs = <0x8b 0xfa 0x8c 0x1a>;
+	qcom,rslow-low-coeffs = <0x6f 0x14 0x35 0x03>;
+	qcom,checksum = <0x2F3C>;
+	qcom,gui-version = "PM855GUI - 1.0.0.13";
+	qcom,fg-profile-data = [
+		 09 00 AA EA
+		 DC D4 12 00
+		 87 CC 00 00
+		 19 BD B3 8B
+		 F2 87 7C A5
+		 6F 86 A9 80
+		 15 00 8B FA
+		 8C 1A 89 05
+		 BF FB CE 07
+		 32 00 E4 EA
+		 2A E4 0B D2
+		 36 0A B3 DC
+		 84 B4 80 1A
+		 92 02 DA AA
+		 60 00 49 00
+		 47 00 42 00
+		 34 00 2E 00
+		 33 00 3E 00
+		 40 00 48 00
+		 46 00 60 00
+		 36 00 3C 00
+		 48 00 42 00
+		 36 00 79 00
+		 5C 64 47 00
+		 3E 00 3E 08
+		 60 F8 42 00
+		 42 00 57 08
+		 4C 08 41 00
+		 7F 28 5D 48
+		 4A 58 40 0E
+		 3F 00 D8 F8
+		 0B 20 1E 05
+		 A3 02 C1 04
+		 A3 1C C1 0A
+		 6A 0C C4 23
+		 A8 17 26 42
+		 B6 5D 5A 03
+		 74 11 DE 1E
+		 E5 FC AD 03
+		 ED 06 DC 1C
+		 0C FA 89 05
+		 E6 02 B2 17
+		 C6 23 8D 44
+		 28 5A 6B 11
+		 E2 1E E3 EC
+		 B1 CB E6 C6
+		 D5 1C 51 C3
+		 F9 04 94 BB
+		 91 17 B7 8B
+		 B1 84 04 9A
+		 7A 90 09 80
+		 94 FA 22 05
+		 8E FA 15 FA
+		 00 00 4C DD
+		 46 E3 F5 FF
+		 C7 04 F5 CC
+		 80 10 11 00
+		 FD 04 81 03
+		 F3 04 01 02
+		 CE 07 32 00
+		 71 01 67 03
+		 91 04 E7 02
+		 C8 07 94 02
+		 6E 03 46 02
+		 DB 07 48 00
+		 39 00 40 00
+		 42 64 48 00
+		 47 00 45 00
+		 47 F8 45 00
+		 48 00 42 10
+		 3D 10 3A 00
+		 46 28 46 48
+		 52 58 61 0D
+		 3C 00 4A 00
+		 52 08 5A F8
+		 44 00 3B 00
+		 3C 10 47 10
+		 43 00 54 20
+		 63 40 3F 58
+		 4D 0E 51 00
+		 50 F8 32 08
+		 D8 F8 A8 1F
+		 10 06 D6 0B
+		 CF 0D C4 1C
+		 7B 23 94 45
+		 8B 52 7B 18
+		 04 02 BA 05
+		 93 03 66 11
+		 3F 0A DB 1F
+		 75 05 93 02
+		 67 04 BA 1C
+		 26 03 D6 05
+		 58 02 89 18
+		 AB 03 23 04
+		 D3 02 69 00
+		 3B 1F 2F 04
+		 30 02 03 05
+		 C4 1C 98 02
+		 B3 04 B7 03
+		 A6 18 12 03
+		 3D 05 72 03
+		 69 00 E8 01
+		 C0 00 FA 00
+		 E5 0D 00 00
+	];
+};

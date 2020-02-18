@@ -30,6 +30,10 @@
 #define DEFAULT_PANEL_JITTER_ARRAY_SIZE		2
 #define DEFAULT_PANEL_PREFILL_LINES	25
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+extern char* get_ddic_name(void);
+#endif
+
 static struct dsi_display_mode_priv_info default_priv_info = {
 	.panel_jitter_numer = DEFAULT_PANEL_JITTER_NUMERATOR,
 	.panel_jitter_denom = DEFAULT_PANEL_JITTER_DENOMINATOR,
@@ -968,6 +972,15 @@ int dsi_conn_post_kickoff(struct drm_connector *connector,
 		c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_VRR;
 	}
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if(strcmp(get_ddic_name(), "dsi_sim_cmd")) {
+		rc = dsi_display_post_kickoff(display);
+		if (rc) {
+			pr_err("failed new post kickoff\n");
+		}
+	}
+
+#endif
 	/* ensure dynamic clk switch flag is reset */
 	c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_DYN_CLK;
 

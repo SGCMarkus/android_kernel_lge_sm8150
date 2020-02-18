@@ -139,6 +139,11 @@ struct ufs_qcom_phy {
 	bool is_powered_on;
 	struct ufs_qcom_phy_specific_ops *phy_spec_ops;
 	u32 vco_tune1_mode1;
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+	void *ufsdbg_tunables;
+#endif
+
 };
 
 /**
@@ -168,6 +173,10 @@ struct ufs_qcom_phy_specific_ops {
 	void (*power_control)(struct ufs_qcom_phy *phy, bool val);
 	int (*configure_lpm)(struct ufs_qcom_phy *phy, bool enable);
 	void (*dbg_register_dump)(struct ufs_qcom_phy *phy);
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+	int (*calibrate_phy_tunables)(struct ufs_qcom_phy *phy);
+#endif
 };
 
 struct ufs_qcom_phy *get_ufs_qcom_phy(struct phy *generic_phy);

@@ -1,0 +1,51 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+&qupv3_se0_i2c { /* QUPV3 SE0  */
+	dw7912@59 {
+		compatible = "dwanatech,dw7912";
+		reg = <0x59>;
+		use_en_pin = <1>; /* 1 = use en pin, 0 = do not use en pin */
+		dw7912,en-gpio = <&tlmm 139 0x0>; /* gpx0_0, set to output(0x1) */
+		status = "disabled";
+	};
+};
+
+&qupv3_se0_i2c { /* QUPV3 SE0  */
+	dw7800@59 {
+		compatible = "dongwoon,dw7800";
+		reg = <0x59>;
+		dongwoon,vpwr-on = <0>;
+		status = "disabled";
+	};
+};
+
+&qupv3_se4_i2c { /* QUPV3 SE4  */
+	dw7912@59 {
+		compatible = "dwanatech,dw7912";
+		reg = <0x59>;
+		use_en_pin = <1>; /* 1 = use en pin, 0 = do not use en pin */
+		dw7912,en-gpio = <&tlmm 139 0x0>; /* gpx0_0, set to output(0x1) */
+		status = "disabled";
+	};
+};
+
+&qupv3_se4_i2c { /* QUPV3 SE4  */
+	dw7800@59 {
+		compatible = "dongwoon,dw7800";
+		reg = <0x59>;
+		dongwoon,vpwr-on = <0>;
+		status = "disabled";
+	};
+};

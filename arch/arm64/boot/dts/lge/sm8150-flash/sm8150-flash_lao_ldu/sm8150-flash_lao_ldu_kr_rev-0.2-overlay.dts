@@ -1,0 +1,147 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-flash_lao_ldu.dtsi"
+#include "sm8150-flash_lao_ldu-sound.dtsi"
+#include "sm8150-flash_lao_ldu-fingerprint_rev-0.2.dtsi"
+#include "sm8150-flash_lao_ldu-lattice.dtsi"
+#include "sm8150-flash_lao_ldu-lattice_rev-0.2.dtsi"
+#include "../sm8150-camera/sm8150-flash-camera_rev-a.dtsi"
+#include "sm8150-flash_lao_ldu-tdmb_rev-a.dtsi"
+
+/ {
+	model = "LG Electronics, flash_lao_kr, rev_0.2";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x01050008 0>;
+};
+
+/* In rev 0.2, vol up/down key gpio matching is inverse,
+ * so apply workaround to fix it.
+ */
+&spmi_bus {
+	qcom,pm8150@0 {
+		qcom,power-on@800 {
+			qcom,pon_2 {
+				/* linux,code = <KEY_VOLUMEDOWN>; */
+				linux,code = <KEY_VOLUMEUP>;
+			};
+		};
+	};
+};
+
+&soc {
+	gpio_keys {
+		pinctrl-0 = <&smartcover_gpio_default>;
+		vol_up {
+			/* linux,code = <KEY_VOLUMEUP>; */
+			linux,code = <KEY_VOLUMEDOWN>;
+		};
+
+		cover_display_back {
+			status = "disabled";
+		};
+	};
+};
+
+&pm8150b_charger {
+	lge-extension-usb {
+		lge,usbid-parallel-kohm = <2000>;		// parallel resistance
+	};
+};
+
+&qupv3_se0_i2c{ /* QUPV3 SE0  */
+	status = "ok";
+	lp5523@32 {
+		status = "ok";
+		compatible = "national,lp5523";
+		reg = <0x32>;
+		clock-mode = /bits/ 8 <1>;
+		enable-gpio = <&tlmm 82 0x00>;
+
+		chan0 {
+			chan-name = "d1";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan1 {
+			chan-name = "d2";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan2 {
+			chan-name = "d3";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan3 {
+			chan-name = "d4";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan4 {
+			chan-name = "d5";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan5 {
+			chan-name = "d6";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan6 {
+			chan-name = "d7";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan7 {
+			chan-name = "d8";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+
+		chan8 {
+			chan-name = "d9";
+			led-cur = /bits/ 8 <0x14>;
+			max-cur = /bits/ 8 <0x20>;
+		};
+	};
+};
+
+&vendor {
+	lge-battery-supplement {
+		default-battery-name = "FLASH_QDM_Tocad_3250mAh";
+		default-battery-kohm = <63>;
+	};
+};
+
+&hot_key {
+	status = "disabled";
+};
+
+&slim_aud {
+	tavil_codec {
+		cdc-vdd-3v3-supply = <&pm8150l_l7>;
+		qcom,cdc-vdd-3v3-voltage = <3300000 3300000>;
+		qcom,cdc-vdd-3v3-current = <16800>;
+	};
+};

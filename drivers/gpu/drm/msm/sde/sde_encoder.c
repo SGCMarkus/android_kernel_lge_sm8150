@@ -40,6 +40,10 @@
 #include "sde_hw_top.h"
 #include "sde_hw_qdss.h"
 
+#ifdef CONFIG_LGE_PM_PRM
+#include "vfps/lge_vfps.h"
+#endif
+
 #define SDE_DEBUG_ENC(e, fmt, ...) SDE_DEBUG("enc%d " fmt,\
 		(e) ? (e)->base.base.id : -1, ##__VA_ARGS__)
 
@@ -3479,7 +3483,19 @@ static void sde_encoder_vblank_callback(struct drm_encoder *drm_enc,
 
 	spin_lock_irqsave(&sde_enc->enc_spinlock, lock_flags);
 	if (sde_enc->crtc_vblank_cb)
+#ifdef CONFIG_LGE_PM_PRM
+	{
+		if (sde_enc->disp_info.is_primary) {
+			if (!lge_vfps_check_internal())
+				sde_enc->crtc_vblank_cb(sde_enc->crtc_vblank_cb_data);
+		} else {
+			sde_enc->crtc_vblank_cb(sde_enc->crtc_vblank_cb_data);
+		}
+	}
+#else
 		sde_enc->crtc_vblank_cb(sde_enc->crtc_vblank_cb_data);
+#endif
+
 	spin_unlock_irqrestore(&sde_enc->enc_spinlock, lock_flags);
 
 	atomic_inc(&phy_enc->vsync_cnt);
@@ -5090,6 +5106,14 @@ static void _sde_encoder_destroy_debugfs(struct drm_encoder *drm_enc)
 
 static int sde_encoder_late_register(struct drm_encoder *encoder)
 {
+#ifdef CONFIG_LGE_PM_PRM
+	if (encoder) {
+		struct sde_encoder_virt *sde_enc = to_sde_encoder_virt(encoder);
+		if (sde_enc->disp_info.is_primary) {
+			lge_vfps_set_encoder(encoder);
+		}
+	}
+#endif
 	return _sde_encoder_init_debugfs(encoder);
 }
 

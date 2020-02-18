@@ -602,23 +602,21 @@ end:
 
 static void __cam_isp_ctx_send_sof_boot_timestamp(
 	struct cam_isp_context *ctx_isp, uint64_t request_id,
-	uint32_t sof_event_status, uint64_t delta_ts)
+	uint32_t sof_event_status)
 {
 	struct cam_req_mgr_message   req_msg;
 
 	req_msg.session_hdl = ctx_isp->base->session_hdl;
 	req_msg.u.frame_msg.frame_id = ctx_isp->frame_id;
 	req_msg.u.frame_msg.request_id = request_id;
+	req_msg.u.frame_msg.timestamp = ctx_isp->boot_timestamp;
 	req_msg.u.frame_msg.link_hdl = ctx_isp->base->link_hdl;
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
-	req_msg.u.frame_msg.timestamp = ctx_isp->prev_boot_timestamp + delta_ts;
-
 	CAM_DBG(CAM_ISP,
-		"req id:%lld frame num:%lld bt_ts:0x%llx pre_bt_ts:0x%llx diff:0x%llx",
+		"request id:%lld frame number:%lld boot time stamp:0x%llx",
 		request_id, ctx_isp->frame_id,
-		ctx_isp->boot_timestamp, ctx_isp->prev_boot_timestamp,
-		delta_ts);
+		ctx_isp->boot_timestamp);
 
 
 	if (cam_req_mgr_notify_message(&req_msg,
@@ -628,7 +626,6 @@ static void __cam_isp_ctx_send_sof_boot_timestamp(
 			"Error in notifying the boot time for req id:%lld",
 			request_id);
 
-	ctx_isp->prev_boot_timestamp = req_msg.u.frame_msg.timestamp;
 }
 
 
@@ -637,7 +634,6 @@ static void __cam_isp_ctx_send_sof_timestamp(
 	uint32_t sof_event_status)
 {
 	struct cam_req_mgr_message   req_msg;
-	uint64_t delta_ts;
 
 	req_msg.session_hdl = ctx_isp->base->session_hdl;
 	req_msg.u.frame_msg.frame_id = ctx_isp->frame_id;
@@ -647,9 +643,9 @@ static void __cam_isp_ctx_send_sof_timestamp(
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
 	CAM_DBG(CAM_ISP,
-		"request id:%lld frame number:%lld SOF time stamp:0x%llx, Prev SOF time:0x%llx",
-		 request_id, ctx_isp->frame_id,
-		ctx_isp->sof_timestamp_val, ctx_isp->prev_sof_timestamp_val);
+		"request id:%lld frame number:%lld SOF time stamp:0x%llx",
+		request_id, ctx_isp->frame_id,
+		ctx_isp->sof_timestamp_val);
 	CAM_DBG(CAM_ISP, "sof status:%d", sof_event_status);
 
 	if (cam_req_mgr_notify_message(&req_msg,
@@ -657,18 +653,9 @@ static void __cam_isp_ctx_send_sof_timestamp(
 		CAM_ERR(CAM_ISP,
 			"Error in notifying the sof time for req id:%lld",
 			request_id);
-	delta_ts = ctx_isp->sof_timestamp_val -
-			ctx_isp->prev_sof_timestamp_val;
 
 	__cam_isp_ctx_send_sof_boot_timestamp(ctx_isp,
-		request_id, sof_event_status,
-		(ctx_isp->prev_sof_timestamp_val == 0) ?
-			ctx_isp->boot_timestamp :
-			delta_ts);
-
-	ctx_isp->prev_sof_timestamp_val =
-			ctx_isp->sof_timestamp_val;
-
+		request_id, sof_event_status);
 }
 
 static int __cam_isp_ctx_reg_upd_in_epoch_state(
@@ -825,8 +812,15 @@ static int __cam_isp_ctx_notify_sof_in_activated_state(
 			__cam_isp_ctx_dump_state_monitor_array(ctx_isp, true);
 		}
 
+#ifdef QUALCOMM_ORIGINAL
 		__cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
 			CAM_REQ_MGR_SOF_EVENT_SUCCESS);
+#else
+        if (ctx_isp->active_req_cnt > 0) {
+            __cam_isp_ctx_send_sof_timestamp(ctx_isp, request_id,
+                CAM_REQ_MGR_SOF_EVENT_SUCCESS);
+        }
+#endif
 	} else {
 		CAM_ERR_RATE_LIMIT(CAM_ISP,
 			"Can not notify SOF to CRM for ctx %u",
@@ -2041,19 +2035,40 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 	struct cam_req_mgr_flush_request *flush_req)
 {
 	int rc = 0;
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+	struct cam_isp_context *ctx_isp;
+
+	ctx_isp = (struct cam_isp_context *) ctx->ctx_priv;
+#else
 	struct cam_isp_context           *ctx_isp =
 		(struct cam_isp_context *) ctx->ctx_priv;
 	struct cam_isp_stop_args          stop_isp;
 	struct cam_hw_stop_args           stop_args;
 	struct cam_isp_start_args         start_isp;
 	struct cam_hw_reset_args          reset_args;
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 	if (flush_req->type == CAM_REQ_MGR_FLUSH_TYPE_ALL) {
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+		CAM_INFO(CAM_ISP, "Last request id to flush is %lld",
+			flush_req->req_id);
+#else
 		CAM_INFO(CAM_ISP, "ctx id:%d Last request id to flush is %lld",
 			ctx->ctx_id, flush_req->req_id);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 		ctx->last_flush_req = flush_req->req_id;
 	}
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+	CAM_DBG(CAM_ISP, "try to flush pending list");
+#else
 	CAM_DBG(CAM_ISP, "ctx id:%d try to flush pending list", ctx->ctx_id);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 	spin_lock_bh(&ctx->lock);
 	rc = __cam_isp_ctx_flush_req(ctx, &ctx->pending_req_list, flush_req);
 
@@ -2076,6 +2091,8 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 	spin_unlock_bh(&ctx->lock);
 
 	atomic_set(&ctx_isp->process_bubble, 0);
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 	if (flush_req->type == CAM_REQ_MGR_FLUSH_TYPE_ALL) {
 		/* if active and wait list are empty, return */
 		spin_lock_bh(&ctx->lock);
@@ -2127,6 +2144,8 @@ static int __cam_isp_ctx_flush_req_in_top_state(
 
 end:
 	ctx_isp->substate_activated = CAM_ISP_CTX_ACTIVATED_SOF;
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 	return rc;
 }
 
@@ -3446,7 +3465,11 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 	ctx_isp->req_info.reported_req_id = 0;
 	ctx_isp->substate_activated = ctx_isp->rdi_only_context ?
 		CAM_ISP_CTX_ACTIVATED_APPLIED :
+#if 0
 		(req_isp->num_fence_map_out) ? CAM_ISP_CTX_ACTIVATED_EPOCH :
+#else
+		(req_isp->num_fence_map_out) ? CAM_ISP_CTX_ACTIVATED_APPLIED :
+#endif
 		CAM_ISP_CTX_ACTIVATED_SOF;
 
 	/*
@@ -3469,12 +3492,17 @@ static int __cam_isp_ctx_start_dev_in_ready(struct cam_context *ctx,
 
 	list_del_init(&req->list);
 
+#if 0
 	if (req_isp->num_fence_map_out) {
 		list_add_tail(&req->list, &ctx->active_req_list);
 		ctx_isp->active_req_cnt++;
 	} else {
 		list_add_tail(&req->list, &ctx->wait_req_list);
 	}
+#else
+	list_add_tail(&req->list, &ctx->wait_req_list);
+#endif
+
 end:
 	return rc;
 }
@@ -3581,8 +3609,6 @@ static int __cam_isp_ctx_stop_dev_in_activated_unlock(
 	ctx_isp->req_info.last_applied_time_stamp = 0;
 	ctx_isp->req_info.last_bufdone_time_stamp = 0;
 	ctx_isp->req_info.last_reported_id_time_stamp = 0;
-	ctx_isp->prev_sof_timestamp_val = 0;
-	ctx_isp->prev_boot_timestamp = 0;
 
 	atomic_set(&ctx_isp->process_bubble, 0);
 

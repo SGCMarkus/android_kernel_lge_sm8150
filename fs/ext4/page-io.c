@@ -354,6 +354,13 @@ void ext4_io_submit(struct ext4_io_submit *io)
 		io->io_bio->bi_write_hint = io->io_end->inode->i_write_hint;
 		if (io->io_flags & EXT4_IO_ENCRYPTED)
 			io_op_flags |= REQ_NOENCRYPT;
+
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+		if (io->io_wbc->for_background) {
+			io->io_bio->bi_excontrol |= REQ_EX_ORDERED;
+		}
+#endif
+
 		bio_set_op_attrs(io->io_bio, REQ_OP_WRITE, io_op_flags);
 		submit_bio(io->io_bio);
 	}

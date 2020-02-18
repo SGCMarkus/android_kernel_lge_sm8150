@@ -20,6 +20,13 @@ config DVB_MPQ_NUM_DMX_DEVICES
 	  Configure number of demux devices.
 	  Depends on your use-cases for maximum concurrent stream playback.
 
+config LGE_BROADCAST_ISDBT_JAPAN
+	bool "Japan full-seg Broadcast service"
+	depends on (MACH_SM8150_MH2LM_SB_JP)
+	default y
+	help
+	  Select this if you want to use Japanese FullSeg mobile broadcast service
+
 config DVB_MPQ_TSPP1
 	bool "TSPPv1 plugin"
 	depends on DVB_MPQ_DEMUX && TSPP

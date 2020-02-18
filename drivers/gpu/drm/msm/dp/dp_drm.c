@@ -389,8 +389,13 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 	dp_panel = sde_conn->drv_panel;
 
 	topology = &mode_info->topology;
-	topology->num_lm = (max_mixer_width < drm_mode->hdisplay) ?
-							dual_lm : single_lm;
+
+	if (max_mixer_width <= drm_mode->hdisplay ||
+		max_mixer_width <= drm_mode->vdisplay)
+		topology->num_lm = dual_lm;
+	else
+		topology->num_lm = single_lm;
+
 	topology->num_enc = no_enc;
 	topology->num_intf = single_intf;
 

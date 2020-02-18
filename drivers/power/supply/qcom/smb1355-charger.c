@@ -271,6 +271,9 @@ enum {
 	CONNECTOR_TEMP = 0,
 	DIE_TEMP,
 };
+#ifdef CONFIG_LGE_PM
+void smb1355_retry_charging_trigger(struct smb1355* chip, bool enable);
+#endif
 
 static bool is_secure(struct smb1355 *chip, int addr)
 {
@@ -851,6 +854,16 @@ static int smb1355_parallel_get_prop(struct power_supply *psy,
 		val->intval = 0;
 		break;
 	default:
+#ifdef CONFIG_LGE_PM_DEBUG
+	// SMB1355 is not providing POWER_SUPPLY_PROP_ONLINE :
+	// power_supply_changed_work
+	// -> power_supply_update_leds
+	//    -> power_supply_update_gen_leds
+	//       -> power_supply_get_property(POWER_SUPPLY_PROP_ONLINE(5))
+	// So every power_supply_changed() causes
+	// => "SMB1355: smb1355_parallel_get_prop: parallel psy get prop 5 not supported"
+	if (prop != POWER_SUPPLY_PROP_ONLINE)
+#endif
 		pr_err_ratelimited("parallel psy get prop %d not supported\n",
 			prop);
 		return -EINVAL;
@@ -985,6 +998,9 @@ static int smb1355_parallel_set_prop(struct power_supply *psy,
 	}
 	switch (prop) {
 	case POWER_SUPPLY_PROP_INPUT_SUSPEND:
+#ifdef CONFIG_LGE_PM
+		smb1355_retry_charging_trigger(chip, (bool) !val->intval);
+#endif
 		rc = smb1355_set_parallel_charging(chip, (bool)val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
@@ -1704,6 +1720,112 @@ static struct platform_driver smb1355_driver = {
 	.remove		= smb1355_remove,
 	.shutdown	= smb1355_shutdown,
 };
+
+#ifdef CONFIG_LGE_PM
+#define SMB_REG_BASE_CHGR	0x1000
+#define SMB_REG_BASE_BATIF	0x1200
+#define SMB_REG_BASE_USB	0x1300
+#define SMB_REG_BASE_MISC	0x1600
+
+static const struct base {
+	const char* name;
+	int base;
+} bases [] = {
+	/* 0: */ { .name = "POLL",	.base = -1, },	// Dummy for polling logs
+	/* 1: */ { .name = "CHGR",	.base = SMB_REG_BASE_CHGR, },
+	/* 3: */ { .name = "BATIF", 	.base = SMB_REG_BASE_BATIF, },
+	/* 4: */ { .name = "USB",		.base = SMB_REG_BASE_USB, },
+	/* 7: */ { .name = "MISC",	.base = SMB_REG_BASE_MISC, },
+};
+
+static void smb1355_debug_dump(struct smb1355* chip, const char* title, u16 start) {
+	u16 reg, i;
+	u8 val[16];
+
+	for (reg = start; reg < start + 0x100; reg += 0x10) {
+		for (i = 0; i < 0x10; i++) {
+			val[i] = 0x99;
+			smb1355_read(chip, reg+i, &val[i]);
+		}
+		pr_err("REGDUMP: [%s] 0x%X - %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+			title, reg, val[0], val[1], val[2], val[3], val[4], val[5], val[6], val[7], val[8],
+			val[9], val[10], val[11], val[12], val[13], val[14], val[15]);
+	}
+}
+static void smb1355_debug_battery(struct smb1355* chip) {
+	int i;
+
+	for (i = 1; i < ARRAY_SIZE(bases); ++i)
+		smb1355_debug_dump(chip, bases[i].name, bases[i].base);
+}
+
+#define CHARE_RERUN_DELAY_MS 3000
+static void smb1355_retry_charging_func(struct work_struct *unused);
+static DECLARE_DELAYED_WORK(smb1355_retry_charging_dwork, smb1355_retry_charging_func);
+extern void wa_get_pmic_dump(void);
+
+static void smb1355_retry_charging_func(struct work_struct *unused) {
+	// getting smb_charger from air
+	struct power_supply*	psy
+		= power_supply_get_by_name("parallel");
+	struct smb1355* chip
+		= psy ? power_supply_get_drvdata(psy) : NULL;
+	union power_supply_propval val;
+	int prll_chgen, prll_suspd;
+	static int retry_count = 0;
+
+	if (psy)
+		power_supply_put(psy);
+
+	if (!chip) {
+		schedule_delayed_work(&smb1355_retry_charging_dwork, msecs_to_jiffies(CHARE_RERUN_DELAY_MS));
+		pr_err("Fail to get sm1355 chip\n");
+		return;
+	}
+
+	prll_chgen = !power_supply_get_property(chip->parallel_psy,
+		POWER_SUPPLY_PROP_CHARGING_ENABLED, &val) ? !!val.intval : -1;
+	prll_suspd = !power_supply_get_property(chip->parallel_psy,
+		POWER_SUPPLY_PROP_INPUT_SUSPEND, &val) ? !!val.intval : -1;
+
+	if (!prll_chgen && !prll_suspd && retry_count <= 3) {
+		pr_debug("Fail to enable smb135 charger. retry count = %d\n", retry_count);
+		schedule_delayed_work(&smb1355_retry_charging_dwork, msecs_to_jiffies(CHARE_RERUN_DELAY_MS));
+		retry_count++;
+
+		return;
+	} else if (!prll_chgen && !prll_suspd) {
+		pr_info("Fail to enable smb135 charger. retry count = %d\n", retry_count);
+
+		smb1355_debug_battery(chip);
+		wa_get_pmic_dump();
+
+		val.intval = 1;
+		power_supply_set_property(chip->parallel_psy,
+			POWER_SUPPLY_PROP_INPUT_SUSPEND, &val);
+
+		val.intval = 0;
+		power_supply_set_property(chip->parallel_psy,
+			POWER_SUPPLY_PROP_INPUT_SUSPEND, &val);
+		retry_count = 0;
+	} else {
+		pr_debug("Success to enable smb135 charger. chgen(%d), suspd(%d)\n", prll_chgen, prll_suspd);
+		retry_count = 0;
+	}
+
+	return;
+}
+
+void smb1355_retry_charging_trigger(struct smb1355* chip, bool enable) {
+	if (enable) {
+		if (!delayed_work_pending(&smb1355_retry_charging_dwork))
+			schedule_delayed_work(&smb1355_retry_charging_dwork, msecs_to_jiffies(CHARE_RERUN_DELAY_MS));
+	} else {
+		cancel_delayed_work(&smb1355_retry_charging_dwork);
+	}
+}
+#endif
+
 module_platform_driver(smb1355_driver);
 
 MODULE_DESCRIPTION("QPNP SMB1355 Charger Driver");

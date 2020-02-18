@@ -1,0 +1,66 @@
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+&qupv3_se17_i2c {
+	synaptics_s3707@20 {
+		status = "disable";
+		compatible = "synaptics,s3707";
+
+		reg = <0x20>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <122 0x2008>;
+		irqflags = <0x00000002>;
+
+		vdd-gpio = <&tlmm 152 0x00>;
+		vcl-gpio = <&tlmm 59 0x00>;
+		reset-gpio = <&tlmm 54 0x00>;
+		irq-gpio = <&tlmm 122 0x2008>;
+
+		/* Caps */
+		max_x = <1439>;
+		max_y = <3119>;
+		max_pressure = <0xff>;
+		max_width_major = <3119>;
+		max_width_minor = <3119>;
+		max_orientation = <90>;
+		max_id = <10>;
+		hw_reset_delay = <100>;
+		sw_reset_delay = <100>;
+
+		/* Role */
+		use_lpwg = <1>;
+		use_lpwg_test = <1>;
+		hide_coordinate = <0>;
+
+		/* Firmware */
+		fw_image = "touch/alpha/PLG662-V0.08-PR2789051-s3707b_BLV86_DS5.10.81.1_50061108.img";
+		panel_spec = "touch/alpha/alpha_limit.txt";
+		panel_spec_mfts_folder = "touch/alpha/alpha_limit_mfts.txt";
+
+		/* Performance Test */
+		use_perf_test = <1>;
+		test_delay = <8>;
+		test_pressure = <50>;
+		test_width = <100>;
+		click_test_x = <180>;
+		click_test_y = <756>;
+		v_drag_test_x = <144>;
+		v_drag_test_start_y = <1971>;
+		v_drag_test_end_y = <1148>;
+		h_drag_test_start_x = <1131>;
+		h_drag_test_end_x = <308>;
+		h_drag_test_y = <2184>;
+	};
+
+};
+

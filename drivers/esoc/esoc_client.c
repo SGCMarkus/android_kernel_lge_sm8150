@@ -164,13 +164,13 @@ int esoc_register_client_hook(struct esoc_desc *desc,
 		if (i == client_hook->prio &&
 			esoc_clink->client_hook[i] == NULL) {
 			esoc_clink->client_hook[i] = client_hook;
-			dev_dbg(&esoc_clink->dev,
+			dev_err(&esoc_clink->dev,
 				"Client hook registration successful\n");
 			return 0;
 		}
 	}
 
-	dev_dbg(&esoc_clink->dev, "Client hook registration failed!\n");
+	dev_err(&esoc_clink->dev, "Client hook registration failed!\n");
 	return -EINVAL;
 }
 EXPORT_SYMBOL(esoc_register_client_hook);
@@ -196,13 +196,13 @@ int esoc_unregister_client_hook(struct esoc_desc *desc,
 		if (i == client_hook->prio &&
 			esoc_clink->client_hook[i] != NULL) {
 			esoc_clink->client_hook[i] = NULL;
-			dev_dbg(&esoc_clink->dev,
+			dev_err(&esoc_clink->dev,
 				"Client hook unregistration successful\n");
 			return 0;
 		}
 	}
 
-	dev_dbg(&esoc_clink->dev, "Client hook unregistration failed!\n");
+	dev_err(&esoc_clink->dev, "Client hook unregistration failed!\n");
 	return -EINVAL;
 }
 EXPORT_SYMBOL(esoc_unregister_client_hook);

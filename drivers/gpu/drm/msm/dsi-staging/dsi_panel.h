@@ -164,6 +164,10 @@ struct drm_panel_esd_config {
 	u32 groups;
 };
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+#include "../lge/lge_dsi_panel_def.h"
+#endif
+
 struct dsi_panel {
 	const char *name;
 	const char *type;
@@ -212,6 +216,9 @@ struct dsi_panel {
 	bool sync_broadcast_en;
 	int power_mode;
 	enum dsi_panel_physical_type panel_type;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	struct lge_dsi_panel lge;
+#endif
 };
 
 static inline bool dsi_panel_ulps_feature_enabled(struct dsi_panel *panel)

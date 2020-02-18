@@ -25,6 +25,10 @@
 #define UFS_VENDOR_SAMSUNG     0x1CE
 #define UFS_VENDOR_SKHYNIX     0x1AD
 
+#ifdef CONFIG_UFS_LGE_FEATURE
+#define UFS_VENDOR_SANDISK     0x145
+#endif
+
 /**
  * ufs_dev_fix - ufs device quirk info
  * @card: ufs card details
@@ -147,5 +151,9 @@ struct ufs_dev_fix {
  * instead of the default delay.
  */
 #define UFS_DEVICE_QUIRK_WAIT_AFTER_REF_CLK_UNGATE	(1 << 10)
+
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+#define UFS_DEVICE_QUIRK_CMD_ORDERED (1 << 15)
+#endif
 
 #endif /* UFS_QUIRKS_H_ */

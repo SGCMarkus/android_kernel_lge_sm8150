@@ -169,12 +169,14 @@ static void lp5523_load_engine(struct lp55xx_chip *chip)
 {
 	enum lp55xx_engine_index idx = chip->engine_idx;
 	static const u8 mask[] = {
+		[LP55XX_ENGINE_INVALID] = 0,
 		[LP55XX_ENGINE_1] = LP5523_MODE_ENG1_M,
 		[LP55XX_ENGINE_2] = LP5523_MODE_ENG2_M,
 		[LP55XX_ENGINE_3] = LP5523_MODE_ENG3_M,
 	};
 
 	static const u8 val[] = {
+		[LP55XX_ENGINE_INVALID] = 0,
 		[LP55XX_ENGINE_1] = LP5523_LOAD_ENG1,
 		[LP55XX_ENGINE_2] = LP5523_LOAD_ENG2,
 		[LP55XX_ENGINE_3] = LP5523_LOAD_ENG3,
@@ -189,6 +191,7 @@ static void lp5523_load_engine_and_select_page(struct lp55xx_chip *chip)
 {
 	enum lp55xx_engine_index idx = chip->engine_idx;
 	static const u8 page_sel[] = {
+		[LP55XX_ENGINE_INVALID] = 0,
 		[LP55XX_ENGINE_1] = LP5523_PAGE_ENG1,
 		[LP55XX_ENGINE_2] = LP5523_PAGE_ENG2,
 		[LP55XX_ENGINE_3] = LP5523_PAGE_ENG3,
@@ -209,6 +212,7 @@ static void lp5523_stop_engine(struct lp55xx_chip *chip)
 {
 	enum lp55xx_engine_index idx = chip->engine_idx;
 	static const u8 mask[] = {
+		[LP55XX_ENGINE_INVALID] = 0,
 		[LP55XX_ENGINE_1] = LP5523_MODE_ENG1_M,
 		[LP55XX_ENGINE_2] = LP5523_MODE_ENG2_M,
 		[LP55XX_ENGINE_3] = LP5523_MODE_ENG3_M,
@@ -508,6 +512,7 @@ static int lp5523_load_mux(struct lp55xx_chip *chip, u16 mux, int nr)
 	struct lp55xx_engine *engine = &chip->engines[nr - 1];
 	int ret;
 	static const u8 mux_page[] = {
+		[LP55XX_ENGINE_INVALID] = 0,
 		[LP55XX_ENGINE_1] = LP5523_PAGE_MUX1,
 		[LP55XX_ENGINE_2] = LP5523_PAGE_MUX2,
 		[LP55XX_ENGINE_3] = LP5523_PAGE_MUX3,
@@ -599,6 +604,7 @@ static ssize_t lp5523_selftest(struct device *dev,
 	mutex_lock(&chip->lock);
 
 	ret = lp55xx_read(chip, LP5523_REG_STATUS, &status);
+	LED_I("[START] status = 0x%02X\n", status);
 	if (ret < 0)
 		goto fail;
 
@@ -612,6 +618,7 @@ static ssize_t lp5523_selftest(struct device *dev,
 	lp55xx_write(chip, LP5523_REG_LED_TEST_CTRL, LP5523_EN_LEDTEST | 16);
 	usleep_range(3000, 6000); /* ADC conversion time is typically 2.7 ms */
 	ret = lp55xx_read(chip, LP5523_REG_STATUS, &status);
+	LED_I("status = 0x%02X\n", status);
 	if (ret < 0)
 		goto fail;
 
@@ -619,12 +626,14 @@ static ssize_t lp5523_selftest(struct device *dev,
 		usleep_range(3000, 6000); /* Was not ready. Wait little bit */
 
 	ret = lp55xx_read(chip, LP5523_REG_LED_TEST_ADC, &vdd);
+	LED_I("LP5523_REG_LED_TEST_ADC = 0x%02X\n", vdd);
 	if (ret < 0)
 		goto fail;
 
 	vdd--;	/* There may be some fluctuation in measurement */
 
 	for (i = 0; i < LP5523_MAX_LEDS; i++) {
+		LED_I("===LED %d Start===\n", i);
 		/* Skip non-existing channels */
 		if (pdata->led_config[i].led_current == 0)
 			continue;
@@ -641,6 +650,7 @@ static ssize_t lp5523_selftest(struct device *dev,
 		/* ADC conversion time is 2.7 ms typically */
 		usleep_range(3000, 6000);
 		ret = lp55xx_read(chip, LP5523_REG_STATUS, &status);
+		LED_I("LP5523_REG_STATUS = 0x%02X\n", status);
 		if (ret < 0)
 			goto fail;
 
@@ -648,6 +658,7 @@ static ssize_t lp5523_selftest(struct device *dev,
 			usleep_range(3000, 6000);/* Was not ready. Wait. */
 
 		ret = lp55xx_read(chip, LP5523_REG_LED_TEST_ADC, &adc);
+		LED_I("LP5523_REG_LED_TEST_ADC = 0x%02X\n", adc);
 		if (ret < 0)
 			goto fail;
 
@@ -660,6 +671,7 @@ static ssize_t lp5523_selftest(struct device *dev,
 		lp55xx_write(chip, LP5523_REG_LED_CURRENT_BASE + i,
 			led->led_current);
 		led++;
+		LED_I("===LED %d End===\n", i);
 	}
 	if (pos == 0)
 		pos = sprintf(buf, "OK\n");
@@ -668,6 +680,31 @@ fail:
 	pos = sprintf(buf, "FAIL\n");
 
 release_lock:
+	mutex_unlock(&chip->lock);
+
+	return pos;
+}
+
+static ssize_t lp5523_onofftest(struct device *dev,
+			       struct device_attribute *attr,
+			       char *buf)
+{
+	struct lp55xx_led *led = i2c_get_clientdata(to_i2c_client(dev));
+	struct lp55xx_chip *chip = led->chip;
+	int i, ret, pos = 0;
+
+	mutex_lock(&chip->lock);
+
+	test_toggle ^= 0xff;
+	pos += sprintf(buf + pos, "turn %s, 0x%02x\n", test_toggle ? "on" : "off", test_toggle);
+
+	for (i = 0; i < LP5523_MAX_LEDS; i++) {
+		ret = lp55xx_write(chip, LP5523_REG_LED_PWM_BASE + i,
+				test_toggle);
+		if (ret < 0)
+			LED_E("[%d] onoff fail\n", ret);
+	}
+
 	mutex_unlock(&chip->lock);
 
 	return pos;
@@ -826,6 +863,7 @@ static LP55XX_DEV_ATTR_WO(engine1_load, store_engine1_load);
 static LP55XX_DEV_ATTR_WO(engine2_load, store_engine2_load);
 static LP55XX_DEV_ATTR_WO(engine3_load, store_engine3_load);
 static LP55XX_DEV_ATTR_RO(selftest, lp5523_selftest);
+static LP55XX_DEV_ATTR_RO(onofftest, lp5523_onofftest);
 static LP55XX_DEV_ATTR_RW(master_fader1, show_master_fader1,
 			  store_master_fader1);
 static LP55XX_DEV_ATTR_RW(master_fader2, show_master_fader2,
@@ -846,6 +884,7 @@ static struct attribute *lp5523_attributes[] = {
 	&dev_attr_engine2_leds.attr,
 	&dev_attr_engine3_leds.attr,
 	&dev_attr_selftest.attr,
+	&dev_attr_onofftest.attr,
 	&dev_attr_master_fader1.attr,
 	&dev_attr_master_fader2.attr,
 	&dev_attr_master_fader3.attr,
@@ -884,6 +923,8 @@ static int lp5523_probe(struct i2c_client *client,
 	struct lp55xx_led *led;
 	struct lp55xx_platform_data *pdata = dev_get_platdata(&client->dev);
 	struct device_node *np = client->dev.of_node;
+
+	LED_E("probe start\n");
 
 	if (!pdata) {
 		if (np) {
@@ -955,7 +996,7 @@ static int lp5523_remove(struct i2c_client *client)
 static const struct i2c_device_id lp5523_id[] = {
 	{ "lp5523",  LP5523 },
 	{ "lp55231", LP55231 },
-	{ }
+	{},
 };
 
 MODULE_DEVICE_TABLE(i2c, lp5523_id);

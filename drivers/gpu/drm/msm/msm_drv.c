@@ -60,6 +60,10 @@
 #define MSM_VERSION_MINOR	2
 #define MSM_VERSION_PATCHLEVEL	0
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+extern char* get_ddic_name(void);
+#endif
+
 static void msm_fb_output_poll_changed(struct drm_device *dev)
 {
 	struct msm_drm_private *priv = NULL;
@@ -980,6 +984,13 @@ static void msm_lastclose(struct drm_device *dev)
 	if (kms && kms->funcs && kms->funcs->check_for_splash
 		&& kms->funcs->check_for_splash(kms))
 		return;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	/* To prevent device from shutdown before device is probed */
+	if(!strcmp(get_ddic_name(), "dsi_sim_cmd")) {
+		pr_err("[Display][%s] To avoid crash with no panel \n", __func__);
+		return;
+	}
+#endif
 
 	/*
 	 * clean up vblank disable immediately as this is the last close.

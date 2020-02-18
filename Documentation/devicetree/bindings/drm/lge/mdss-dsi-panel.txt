@@ -1,0 +1,537 @@
+LGE mdss-dsi-panel
+
+mdss-dsi-panel is a dsi panel device which supports panels that
+are compatible with MIPI display serial interface specification.
+
+Required properties:
+- lge,blmap: 	Array of u32 values which specifies the	list of normal brightness level.
+
+Optional properties:
+- lge,drs-mngr-enabled: 	Boolean used to enable LGE dynamic resolution switch manager.
+- lge,drs-mngr-internal-pps-switch-enabled: 	Boolean used to enable pps updating after DSI mode switching.
+- lge,update-pps-in-lp-mode: 	Boolean used to enable sending pps in MIPI LP mode.
+
+- lge,use-ambient: 	Boolean used to enable LGE abmient disaply scenario.
+- lge,blmap-ex: 	Array of u32 values which specifies the	list of ambient brightness level.
+- lge,aod-interface-data: 	Array of string values which specifies the list of supportted AOD area for each resolution.
+				(ex: lge,aod-interface-data = "partial","semi-partial","full-size"; /* QHD = PARTIAL_AOD_AREA, FHD = FULL_SIZE_PARTIAL_AOD_AREA, HD = FULL_SIZE */)
+						"none" = 0: NOT_SUPPORTED
+						"partial" = 1: PARTIAL_AOD_AREA
+						"full-size" = 2: FULL_SIZE
+						"semi-partial" = 4: FULL_SIZE_PARTIAL_AOD_AREA
+- lge,mdss-dsi-nolp-command: 	String that specifies the commands to disable DDIC LP mode.
+- lge,mdss-dsi-nolp-command-state: 	String that specifies the ctrl state for sending disable DDIC LP mode commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-aod-area-command: 	String that specifies the commands to enable AOD area(partial area) on DDIC LP mode.
+- lge,mdss-dsi-aod-area-command-state: 	String that specifies the ctrl state for sending enable AOD area(partial area) commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-lp2-command: 	String that specifies the commands to enable DDIC LP mode.
+- lge,mdss-dsi-lp2-command-state: 	String that specifies the ctrl state for sending enable DDIC LP mode commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,ddic-bist-enabled: 	Boolean used to enable Built-in-self-test(BIST) feature which renders specified image pattern(ex: black) to display.
+- lge,ddic-bist-usage-type: 	Array of string values which specifies the	list of usage. (ex: "drs", "lp2", "nolp")
+- lge,mdss-dsi-bist-on-command: 	String that specifies the commands to enable BIST pattern.
+- lge,mdss-dsi-bist-off-command: 	String that specifies the commands to disable BIST pattern.
+
+- lge,use-color-manager: 	Boolean used to enable DDIC color manager.
+- lge,color-manager-default-status: 	An integer indicate default status of DDIC color manager.
+- lge,mdss-dsi-color-manager-mode-table: 	Array of u32 values which specifies the	list of DDIC color modes available.
+						DDIC color modes is defined by a set of 2 values in the order:
+						- index of color mode
+						- boolean used to enable DDIC color manager
+
+- lge,mdss-dsi-wb-default-command: 	String that specifies the commands to contorl White Point of display.
+- lge,mdss-dsi-wb-default-command-state: 	String that specifies the ctrl state for sending control contorl White Point commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,digital-gamma-cmds-dummy: 	String that specifies the commands to control Digital Gamma.
+- lge,digital-gamma-cmds-dummy-command: String that specifies the ctrl state for sending control Digital Gamma commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-disp-ctrl-command-1: 	String that specifies the commands to control DDIC display-control-1.
+- lge,mdss-dsi-disp-ctrl-command-1-state: 	String that specifies the ctrl state for sending control DDIC display-control-1 commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-disp-ctrl-command-2: 	String that specifies the commands to control DDIC display-control-2.
+- lge,mdss-dsi-disp-ctrl-command-2-state: 	String that specifies the ctrl state for sending control DDIC display-control-2 commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-saturation-command: 	String that specifies the commands to control saturation.
+- lge,mdss-dsi-saturation-command-state: 	String that specifies the ctrl state for sending control saturation commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-hue-command: 	String that specifies the commands to control hue.
+- lge,mdss-dsi-hue-command-state: 	String that specifies the ctrl state for sending control hue commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-sharpness-command: 	String that specifies the commands to control sharpness.
+- lge,mdss-dsi-sharpness-command-state: 	String that specifies the ctrl state for sending control sharpness commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-cm-sports: 	String that specifies the commands to enable sports mode of Color Manager.
+- lge,mdss-dsi-cm-sports-state: 	String that specifies the ctrl state for sending enable sports mode of Color Manager commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-cm-game: 	String that specifies the commands to enable game mode of Color Manager.
+- lge,mdss-dsi-cm-game-state: 	String that specifies the ctrl state for sending enable game mode of Color Manager commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,true-view-supported: 	Boolean used to enable true view feature.
+- lge,digital-gamma-set: 	String that specifies the commands to control Digital Gamma for true view.
+- lge,digital-gamma-command-state: 	String that specifies the ctrl state for sending control Digital Gamma commands for true view.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,blmap-ve: 	Array of u32 values which specifies the	list of Video Enhancement brightness level.
+- lge,mdss-dsi-ve-on-command: 	String that specifies the commands to enable VE.
+- lge,mdss-dsi-ve-on-command-state: String that specifies the ctrl state for sending enable VE commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,mdss-dsi-ve-off-command: 	String that specifies the commands to disable VE.
+- lge,mdss-dsi-ve-off-command-state: String that specifies the ctrl state for sending disable VE commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,use-irc-ctrl: 	Boolean used to enable control IRC feature.
+- lge,mdss-dsi-irc-command: 	String that specifies the commands to control IRC.
+- lge,mdss-dsi-irc-command-state: 	String that specifies the ctrl state for sending control IRC commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,use-ace-ctrl: 	Boolean used to enable Adaptive Contrast Enhancement(ACE) feature.
+- lge,default-ace-mode: 	An integer indicate default status of ACE.
+- lge,mdss-dsi-ace-tune-command: 	String that specifies the commands to enable ACE tuning value.
+- lge,mdss-dsi-ace-restore-command: 	String that specifies the commands to restore ACE default value.
+- lge,mdss-dsi-ace-cmmand-state: String that specifies the ctrl state for sending control ACE commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,use-dynamic-brightness: 	Boolean used to enable dynamic brightness map switch.
+- lge,dynamic-blmap-normal: 	Array of u32 values which specifies the	list of normal brightness level.
+- lge,dynamic-blmap-brighter: 	Array of u32 values which specifies the	list of brighter brightness level.
+
+- lge,blmap-hdr: 	Array of u32 values which specifies the	list of HDR brightness level.
+
+- lge,use-panel-err-detect: 	Boolean used to enable DDIC error detect feature.
+- lge,err-detect-gpio: 	PMIC gpio binding to error detect pin of DDIC.
+					(ex: <&tlmm 7 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */)
+- lge,esd-detect-command: 	 	String that specifies the commands to enable detecting esd.
+- lge,esd-detect-command-state: 	String that specifies the ctrl state for sending enable detecting esd commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,line-defect-detect-command: 	String that specifies the commands to enable detecting line defect.
+- lge,line-defect-detect-command-state: 	String that specifies the ctrl state for sending enable detecting line defect commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,use-line-detect: 	Boolean used to enable detecting line defect feature.
+- lge,detect-vert-line-restore-command: 	String that specifies the commands to enable restoring vertical line.
+- lge,detect-vert-line-restore-command-state: 	String that specifies the ctrl state for sending enable restoring vertical line commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,detect-black-vert-line-command: 	String that specifies the commands to enable detecting vertical black line.
+- lge,detect-black-vert-line-command-state: 	String that specifies the ctrl state for sending enable detecting vertical black line commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+- lge,detect-white-vert-line-command: 	String that specifies the commands to enable detecting vertical white line.
+- lge,detect-white-vert-line-command-state: 	String that specifies the ctrl state for sending enable detecting vertical white line commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,use-ddic-register-lock: 	Boolean used to enable DDIC register lock feature.
+- lge,ddic-register-lock: 	String that specifies the commands to enable DDIC register lock.
+- lge,ddic-register-unlock: 	String that specifies the commands to disable DDIC register lock.
+- lge,ddic-register-lock-unlock-state: 	String that specifies the ctrl state for sending enable DDIC register lock/unlock commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,use-bc-dim: 	Boolean used to enable DDIC brightness dimming feature.
+- lge,bc-dimming-work: 	Boolean used to enable a workqueue which controls DDIC brightness dimming.
+- lge,mdss-dsi-bc-default-command: 	String that specifies the commands to enable DDIC brightness dimming.
+- lge,mdss-dsi-bc-default-command-state: 	String that specifies the ctrl state for sending DDIC brightness dimming commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+- lge,disp-br-ctrl-ext-supported: Boolean used to enable DDIC brightness extension feature.
+                                 (ex. The brightness of specific DDIC is controlled through a register other than 51h)
+- lge,ddic-dsi-br-ctrl-ext-command: String that specifies the commands to enable DDIC brightness extension.
+- lge,ddic-dsi-br-ctrl-ext-command-state = String that specifies the ctrl state for sending DDIC brightness extension commands.
+					"dsi_lp_mode" = DSI low power mode (default)
+					"dsi_hs_mode" = DSI high speed mode
+
+Note, if a given optional lge,* binding is not present, then the driver will configure
+the default values specified.
+
+Example:
+&mdss_mdp {
+	dsi_sim_vid: qcom,mdss_dsi_sim_video {
+		lge,blmap = <
+			0
+			1 1 2 3 4 4 5 6 6 7 7 7 7 8 8 9 10 10 11 13
+			14 15 16 18 19 21 23 24 26 29 31 33 34 36 38 41 43 45 47 49
+			52 54 56 58 60 63 67 71 75 79 84 88 92 97 101 106 111 115 120 123
+			126 129 132 135 139 142 145 148 151 154 157 161 164 168 172 176 179 182 186 189
+			193 197 201 206 209 212 216 219 222 226 229 232 235 238 241 245 248 252 255 258
+			262 266 269 273 276 280 284 288 291 295 299 304 308 312 317 321 326 330 335 339
+			344 348 353 358 362 367 372 377 382 388 394 400 405 410 415 420 426 431 436 441
+			447 452 458 464 469 475 481 487 493 499 505 511 517 524 530 536 543 549 556 561
+			566 570 575 581 586 592 597 603 608 614 619 625 630 636 641 647 653 658 663 668
+			673 678 684 689 694 700 705 711 716 722 727 733 738 743 749 754 760 766 771 777
+			782 787 792 797 803 808 814 820 826 831 834 837 840 843 846 849 851 854 857 860
+			863 866 868 871 874 877 880 883 886 889 891 894 897 900 903 906 909 911 914 917
+			920 923 926 929 932 935 938 941 944 947 951 954 957 960 964 964 964 964 964 964
+			964 964 964 965 965 965 965 965 966 966 966 967 967 967 968 968 969 969 970 970
+			971 972 972 973 974 974 975 977 978 979 980 982 983 985 986 987 989 991 992 993
+			993 993 993 993 994 994 994 994 994 995 995 995 995 996 996 996 996 997 997 997
+			997 998 998 998 999 999 999 999 1000 1000 1000 1001 1001 1001 1002 1002 1002 1003 1003 1004
+			1004 1004 1005 1005 1006 1006 1006 1007 1007 1008 1008 1008 1009 1009 1010 1010 1011 1011 1012 1012
+			1013 1013 1014 1014 1015
+		>;
+
+		lge,drs-mngr-enabled;
+		lge,drs-mngr-internal-pps-switch-enabled;
+		lge,update-pps-in-lp-mode;
+
+		lge,use-ambient;
+		lge,blmap-ex = <
+			1
+			131 131 131 131 131 131 131 131 131 147 160 175 186 196 208 218 227 234 242 251
+			258 264 270 277 284 289 295 300 306 311 317 322 327 332 335 338 350 361 373 384
+			393 402 410 418 426 434 442 449 456 462 468 474 480 486 492 498 503 508 513 517
+			522 527 532 536 541 545 549 553 557 561 565 569 572 576 580 585 590 595 599 603
+			607 612 616 620 624 629 633 637 643 648 654 658 662 667 671 675 679 682 685 688
+			691 694 696 699 702 705 708 712 715 718 724 730 736 741 746 752 758 764 774 785
+			790 796 801 807 813 819 826 832 838 843 848 854 859 865 865 865 865 865 865 865
+			875 883 890 898 905 913 923 931 938 945 953 961 970 978 985 993 999 1006 1012 1012
+			1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012
+			1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012
+			1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012
+			1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012
+			1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012 1012
+		>;
+		lge,aod-interface-data = "partial","semi-partial","full-size"; /* QHD = PARTIAL_AOD_AREA, FHD = FULL_SIZE_PARTIAL_AOD_AREA, HD = FULL_SIZE */
+
+		lge,mdss-dsi-nolp-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 05 30 00 00 0C 2F
+			39 01 00 00 00 00 05 31 00 00 05 9F
+			39 01 00 00 00 00 07 55 16 29 C0 04 78 DB
+			39 01 00 00 00 00 0B C3 10 15 1F 12 AD 4D B1 51 BD 1D
+			39 01 00 00 00 00 08 E5 00 3A 00 36 00 3A 10
+			39 01 00 00 00 00 3D E6 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00
+			39 01 00 00 00 00 1F E7 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00
+			15 01 00 00 00 00 02 EA 6F
+			39 01 00 00 28 00 0F CB 80 5C 07 11 34 54 4F 5A 33 19 60 00 00 00
+			05 01 00 00 00 00 01 13
+			39 01 00 00 55 00 0D B4 2F 02 11 03 31 31 31 0A 10 92 12 00
+			39 01 00 00 00 00 08 E5 00 3A 00 36 00 0F 10
+			39 01 00 00 00 00 3D E6 30 00 12 30 00 12 30 00 12 30 00 12 11 B0 61 02 4D C4 02 B3 5E 02 DB 37 02 EA 27 0F FF 00 30 00 12 30 00 12 30 00 12 30 00 12 11 B0 61 02 4D C4 02 B3 5E 02 DB 37 02 EA 27 0F FF 00
+			39 01 00 00 00 00 1F E7 30 00 13 30 00 13 30 00 13 38 94 AD 38 94 AD 30 00 13 30 00 13 30 00 13 38 94 AD 38 94 AD
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-nolp-command-state = "dsi_lp_mode";
+
+		lge,mdss-dsi-aod-area-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 05 30 00 00 02 CF
+			39 01 00 00 00 00 05 31 00 00 05 9F
+		];
+		lge,mdss-dsi-aod-area-command-state = "dsi_lp_mode";
+
+		lge,mdss-dsi-lp2-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 07 55 16 29 C9 04 78 DB
+			39 01 00 00 00 00 19 C2 70 8A 0A 0A 33 8C 8C 33 8C 8C 0A ED AD 63 23 00 00 64 24 43 60 15 15 64
+			39 01 00 00 00 00 0B C3 10 15 1F 12 AD 4D B1 51 BD 1D
+			39 01 00 00 00 00 08 E5 00 3A 00 36 00 3A 10
+			39 01 00 00 00 00 3D E6 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00
+			39 01 00 00 00 00 1F E7 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00 0F FF 00
+			15 01 00 00 00 00 02 EA EF
+			39 01 00 00 00 00 0D B4 2F 00 11 03 31 31 31 0A 10 92 12 00
+			39 01 00 00 00 00 13 BF 30 F6 11 33 00 00 00 00 00 00 00 00 00 00 33 01 00 20
+			39 01 00 00 00 00 03 C1 01 48
+			39 01 00 00 00 00 05 CA 08 99 10 0F
+			39 01 00 00 00 00 0F CB 80 5C 07 07 34 54 4F 5A 33 19 60 00 00 00
+			05 01 00 00 46 00 01 34
+			39 01 00 00 00 00 03 51 00 10
+			05 01 00 00 00 00 01 12
+			05 01 00 00 55 00 01 35
+			39 01 00 00 00 00 08 E5 00 3A 00 36 00 0F 10
+			39 01 00 00 00 00 3D E6 30 00 12 30 00 12 30 00 12 30 00 12 11 3A D7 11 89 89 11 D7 3A 02 26 EC 02 C3 4F 0F FF 00 30 00 12 30 00 12 30 00 12 30 00 12 11 3A D7 11 89 89 11 D7 3A 02 26 EC 02 C3 4F 0F FF 00
+			39 01 00 00 14 00 1F E7 30 00 13 30 00 13 30 00 13 38 94 AD 38 94 AD 30 00 13 30 00 13 30 00 13 38 94 AD 38 94 AD
+			39 01 00 00 00 00 19 C2 70 8A 0A 0A 33 8C 8C 33 8C 8C 0A ED AD 63 23 00 00 64 24 43 64 15 15 64
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-lp2-command-state = "dsi_lp_mode";
+
+		lge,ddic-bist-enabled;
+		lge,ddic-bist-usage-type = "drs", "lp2", "nolp", "rsvd", "rsvd";
+		lge,mdss-dsi-bist-on-command = [
+			39 01 00 00 21 00 09 FA 03 01 3F FF 00 00 13 01
+		];
+		lge,mdss-dsi-bist-off-command = [
+			39 01 00 00 00 00 09 FA 00 00 3F FF 00 00 13 01
+		];
+
+		lge,use-color-manager;
+		lge,color-manager-default-status = <1>;
+		lge,mdss-dsi-color-manager-mode-table = <3 1>, <0 1>, <2 1>, <1 1>;
+
+		lge,mdss-dsi-disp-ctrl-command-1 = [
+			39 01 00 00 00 00 03 53 4c 30
+		];
+		lge,mdss-dsi-disp-ctrl-command-1-state = "dsi_hs_mode";
+		lge,mdss-dsi-disp-ctrl-command-2 = [
+			39 01 00 00 00 00 04 55 16 29 C0
+		];
+		lge,mdss-dsi-disp-ctrl-command-2-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-wb-default-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 EE 7E FC 7A F7 75 F3 71 00 C0 78 F0
+			39 00 00 00 00 00 06 ED 68 E0 59 D1 49
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-wb-default-command-state = "dsi_hs_mode";
+
+		lge,digital-gamma-cmds-dummy = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 EE 7E FC 7A F7 75 F3 71 00 C0 78 F0
+			39 00 00 00 00 00 06 ED 68 E0 59 D1 49
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,digital-gamma-cmds-dummy-command = "dsi_hs_mode";
+
+		lge,mdss-dsi-saturation-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 CC 88 0A 4B 6C FF 58 60 60 80 67 70 80 7A 74 6E 60 79 65 60 60 68 74 67 87 7A 74 6A 60 7A 7A 5C 6C
+			39 00 00 00 00 00 21 CD 6C 80 80 7A 79 75 6A 68 7C 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-saturation-command-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-hue-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 CE 83 83 83 83 83 83 83 7A 83 83 83 83 83 7F 7F 7F 7F 7F 7F 7F 7E 7E 7E 7F 7F F4 00 06 02 01 06 E4
+			39 00 00 00 00 00 21 CF EF EF EF F6 06 00 0A 81 D3 FF 4C 50 48 48 4C 50 50 4A 45 4E 4C 52 54 54 54 58 58 68 65 6B 53 5B
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-hue-command-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-sharpness-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 1F DD FB F8 40 10 07 06 04 04 20 06 30 20 03 80 04 01 02 58 E0 00 8F 00 FF 7F A0 00 E0 08 C0 10
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-sharpness-command-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-cm-sports = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 EC 3F 03 01 6B 03 01 6B 03 05 AF 00 E3 7C F9 75 F2 6E EB 67 00 EC 7D FB 79 F6 74 F2 6F 00 FF 80 00
+			39 00 00 00 00 00 06 ED 80 00 80 00 80
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-cm-sports-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-cm-game = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 21 CC 88 0A 4B 6C FF 61 6A 6A 8D 71 7B 95 86 83 79 6A 85 6F 6A 6A 72 84 71 95 86 81 75 6A 86 7A 5C 6C
+			39 00 00 00 00 00 21 CD 6C 80 80 80 7A 78 6A 68 7C 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83 83
+			39 00 00 00 00 00 21 EC 3F 03 01 6B 03 01 6B 03 05 AF 00 F5 7E FD 7C FB 7A F9 77 00 FB 7F FF 7E FE 7E FD 7D 00 FF 80 00
+			39 00 00 00 00 00 06 ED 80 00 80 00 80
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-cm-game-state = "dsi_hs_mode";
+
+		lge,true-view-supported;
+		lge,digital-gamma-set = [
+			39 00 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F2 7E FD 7B F9 78 F6 75 00 E0 7A F5
+			39 01 00 00 00 00 06 ED 70 EA 65 DF 5A
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 FB 7F FF 7E FE 7D FD 7C 00 EF 7E FC
+			39 01 00 00 00 00 06 ED 7A F8 76 F4 72
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F9 7F FE 7E FD 7C FB 7B 00 EA 7D FB
+			39 01 00 00 00 00 06 ED 78 F5 73 F0 6E
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F7 7F FE 7D FC 7B FA 79 00 E4 7D F9
+			39 01 00 00 00 00 06 ED 76 F2 6F EC 68
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F5 7F FD 7C FB 7A F8 77 00 DF 7C F8
+			39 01 00 00 00 00 06 ED 74 F0 6C E8 64
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F3 7E FD 7B FA 78 F7 75 00 DA 7B F7
+			39 01 00 00 00 00 06 ED 72 ED 69 E4 60
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 F1 7E FC 7B F9 77 F5 74 00 D5 7B F5
+			39 01 00 00 00 00 06 ED 70 EB 66 E0 5B
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 EF 7E FC 7A F8 76 F4 72 00 CE 7A F4
+			39 01 00 00 00 00 06 ED 6E E7 61 DB 55
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 EC 7E FB 79 F6 74 F2 6F 00 C8 79 F2
+			39 01 00 00 00 00 06 ED 6B E4 5E D7 50
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 EA 7D FB 78 F5 73 F0 6E 00 C1 78 F0
+			39 01 00 00 00 00 06 ED 69 E1 59 D1 4A
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 E6 7D FA 77 F3 70 ED 6A 00 BA 77 EF
+			39 01 00 00 00 00 06 ED 66 DD 55 CC 44
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 E4 7D F9 76 F2 6F EC 68 00 B3 76 ED
+			39 01 00 00 00 00 06 ED 63 DA 50 C7 3D
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 E2 7C F9 75 F1 6E EA 67 00 AF 76 EC
+			39 01 00 00 00 00 06 ED 62 D8 4E C4 3A
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 E1 7C F8 75 F1 6D E9 66 00 AB 75 EB
+			39 01 00 00 00 00 06 ED 60 D6 4B C1 36
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 E0 7C F8 74 F0 6D E9 65 00 A7 75 EA
+			39 01 00 00 00 00 06 ED 5F D4 49 BE 33
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 DE 7C F8 74 EF 6B E7 63 00 A3 74 E9
+			39 01 00 00 00 00 06 ED 5D D2 46 BB 2F
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 DD 7C F7 73 EF 6B E6 62 00 9F 74 E8
+			39 01 00 00 00 00 06 ED 5C D0 44 B8 2C
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 DA 7B F7 72 ED 69 E4 60 00 98 73 E6
+			39 01 00 00 00 00 06 ED 59 CC 40 B3 26
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 D7 7B F6 71 EC 67 E2 5D 00 91 72 E4
+			39 01 00 00 00 00 06 ED 57 C9 3B AD 20
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 D3 7A F5 6F EA 64 DF 59 00 88 71 E2
+			39 01 00 00 00 00 06 ED 53 C4 36 A7 18
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 D0 7A F4 6E E8 63 DD 57 00 81 70 E0
+			39 01 00 00 00 00 06 ED 51 C1 31 A1 12
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 CD 7A F3 6D E7 61 DA 54 00 7A 6F DF
+			39 01 00 00 00 00 06 ED 4E BD 2D 9C 0C
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6B 00 FF 80 00 80 00 80 00 80 00 C8 79 F2 6B E4 5E D7 50 00 72 6E DD
+			39 01 00 00 00 00 06 ED 4B B9 28 96 05
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6A 00 FF 80 00 80 00 80 00 80 00 C3 78 F1 69 E2 5A D3 4B 00 6A 6D DB
+			39 01 00 00 00 00 06 ED 48 B5 23 90 FD
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6A 00 FF 80 00 80 00 80 00 80 00 BE 78 F0 68 DF 57 CF 47 00 61 6C D8
+			39 01 00 00 00 00 06 ED 45 B1 1D 89 F6
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6A 00 FF 80 00 80 00 80 00 80 00 B8 77 EE 65 DC 54 CB 42 00 59 6B D6
+			39 01 00 00 00 00 06 ED 42 AD 18 83 EF
+			39 01 00 00 00 00 21 EC 3F 03 05 AF 03 01 6B 03 01 6A 00 FF 80 00 80 00 80 00 80 00 B3 76 ED 63 DA 50 C7 3D 00 51 6A D4
+			39 01 00 00 00 00 06 ED 3F A9 13 7D E8
+		];
+		lge,digital-gamma-command-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-ve-on-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 0A C1 C3 05 00 C3 05 00 C3 05 00
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-ve-on-command-state = "dsi_hs_mode";
+
+		lge,mdss-dsi-ve-off-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 0A C1 FF 07 00 FF 07 00 FF 07 00
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-ve-off-command-state = "dsi_hs_mode";
+		lge,blmap-ve = <
+			0
+			1 1 2 3 5 5 6 7 7 9 9 9 9 10 10 11 13 13 14 17
+			18 19 20 23 24 27 30 31 34 37 40 43 44 47 49 53 56 58 61 64
+			68 70 73 75 78 82 87 92 98 103 110 115 120 127 132 138 145 150 157 161
+			165 168 172 176 182 185 189 193 197 201 205 210 214 220 225 230 234 238 243 247
+			252 257 263 269 273 277 282 286 290 295 299 303 307 311 315 320 324 330 333 337
+			343 348 352 357 361 366 371 377 381 386 391 398 403 408 415 420 426 432 438 443
+			450 455 462 468 474 480 487 493 500 508 515 523 530 536 543 550 557 564 570 577
+			585 591 599 607 614 622 629 637 645 653 661 669 677 686 694 701 711 718 728 734
+			741 746 752 760 767 775 781 789 796 804 810 818 825 832 839 847 855 861 868 874
+			881 887 895 902 908 916 923 931 937 945 952 959 966 972 980 987 995 1003 1009 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015 1015
+			1015 1015 1015 1015 1015
+		>;
+
+		lge,use-irc-ctrl;
+		lge,mdss-dsi-irc-command = [
+			15 00 00 00 00 00 02 B0 55
+			15 00 00 00 00 00 02 E2 FC
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-irc-command-state = "dsi_lp_mode";
+
+		lge,use-ace-ctrl;
+		lge,default-ace-mode = <3>;
+		lge,mdss-dsi-ace-tune-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 0A C1 C0 05 00 C0 05 00 C0 05 00
+			39 00 00 00 00 00 21 C2 98 FF F9 F3 EE E8 E3 DD D8 D2 CD C7 C2 BC B7 B1 AC A6 A1 9B 96 90 8B 85 80 80 80 80 80 80 80 80
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-ace-restore-command = [
+			15 00 00 00 00 00 02 B0 55
+			39 00 00 00 00 00 0A C1 FF 07 00 FF 07 00 FF 07 00
+			39 00 00 00 00 00 21 C2 B8 A6 A6 A6 A5 A4 A1 9F 9C 98 94 92 8F 8D 8A 88 85 84 83 82 81 81 80 80 80 80 80 80 80 80 80 80
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-ace-cmmand-state = "dsi_lp_mode";
+
+		lge,use-panel-err-detect;
+		interrupt-parent = <&tlmm>;
+		interrupts = <7 0x2001>; /*IRQF_ONESHOT | IRQF_TRIGGER_RISING*/
+		lge,err-detect-gpio = <&tlmm 7 0x2001>; /* IRQF_ONESHOT | IRQF_TRIGGER_RISING */
+
+		lge,memory-error-detect-command = [
+			39 01 00 00 00 00 05 CE 22 10 00 00
+		];
+		lge,memory-error-detect-command-state = "dsi_hs_mode";
+		lge,esd-detect-command = [
+			39 01 00 00 00 00 05 CE 22 1E 00 00
+			39 01 00 00 00 00 04 C5 88 08 00
+		];
+		lge,esd-detect-command-state = "dsi_hs_mode";
+		lge,line-defect-detect-command = [
+			39 01 00 00 00 00 05 CE 00 16 00 00
+		];
+		lge,line-defect-detect-command-state = "dsi_hs_mode";
+
+		lge,use-line-detect;
+		lge,detect-vert-line-restore-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 19 C2 70 8A 0A 0A 33 8C 8C 33 8C 8C 0A ED AD 63 23 00 00 64 24 43 64 15 15 64
+			39 01 00 00 00 00 12 C3 10 15 1F 12 AD 4D B1 51 BD 1D 22 02 C8 20 83 0C 17
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,detect-vert-line-restore-command-state = "dsi_hs_mode";
+		lge,detect-black-vert-line-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 19 C2 70 93 0A 0A 33 96 8C 33 8C 8C 0A ED AD 63 23 00 00 64 24 43 64 15 15 64
+			39 01 00 00 00 00 12 C3 10 15 15 12 AD 4D BF 51 BD 1D 22 02 C8 20 83 0C 17
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,detect-black-vert-line-command-state = "dsi_hs_mode";
+		lge,detect-white-vert-line-command = [
+			15 01 00 00 00 00 02 B0 AC
+			39 01 00 00 00 00 19 C2 70 80 0A 0A 33 82 8C 33 8C 8C 0A ED AD 63 23 00 00 64 24 43 64 15 15 64
+			39 01 00 00 00 00 12 C3 10 15 15 12 AD 4D BF 51 BD 1D 22 02 C8 20 83 0C 17
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,detect-white-vert-line-command-state = "dsi_hs_mode";
+
+		lge,use-ddic-register-lock;
+		lge,ddic-register-lock = [
+			15 01 00 00 10 00 02 B0 CA
+		];
+		lge,ddic-register-unlock = [
+			39 01 00 00 10 00 02 B0 AC
+		];
+		lge,ddic-register-lock-unlock-state = "dsi_lp_mode";
+
+		lge,use-bc-dim;
+		lge,bc-dimming-work;
+		lge,mdss-dsi-bc-default-command = [
+			15 00 00 00 00 00 02 B0 AC
+			39 00 00 00 00 00 19 D0 D2 21 23 1f 21 41 00 00 00 52 41 00 00 00 08 00 C4 8F 8F 98 96 01 00 00
+			15 01 00 00 00 00 02 B0 CA
+		];
+		lge,mdss-dsi-bc-default-command-state = "dsi_hs_mode";
+
+		lge,disp-br-ctrl-ext-supported;
+		lge,ddic-dsi-br-ctrl-ext-command = [
+			15 01 00 00 00 00 02 FE 70
+			15 01 00 00 00 00 02 A9 00
+			15 01 00 00 00 00 02 FE 00
+		];
+		lge,ddic-dsi-br-ctrl-ext-command-state = "dsi_hs_mode";
+	};
+};

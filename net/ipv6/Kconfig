@@ -329,5 +329,10 @@ config IPV6_SEG6_HMAC
 	  of SR-enabled packets.
 
 	  If unsure, say N.
-
+# 2017-11-24 samuel.seo@lge.com, LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2 [START]
+config LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2
+	bool "IPv6: reduce QCT ePDG HO connection time"
+---help---
+	remove random delay time before send NS.
+# 2017-11-24 samuel.seo@lge.com, LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2 [END]
 endif # IPV6

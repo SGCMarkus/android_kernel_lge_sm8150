@@ -610,6 +610,14 @@ config CHARGER_RT9455
 	help
 	  Say Y to enable support for Richtek RT9455 battery charger.
 
+config CHARGER_IDTP9222
+	tristate "IDT P9222 charger diver"
+	default n
+	depends on I2C && GPIOLIB
+	help
+	  Say Y to enable support for the IDT P9222 wireless charger.
+
 source "drivers/power/supply/qcom/Kconfig"
+source "drivers/power/supply/lge/Kconfig"
 
 endif # POWER_SUPPLY

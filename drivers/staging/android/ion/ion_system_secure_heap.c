@@ -112,8 +112,13 @@ static void process_one_prefetch(struct ion_heap *sys_heap,
 	memset(&buffer, 0, sizeof(struct ion_buffer));
 	buffer.heap = sys_heap;
 
+#ifndef CONFIG_MIGRATE_HIGHORDER
 	ret = sys_heap->ops->allocate(sys_heap, &buffer, info->size,
 					buffer.flags);
+#else
+	ret = sys_heap->ops->allocate(sys_heap, &buffer, info->size,
+					info->vmid);
+#endif
 	if (ret) {
 		pr_debug("%s: Failed to prefetch %#llx, ret = %d\n",
 			 __func__, info->size, ret);
@@ -388,9 +393,12 @@ struct page *alloc_from_secure_pool_order(struct ion_system_heap *heap,
 struct page *split_page_from_secure_pool(struct ion_system_heap *heap,
 					 struct ion_buffer *buffer)
 {
-	int i, j;
+#ifndef CONFIG_ALLOC_BUFFERS_IN_4K_CHUNKS
+	int i;
+#endif
+	int j;
 	struct page *page;
-	unsigned int order;
+	unsigned int order = 0;
 
 	mutex_lock(&heap->split_page_mutex);
 
@@ -404,6 +412,7 @@ struct page *split_page_from_secure_pool(struct ion_system_heap *heap,
 	if (!IS_ERR(page))
 		goto got_page;
 
+#ifndef CONFIG_ALLOC_BUFFERS_IN_4K_CHUNKS
 	for (i = NUM_ORDERS - 2; i >= 0; i--) {
 		order = orders[i];
 		page = alloc_from_secure_pool_order(heap, buffer, order);
@@ -413,6 +422,7 @@ struct page *split_page_from_secure_pool(struct ion_system_heap *heap,
 		split_page(page, order);
 		break;
 	}
+#endif
 	/*
 	 * Return the remaining order-0 pages to the pool.
 	 * SetPagePrivate flag to mark memory as secure.

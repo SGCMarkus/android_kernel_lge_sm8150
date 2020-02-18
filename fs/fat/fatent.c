@@ -693,3 +693,77 @@ out:
 	unlock_fat(sbi);
 	return err;
 }
+
+#ifdef CONFIG_MACH_LGE
+int fat_ent_update_badclusters_after(struct super_block *sb, int entry)
+{
+	struct msdos_sb_info *sbi = MSDOS_SB(sb);
+	const struct fatent_operations *ops = sbi->fatent_ops;
+	struct fat_entry fatent;
+	struct buffer_head *bhs[MAX_BUF_PER_PAGE];
+	int i, err, nr_bhs;
+	int mark_bad_count = 0;
+
+	lock_fat(sbi);
+	err = nr_bhs = 0;
+
+	if(entry >= sbi->max_cluster || entry < FAT_START_ENT)
+		return EFAULT;
+
+	fatent_init(&fatent);
+
+	while (entry < sbi->max_cluster) {
+		fatent_set_entry(&fatent, entry);
+//		fat_msg_ratelimit(sb, KERN_WARNING, "bad geometry: entry : %d ",entry);
+		err = fat_ent_read_block(sb, &fatent);
+		if(err)
+			goto out;
+		do {
+			if(ops->ent_get(&fatent)==FAT_ENT_FREE) {
+
+				// make the cluster as BAD_CLUSTER
+				ops->ent_put(&fatent, FAT_ENT_BAD);
+				fat_collect_bhs(bhs, &nr_bhs, &fatent);
+				mark_bad_count++;
+
+				if(sbi->free_clusters != -1)
+					sbi->free_clusters--;
+			}
+			if (nr_bhs + fatent.nr_bhs > MAX_BUF_PER_PAGE) {
+				if (sb->s_flags & MS_SYNCHRONOUS && mark_bad_count>0) {
+					err = fat_sync_bhs(bhs, nr_bhs);
+					if (err)
+						goto error;
+				}
+				err = fat_mirror_bhs(sb, bhs, nr_bhs);
+				if (err)
+					goto error;
+				for (i = 0; i < nr_bhs; i++)
+					brelse(bhs[i]);
+				nr_bhs = 0;
+			}
+			entry++;
+			if (entry >= sbi->max_cluster )
+				goto out;
+		} while (fat_ent_next(sbi, &fatent));
+	}
+
+out:
+	if (sb->s_flags & MS_SYNCHRONOUS && mark_bad_count>0) {
+		err = fat_sync_bhs(bhs, nr_bhs);
+		if(err)
+			goto error;
+	}
+	fat_mirror_bhs(sb, bhs, nr_bhs);
+error:
+	fatent_brelse(&fatent);
+	for(i = 0 ; i <nr_bhs; i++)
+		brelse(bhs[i]);
+	unlock_fat(sbi);
+
+	if(mark_bad_count>0)
+		mark_fsinfo_dirty(sb);
+
+	return mark_bad_count;
+}
+#endif

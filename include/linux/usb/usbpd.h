@@ -51,6 +51,12 @@ struct usbpd_svid_handler {
 	int (*request_usb_ss_lane)(struct usbpd *pd,
 			struct usbpd_svid_handler *hdlr);
 
+#ifdef CONFIG_LGE_USB
+	/* USB driver -> PE driver for requesting USB suspend */
+	int (*request_usb_suspend)(struct usbpd *pd,
+			struct usbpd_svid_handler *hdlr, bool suspend);
+#endif
+
 	/* Unstructured VDM */
 	void (*vdm_received)(struct usbpd_svid_handler *hdlr, u32 vdm_hdr,
 			const u32 *vdos, int num_vdos);

@@ -94,6 +94,7 @@
 #include <linux/seq_file.h>
 #include <linux/export.h>
 
+#include <net/patchcodeid.h>
 /* Set to 3 to get tracing... */
 #define ACONF_DEBUG 2
 
@@ -932,6 +933,9 @@ void inet6_ifa_finish_destroy(struct inet6_ifaddr *ifp)
 
 	kfree_rcu(ifp, rcu);
 }
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+EXPORT_SYMBOL(inet6_ifa_finish_destroy);
+#endif
 
 static void
 ipv6_link_dev_addr(struct inet6_dev *idev, struct inet6_ifaddr *ifp)
@@ -3833,10 +3837,29 @@ static void addrconf_dad_kick(struct inet6_ifaddr *ifp)
 	struct inet6_dev *idev = ifp->idev;
 	u64 nonce;
 
-	if (ifp->flags & IFA_F_OPTIMISTIC)
+	if (ifp->flags & IFA_F_OPTIMISTIC) {
 		rand_num = 0;
-	else
+		printk("addrconf_dad_kick no wait rand_num 0\n");
+	}
+	else {
 		rand_num = prandom_u32() % (idev->cnf.rtr_solicit_delay ? : 1);
+		printk("addrconf_dad_kick wait rand_num\n");
+#ifdef CONFIG_IPV6_OPTIMISTIC_DAD
+/* 2017-11-24 samuel.seo@lge.com, LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2 [START] */
+#ifdef CONFIG_LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2
+		patch_code_id("LPCP-2334@y@c@vmlinux@addrconf.c@1");
+		if(idev->dev != NULL && strlen(idev->dev->name)>5 && !strncmp(idev->dev->name,"rmnet",5)){
+			printk("addrconf_dad_kick it's rmnet!\n");
+			if(ifp && !dev_net(idev->dev)->ipv6.devconf_all->forwarding){
+				printk("addrconf_dad_kick forwarding disabled\n");
+				printk("addrconf_dad_kick rmnet case. set rand_num 0 !!\n");
+				rand_num = 0;
+			}
+		}
+#endif
+/* 2017-11-24 samuel.seo@lge.com, LGP_DATA_IMPROVE_QCT_EPDG_CONNECTION_TIME2 [END] */
+#endif
+	}
 
 	nonce = 0;
 	if (idev->cnf.enhanced_dad ||
