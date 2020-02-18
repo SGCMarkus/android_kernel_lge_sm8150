@@ -36,7 +36,7 @@
 #endif /* CONFIG_SND_SOC_TFA9872 */
 
 #if defined(CONFIG_SND_LGE_VOC_MUTE_DET)
-#include "../../../../kernel/msm-4.14/drivers/extcon/extcon.h"
+#include "../../drivers/extcon/extcon.h"
 
 #define VOC_MUTE "voc_mute_status"
 #define AFE_OPCODE_LGE_VOC_MUTE_DET 0x10001128

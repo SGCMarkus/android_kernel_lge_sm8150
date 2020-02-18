@@ -18,7 +18,7 @@
 #include "wcdcal-hwdep.h"
 #include <sound/jack.h>
 #include <linux/extcon.h>
-#include "../../../../../../kernel/msm-4.14/drivers/extcon/extcon.h"
+#include "../../../../drivers/extcon/extcon.h"
 
 #define TOMBAK_MBHC_NC	0
 #define TOMBAK_MBHC_NO	1
