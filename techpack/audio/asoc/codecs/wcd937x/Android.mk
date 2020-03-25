@@ -3,13 +3,13 @@
 # Assume no targets will be supported
 
 # Check if this driver needs be built for current target
-ifeq ($(call is-board-platform-in-list,$(MSMSTEPPE) atoll $(TRINKET)),true)
+ifeq ($(call is-board-platform,$(MSMSTEPPE) $(TRINKET)),true)
 AUDIO_SELECT  := CONFIG_SND_SOC_SM6150=m
 endif
 
 AUDIO_CHIPSET := audio
 # Build/Package only in case of supported target
-ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 msmnile atoll $(MSMSTEPPE) $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 sdm845 sdm670 qcs605 msmnile $(MSMSTEPPE) $(TRINKET)),true)
 
 LOCAL_PATH := $(call my-dir)
 
@@ -17,7 +17,7 @@ LOCAL_PATH := $(call my-dir)
 ifneq ($(findstring vendor,$(LOCAL_PATH)),)
 
 ifneq ($(findstring opensource,$(LOCAL_PATH)),)
-	AUDIO_BLD_DIR := $(shell pwd)/vendor/qcom/opensource/audio-kernel
+	AUDIO_BLD_DIR := $(ANDROID_BUILD_TOP)/vendor/qcom/opensource/audio-kernel
 endif # opensource
 
 DLKM_DIR := $(TOP)/device/qcom/common/dlkm

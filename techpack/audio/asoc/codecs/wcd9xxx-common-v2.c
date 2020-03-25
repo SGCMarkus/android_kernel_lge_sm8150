@@ -251,10 +251,6 @@ ret:
 	return imped_index[i].index;
 }
 
-#ifdef CONFIG_MACH_LGE
-extern bool lge_get_factory_boot(void);
-#endif /*CONFIG_MACH_LGE*/
-
 /*
  * Function: wcd_clsh_imped_config
  * Params: codec, imped, reset
@@ -302,18 +298,6 @@ void wcd_clsh_imped_config(struct snd_soc_codec *codec, int imped, bool reset)
 			index);
 		return;
 	}
-
-#ifdef CONFIG_MACH_LGE
-	if(lge_get_factory_boot()) {
-		pr_info("%s, [LGE MBHC] Factory MUST return w/ range %d, imped %d\n", __func__,
-			index, imped);
-		return;
-	}
-
-	pr_info("%s, [LGE MBHC] decrease headphones Rx gain. w/ range %d, imped %d\n", __func__,
-			index, imped);
-#endif /*CONFIG_MACH_LGE*/
-
 	for (i = 0; i < MAX_IMPED_PARAMS; i++)
 		snd_soc_update_bits(codec,
 				imped_table_ptr[index][i].reg,

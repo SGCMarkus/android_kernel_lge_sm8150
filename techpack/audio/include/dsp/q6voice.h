@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -44,15 +44,13 @@
 #define CVD_VERSION_2_1                      "2.1"
 #define CVD_VERSION_2_2                      "2.2"
 #define CVD_VERSION_2_3                      "2.3"
-#define CVD_VERSION_2_4                      "2.4"
 
 #define CVD_INT_VERSION_DEFAULT              0
 #define CVD_INT_VERSION_0_0                  1
 #define CVD_INT_VERSION_2_1                  2
 #define CVD_INT_VERSION_2_2                  3
 #define CVD_INT_VERSION_2_3                  4
-#define CVD_INT_VERSION_2_4                  5
-#define CVD_INT_VERSION_LAST                 CVD_INT_VERSION_2_4
+#define CVD_INT_VERSION_LAST                 CVD_INT_VERSION_2_3
 #define CVD_INT_VERSION_MAX                  (CVD_INT_VERSION_LAST + 1)
 
 struct cvd_version_table {
@@ -1777,7 +1775,6 @@ struct incall_rec_info {
 	uint32_t rec_enable;
 	uint32_t rec_mode;
 	uint32_t recording;
-	uint32_t port_id;
 };
 
 struct incall_music_info {
@@ -1956,7 +1953,6 @@ struct common_data {
 	bool sidetone_enable;
 	bool mic_break_enable;
 	struct audio_uevent_data *uevent_data;
-	int32_t rec_channel_count;
 };
 
 struct voice_session_itr {
@@ -2090,8 +2086,6 @@ int voc_disable_topology(uint32_t session_id, uint32_t disable);
 int voc_set_device_config(uint32_t session_id, uint8_t path_dir,
 			  struct media_format_info *finfo);
 uint32_t voice_get_topology(uint32_t topology_idx);
-void voc_set_incall_capture_channel_config(int channel_count);
-int voc_get_incall_capture_channel_config(void);
 int voice_set_topology_specific_info(struct voice_data *v,
 				     uint32_t topology_idx);
 int voc_set_sound_focus(struct sound_focus_param sound_focus_param);

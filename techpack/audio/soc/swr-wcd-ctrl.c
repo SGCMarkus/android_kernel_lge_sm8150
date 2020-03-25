@@ -273,12 +273,6 @@ static ssize_t swrm_reg_show(char __user *ubuf, size_t count,
 		i <= SWR_MSTR_MAX_REG_ADDR; i += 4) {
 		reg_val = dbgswrm->read(dbgswrm->handle, i);
 		len = snprintf(tmp_buf, 25, "0x%.3x: 0x%.2x\n", i, reg_val);
-		if (len < 0) {
-			pr_err("%s: fail to fill the buffer\n", __func__);
-			total = -EFAULT;
-			goto copy_err;
-		}
-
 		if ((total + len) >= count - 1)
 			break;
 		if (copy_to_user((ubuf + total), tmp_buf, len)) {
@@ -661,10 +655,6 @@ static u8 get_inactive_bank_num(struct swr_mstr_ctrl *swrm)
 static void enable_bank_switch(struct swr_mstr_ctrl *swrm, u8 bank,
 				u8 row, u8 col)
 {
-	/* apply div2 setting for inactive bank before bank switch */
-	swrm_cmd_fifo_wr_cmd(swrm, 0x01, 0xF, 0x00,
-			SWRS_SCP_HOST_CLK_DIV2_CTL_BANK(bank));
-
 	swrm_cmd_fifo_wr_cmd(swrm, ((row << 3) | col), 0xF, 0xF,
 			SWRS_SCP_FRAME_CTRL_BANK(bank));
 }
@@ -902,6 +892,10 @@ static void swrm_apply_port_config(struct swr_master *master)
 	bank = get_inactive_bank_num(swrm);
 	dev_dbg(swrm->dev, "%s: enter bank: %d master_ports: %d\n",
 		__func__, bank, master->num_port);
+
+
+	swrm_cmd_fifo_wr_cmd(swrm, 0x01, 0xF, 0x00,
+			SWRS_SCP_HOST_CLK_DIV2_CTL_BANK(bank));
 
 	swrm_copy_data_port_config(master, bank);
 }

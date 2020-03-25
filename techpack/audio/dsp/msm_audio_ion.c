@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -331,7 +331,6 @@ static int msm_audio_ion_map_buf(struct dma_buf *dma_buf, dma_addr_t *paddr,
 	if (rc) {
 		pr_err("%s: ION Get Physical for AUDIO failed, rc = %d\n",
 				__func__, rc);
-		dma_buf_put(dma_buf);
 		goto err;
 	}
 
@@ -339,7 +338,6 @@ static int msm_audio_ion_map_buf(struct dma_buf *dma_buf, dma_addr_t *paddr,
 	if (IS_ERR_OR_NULL(*vaddr)) {
 		pr_err("%s: ION memory mapping for AUDIO failed\n", __func__);
 		rc = -ENOMEM;
-		msm_audio_dma_buf_unmap(dma_buf);
 		goto err;
 	}
 
@@ -401,54 +399,21 @@ int msm_audio_ion_alloc(struct dma_buf **dma_buf, size_t bufsz,
 	rc = msm_audio_ion_map_buf(*dma_buf, paddr, plen, vaddr);
 	if (rc) {
 		pr_err("%s: failed to map ION buf, rc = %d\n", __func__, rc);
-		goto err;
+		goto err_dma_buf;
 	}
 	pr_debug("%s: mapped address = %pK, size=%zd\n", __func__,
 		*vaddr, bufsz);
 
 	memset(*vaddr, 0, bufsz);
 
+	return rc;
+
+err_dma_buf:
+	dma_buf_put(*dma_buf);
 err:
 	return rc;
 }
 EXPORT_SYMBOL(msm_audio_ion_alloc);
-
-/**
- * msm_audio_ion_dma_map -
- *        Memory maps for a given DMA buffer
- *
- * @phys_addr: Physical address of DMA buffer to be mapped
- * @iova_base: IOVA address of memory mapped DMA buffer
- * @size: buffer size
- * @dir: DMA direction
- * Returns 0 on success or error on failure
- */
-int msm_audio_ion_dma_map(dma_addr_t *phys_addr, dma_addr_t *iova_base,
-			u32 size, enum dma_data_direction dir)
-{
-	dma_addr_t iova;
-	struct device *cb_dev = msm_audio_ion_data.cb_dev;
-
-	if (!phys_addr || !iova_base || !size)
-		return -EINVAL;
-
-	iova = dma_map_resource(cb_dev, *phys_addr, size,
-				dir, 0);
-	if (dma_mapping_error(cb_dev, iova)) {
-		pr_err("%s: dma_mapping_error\n", __func__);
-		return -EIO;
-	}
-	pr_debug("%s: dma_mapping_success iova:0x%lx\n", __func__,
-			 (unsigned long)iova);
-	if (msm_audio_ion_data.smmu_enabled)
-		/* Append the SMMU SID information to the IOVA address */
-		iova |= msm_audio_ion_data.smmu_sid_bits;
-
-	*iova_base = iova;
-
-	return 0;
-}
-EXPORT_SYMBOL(msm_audio_ion_dma_map);
 
 /**
  * msm_audio_ion_import-
@@ -501,7 +466,7 @@ int msm_audio_ion_import(struct dma_buf **dma_buf, int fd,
 	rc = msm_audio_ion_map_buf(*dma_buf, paddr, plen, vaddr);
 	if (rc) {
 		pr_err("%s: failed to map ION buf, rc = %d\n", __func__, rc);
-		goto err;
+		goto err_ion_flag;
 	}
 	pr_debug("%s: mapped address = %pK, size=%zd\n", __func__,
 		*vaddr, bufsz);
@@ -530,6 +495,7 @@ int msm_audio_ion_free(struct dma_buf *dma_buf)
 
 	if (!dma_buf) {
 		pr_err("%s: dma_buf invalid\n", __func__);
+		panic("[AUDIO_BSP] ion free fail : Please contact to BSP AUDIO TEAM.");
 		return -EINVAL;
 	}
 

@@ -1,4 +1,4 @@
-/*  Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/*  Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,7 +29,6 @@
 #include <dsp/q6voice.h>
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
-#include <dsp/voice_mhi.h>
 
 #define TIMEOUT_MS 300
 
@@ -58,7 +57,6 @@ struct cvd_version_table cvd_version_table_mapping[CVD_INT_VERSION_MAX] = {
 		{CVD_VERSION_2_1, CVD_INT_VERSION_2_1},
 		{CVD_VERSION_2_2, CVD_INT_VERSION_2_2},
 		{CVD_VERSION_2_3, CVD_INT_VERSION_2_3},
-		{CVD_VERSION_2_4, CVD_INT_VERSION_2_4},
 };
 
 static struct common_data common;
@@ -106,8 +104,7 @@ static void voice_unload_topo_modules(void);
 
 static int voice_cvs_stop_playback(struct voice_data *v);
 static int voice_cvs_start_playback(struct voice_data *v);
-static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode,
-					uint32_t port_id);
+static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode);
 static int voice_cvs_stop_record(struct voice_data *v);
 
 static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv);
@@ -3551,7 +3548,6 @@ static int voice_pause_voice_call(struct voice_data *v)
 		msecs_to_jiffies(TIMEOUT_MS));
 	if (!ret) {
 		pr_err("%s: Command timeout\n", __func__);
-
 		ret = -EINVAL;
 		goto done;
 	}
@@ -3859,7 +3855,6 @@ int voc_map_rtac_block(struct rtac_cal_block_data *cal_block)
 				&cal_block->cal_data.paddr,
 				cal_block->map_data.map_size);
 
-			common.rtac_mem_map_table.dma_buf = NULL;
 			goto done_unlock;
 		}
 	}
@@ -4428,8 +4423,7 @@ static int voice_setup_vocproc(struct voice_data *v)
 
 	/* Start in-call recording if this feature is enabled */
 	if (v->rec_info.rec_enable)
-		voice_cvs_start_record(v, v->rec_info.rec_mode,
-					v->rec_info.port_id);
+		voice_cvs_start_record(v, v->rec_info.rec_mode);
 
 	if (v->dtmf_rx_detect_en)
 		voice_send_dtmf_rx_detection_cmd(v, v->dtmf_rx_detect_en);
@@ -5074,8 +5068,7 @@ static int voice_destroy_vocproc(struct voice_data *v)
 		if (v->rec_info.rec_enable) {
 			voice_cvs_start_record(
 				&common.voice[VOC_PATH_PASSIVE],
-				v->rec_info.rec_mode,
-				v->rec_info.port_id);
+				v->rec_info.rec_mode);
 			common.srvcc_rec_flag = true;
 
 			pr_debug("%s: switch recording, srvcc_rec_flag %d\n",
@@ -5584,8 +5577,7 @@ static int voice_send_vol_step_cmd(struct voice_data *v)
 	return 0;
 }
 
-static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode,
-					uint32_t port_id)
+static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode)
 {
 	int ret = 0;
 	void *apr_cvs;
@@ -5636,18 +5628,6 @@ static int voice_cvs_start_record(struct voice_data *v, uint32_t rec_mode,
 					VSS_IRECORD_TAP_POINT_STREAM_END;
 			cvs_start_record.rec_mode.tx_tap_point =
 					VSS_IRECORD_TAP_POINT_STREAM_END;
-			if (common.rec_channel_count ==
-					NUM_CHANNELS_STEREO) {
-			/*
-			 * if channel count is not stereo,
-			 * then default port_id and mode
-			 * (mono) will be used
-			 */
-				cvs_start_record.rec_mode.mode =
-					VSS_IRECORD_MODE_TX_RX_STEREO;
-				cvs_start_record.rec_mode.port_id =
-					port_id;
-			}
 		} else {
 			pr_err("%s: Invalid in-call rec_mode %d\n", __func__,
 				rec_mode);
@@ -5806,7 +5786,6 @@ int voc_start_record(uint32_t port_id, uint32_t set, uint32_t session_id)
 
 		mutex_lock(&v->lock);
 		rec_mode = v->rec_info.rec_mode;
-		v->rec_info.port_id = port_id;
 		rec_set = set;
 		if (set) {
 			if ((v->rec_route_state.ul_flag != 0) &&
@@ -5883,8 +5862,7 @@ int voc_start_record(uint32_t port_id, uint32_t set, uint32_t session_id)
 
 		if (cvs_handle != 0) {
 			if (rec_set)
-				ret = voice_cvs_start_record(v, rec_mode,
-						port_id);
+				ret = voice_cvs_start_record(v, rec_mode);
 			else
 				ret = voice_cvs_stop_record(v);
 		}
@@ -6181,31 +6159,6 @@ int voc_disable_topology(uint32_t session_id, uint32_t disable)
 	return ret;
 }
 EXPORT_SYMBOL(voc_disable_topology);
-
-/**
- * voc_set_incall_capture_channel_config -
- *		command to set channel count for record
- *
- * @channel_count: number of channels
- *
- */
-void voc_set_incall_capture_channel_config(int channel_count)
-{
-	common.rec_channel_count = channel_count;
-}
-EXPORT_SYMBOL(voc_set_incall_capture_channel_config);
-
-/**
- * voc_get_incall_capture_channel_config -
- *		command to get channel count for record
- *
- * Returns number of channels configured for record
- */
-int voc_get_incall_capture_channel_config(void)
-{
-	return common.rec_channel_count;
-}
-EXPORT_SYMBOL(voc_get_incall_capture_channel_config);
 
 static int voice_set_packet_exchange_mode_and_config(uint32_t session_id,
 						 uint32_t mode)
@@ -6869,12 +6822,6 @@ int voc_end_voice_call(uint32_t session_id)
 		voc_update_session_params(v);
 
 		voice_destroy_mvm_cvs_session(v);
-
-		ret = voice_mhi_end();
-		if (ret < 0)
-			pr_debug("%s: voice_mhi_end failed! %d\n",
-				 __func__, ret);
-
 		v->voc_state = VOC_RELEASE;
 	} else {
 		pr_err("%s: Error: End voice called in state %d\n",
@@ -7210,13 +7157,6 @@ int voc_start_voice_call(uint32_t session_id)
 					 __func__, ret);
 		}
 
-		ret = voice_mhi_start();
-		if (ret < 0) {
-			pr_debug("%s: voice_mhi_start failed! %d\n",
-				 __func__, ret);
-			goto fail;
-		}
-
 		ret = voice_create_mvm_cvs_session(v);
 		if (ret < 0) {
 			pr_err("create mvm and cvs failed\n");
@@ -7392,7 +7332,7 @@ EXPORT_SYMBOL(voc_config_vocoder);
 
 static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 {
-	uint32_t *ptr = NULL, min_payload_size = 0;
+	uint32_t *ptr = NULL;
 	struct common_data *c = NULL;
 	struct voice_data *v = NULL;
 	struct vss_evt_voice_activity *voice_act_update = NULL;
@@ -7460,7 +7400,7 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 	}
 
 	if (data->opcode == APR_BASIC_RSP_RESULT) {
-		if (data->payload_size >= sizeof(ptr[0]) * 2) {
+		if (data->payload_size) {
 			ptr = data->payload;
 
 			pr_debug("%x %x\n", ptr[0], ptr[1]);
@@ -7530,13 +7470,7 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 	} else if (data->opcode == VSS_IMEMORY_RSP_MAP) {
 		pr_debug("%s, Revd VSS_IMEMORY_RSP_MAP response\n", __func__);
 
-		if (data->payload_size < sizeof(ptr[0])) {
-			pr_err("%s: payload has invalid size[%d]\n", __func__,
-			       data->payload_size);
-			return -EINVAL;
-		}
-
-		if (data->token == VOIP_MEM_MAP_TOKEN) {
+		if (data->payload_size && data->token == VOIP_MEM_MAP_TOKEN) {
 			ptr = data->payload;
 			if (ptr[0]) {
 				v->shmem_info.mem_handle = ptr[0];
@@ -7603,13 +7537,10 @@ static int32_t qdsp_mvm_callback(struct apr_client_data *data, void *priv)
 		pr_debug("%s: Received VSS_IVERSION_RSP_GET\n", __func__);
 
 		if (data->payload_size) {
-			min_payload_size = min_t(u32, (int)data->payload_size,
-					       CVD_VERSION_STRING_MAX_SIZE);
 			version_rsp =
 				(struct vss_iversion_rsp_get_t *)data->payload;
 			memcpy(common.cvd_version, version_rsp->version,
-			       min_payload_size);
-			common.cvd_version[min_payload_size - 1] = '\0';
+			       CVD_VERSION_STRING_MAX_SIZE);
 			pr_debug("%s: CVD Version = %s\n",
 				 __func__, common.cvd_version);
 
@@ -7809,11 +7740,6 @@ static int32_t qdsp_cvs_callback(struct apr_client_data *data, void *priv)
 
 		cvs_voc_pkt = v->shmem_info.sh_buf.buf[1].data;
 		if (cvs_voc_pkt != NULL &&  common.mvs_info.ul_cb != NULL) {
-			if (v->shmem_info.sh_buf.buf[1].size <
-			    ((3 * sizeof(uint32_t)) + cvs_voc_pkt[2])) {
-				pr_err("%s: invalid voc pkt size\n", __func__);
-				return -EINVAL;
-			}
 			/* cvs_voc_pkt[0] contains tx timestamp */
 			common.mvs_info.ul_cb((uint8_t *)&cvs_voc_pkt[3],
 					      cvs_voc_pkt[2],
@@ -7982,7 +7908,7 @@ static int32_t qdsp_cvp_callback(struct apr_client_data *data, void *priv)
 	}
 
 	if (data->opcode == APR_BASIC_RSP_RESULT) {
-		if (data->payload_size >= (2 * sizeof(uint32_t))) {
+		if (data->payload_size) {
 			ptr = data->payload;
 
 			pr_debug("%x %x\n", ptr[0], ptr[1]);
@@ -9966,12 +9892,6 @@ int __init voice_init(void)
 		sizeof(common.cvd_version));
 	/* Initialize Per-Vocoder Calibration flag */
 	common.is_per_vocoder_cal_enabled = false;
-
-	/*
-	 * Initialize in call record channel config
-	 * to mono
-	 */
-	common.rec_channel_count = NUM_CHANNELS_MONO;
 
 	mutex_init(&common.common_lock);
 

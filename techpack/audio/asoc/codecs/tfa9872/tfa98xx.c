@@ -51,7 +51,7 @@
 #include "inc/tfa_container.h"
 #include "inc/tfa98xx_parameters.h"
 
-#if defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_BETA)
+#if defined(CONFIG_MACH_SM8150_FLASH)
 /*
  * when one of TFA ICs is connected to RCV,
  * TFA driver needs to send a extcon event intead of WCD codec.
@@ -1770,7 +1770,6 @@ static int tfa98xx_get_profile(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-#define LGE_SKIP_TO_UPDATE_MIXER -1
 static int tfa98xx_set_profile(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -1801,7 +1800,7 @@ static int tfa98xx_set_profile(struct snd_kcontrol *kcontrol,
 			__func__, profile, tfa_exception);
 		// reset tfa_exception
 		tfa_exception = TFA98XX_NO_EXCEPTION;
-		return LGE_SKIP_TO_UPDATE_MIXER;
+		return 0;
 	default:
 		if (new_profile == profile)
 			return 0;
@@ -1875,7 +1874,7 @@ static int tfa98xx_set_profile(struct snd_kcontrol *kcontrol,
 	}
 #endif
 
-#if defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_BETA)
+#if defined(CONFIG_MACH_SM8150_FLASH)
     /*
      * when one of TFA ICs is connected to RCV,
      * TFA driver needs to send a extcon event intead of WCD codec.
@@ -2213,30 +2212,7 @@ static int tfa98xx_set_saam_ctl(struct snd_kcontrol *kcontrol,
 	// saam_select = 2: mute = 0 to enable RaM / SaM and playback, concurrently
     _tfa_set_saam_select(saam_select);
 
-#if defined(TFA_EXCEPTION_AT_TRANSITION)
-	if (!saam_select) {
-		pr_info("%s: [Exception] restore ignored stream\n", __func__);
-
-		// restore streams at tfa_exception (case to switch profile)
-		tfa98xx->pstream |= tfa98xx->ignored_pstream;
-		tfa98xx->cstream |= tfa98xx->ignored_cstream;
-
-		pr_info("restore: [pstream %d, cstream %d, samstream %d]\n",
-			tfa98xx->pstream, tfa98xx->cstream, tfa98xx->samstream);
-		tfa98xx_set_stream_state((tfa98xx->pstream & BIT_PSTREAM)
-			|((tfa98xx->cstream<<1) & BIT_CSTREAM)
-			|((tfa98xx->samstream<<2) & BIT_SAMSTREAM));
-	}
-#endif
-
 	_tfa98xx_mute(tfa98xx, saam_select ? 0 : 1, SNDRV_PCM_STREAM_SAAM);
-
-#if defined(TFA_EXCEPTION_AT_TRANSITION)
-	if (!saam_select && tfa98xx->pstream != 0) {
-		pr_info("%s: [Exception] restore after stopping RaM\n", __func__);
-		_tfa98xx_mute(tfa98xx, 0, SNDRV_PCM_STREAM_SAAM);
-	}
-#endif
 
 	return 0;
 }
@@ -3999,25 +3975,21 @@ static int tfa98xx_probe(struct snd_soc_codec *codec)
 #endif
 
 #ifdef CONFIG_SND_LGE_TX_NXP_LIB
-	// 0x34 : speaker, 0x35 : receiver,
-	// RaM is working on reciever, so don't need to register extcon devices twice.
-	if (tfa98xx->i2c->addr == 0x34) {
-		edev = devm_extcon_dev_allocate(codec->dev, tfa98xx_cable);
-		if (IS_ERR(edev)) {
-			dev_err(codec->dev, "failed to allocate extcon device\n");
-			return -ENOMEM;
-		}
-
-		strcpy(tfa98xx->edev_name,"ram_status");
-		edev->name = tfa98xx->edev_name;
-		ret = devm_extcon_dev_register(codec->dev, edev);
-		if (ret < 0) {
-			dev_err(codec->dev, "extcon_dev_register() failed: %d\n",
-				ret);
-			return ret;
-		}
-		pr_info("%s register excon device on i2c addr 0x%x\n", __func__, tfa98xx->i2c->addr);
+	edev = devm_extcon_dev_allocate(codec->dev, tfa98xx_cable);
+	if (IS_ERR(edev)) {
+		dev_err(codec->dev, "failed to allocate extcon device\n");
+		return -ENOMEM;
 	}
+
+	strcpy(tfa98xx->edev_name,"ram_status");
+	edev->name = tfa98xx->edev_name;
+	ret = devm_extcon_dev_register(codec->dev, edev);
+	if (ret < 0) {
+		dev_err(codec->dev, "extcon_dev_register() failed: %d\n",
+			ret);
+		return ret;
+	}
+	pr_info("%s register excon device\n",__func__);
 #endif
 	dev_info(codec->dev, "tfa98xx codec registered (%s)",
 							tfa98xx->fw.name);

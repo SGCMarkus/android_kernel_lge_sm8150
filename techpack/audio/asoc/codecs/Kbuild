@@ -40,9 +40,9 @@ ifeq ($(KERNEL_BUILD), 0)
 		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_TRINKET), y)
-		include $(AUDIO_ROOT)/config/trinketauto.conf
+		include $(AUDIO_ROOT)/config/sm6150auto.conf
 		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/trinketautoconf.h
+		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
 		include $(AUDIO_ROOT)/config/sm8150auto.conf
@@ -117,13 +117,6 @@ ifdef CONFIG_SND_SOC_WSA881X
 	WSA881X_OBJS += wsa881x-tables.o
 	WSA881X_OBJS += wsa881x-regmap.o
 	WSA881X_OBJS += wsa881x-temp-sensor.o
-endif
-
-ifdef CONFIG_SND_SOC_WSA881X_ANALOG
-	WSA881X_ANALOG_OBJS += wsa881x-analog.o
-	WSA881X_ANALOG_OBJS += wsa881x-tables-analog.o
-	WSA881X_ANALOG_OBJS += wsa881x-regmap-analog.o
-	WSA881X_ANALOG_OBJS += wsa881x-temp-sensor.o
 endif
 
 ifdef CONFIG_SND_SOC_MSM_STUB
@@ -228,9 +221,6 @@ wcd9335_dlkm-y := $(WCD9335_OBJS)
 obj-$(CONFIG_SND_SOC_WSA881X) += wsa881x_dlkm.o
 wsa881x_dlkm-y := $(WSA881X_OBJS)
 
-obj-$(CONFIG_SND_SOC_WSA881X_ANALOG) += wsa881x_analog_dlkm.o
-wsa881x_analog_dlkm-y := $(WSA881X_ANALOG_OBJS)
-
 obj-$(CONFIG_SND_SOC_MSM_STUB) += stub_dlkm.o
 stub_dlkm-y := $(STUB_OBJS)
 
@@ -242,6 +232,12 @@ wcd_spi_dlkm-y := $(SPI_OBJS)
 
 obj-$(CONFIG_SND_SOC_WCD_MBHC) += mbhc_dlkm.o
 mbhc_dlkm-y := $(MBHC_OBJS)
+
+obj-$(CONFIG_SND_SOC_TFA9872)   += tfa9872/
+
+obj-$(CONFIG_SND_SOC_SMA6101)   += sma6101/
+
+obj-$(CONFIG_SND_SOC_CS43131)   += cs43131/
 
 obj-$(CONFIG_SND_SOC_ES9218P) += es9218_dlkm.o
 es9218_dlkm-y := $(ES9218_OBJS)

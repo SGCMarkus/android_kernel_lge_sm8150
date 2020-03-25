@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,6 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
-#include <linux/clk-provider.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
@@ -57,8 +56,6 @@
 #define WSA_MACRO_RX_PATH_DSMDEM_OFFSET 0x4C
 #define WSA_MACRO_FS_RATE_MASK 0x0F
 
-#define WSA_MACRO_MAX_DMA_CH_PER_PORT 0x2
-
 enum {
 	WSA_MACRO_RX0 = 0,
 	WSA_MACRO_RX1,
@@ -90,24 +87,6 @@ enum {
 	WSA_MACRO_SOFTCLIP0, /* RX0 */
 	WSA_MACRO_SOFTCLIP1, /* RX1 */
 	WSA_MACRO_SOFTCLIP_MAX
-};
-
-enum {
-	INTn_1_INP_SEL_ZERO = 0,
-	INTn_1_INP_SEL_RX0,
-	INTn_1_INP_SEL_RX1,
-	INTn_1_INP_SEL_RX2,
-	INTn_1_INP_SEL_RX3,
-	INTn_1_INP_SEL_DEC0,
-	INTn_1_INP_SEL_DEC1,
-};
-
-enum {
-	INTn_2_INP_SEL_ZERO = 0,
-	INTn_2_INP_SEL_RX0,
-	INTn_2_INP_SEL_RX1,
-	INTn_2_INP_SEL_RX2,
-	INTn_2_INP_SEL_RX3,
 };
 
 struct interp_sample_rate {
@@ -151,7 +130,6 @@ static int wsa_macro_hw_params(struct snd_pcm_substream *substream,
 static int wsa_macro_get_channel_map(struct snd_soc_dai *dai,
 				unsigned int *tx_num, unsigned int *tx_slot,
 				unsigned int *rx_num, unsigned int *rx_slot);
-static int wsa_macro_digital_mute(struct snd_soc_dai *dai, int mute);
 /* Hold instance to soundwire platform device */
 struct wsa_macro_swr_ctrl_data {
 	struct platform_device *wsa_swr_pdev;
@@ -218,12 +196,9 @@ struct wsa_macro_priv {
 	u16 prim_int_users[WSA_MACRO_RX1 + 1];
 	u16 wsa_mclk_users;
 	u16 swr_clk_users;
-	bool dapm_mclk_enable;
-	bool reset_swr;
 	unsigned int vi_feed_value;
 	struct mutex mclk_lock;
 	struct mutex swr_clk_lock;
-	struct mutex clk_lock;
 	struct wsa_macro_swr_ctrl_data *swr_ctrl_data;
 	struct wsa_macro_swr_ctrl_platform_data swr_plat_data;
 	struct work_struct wsa_macro_add_child_devices_work;
@@ -246,7 +221,6 @@ struct wsa_macro_priv {
 	int is_softclip_on[WSA_MACRO_SOFTCLIP_MAX];
 	int softclip_clk_users[WSA_MACRO_SOFTCLIP_MAX];
 	struct wsa_macro_bcl_pmic_params bcl_pmic_params;
-	int wsa_digital_mute_status[WSA_MACRO_RX_MAX];
 };
 
 static int wsa_macro_config_ear_spkr_gain(struct snd_soc_codec *codec,
@@ -384,7 +358,6 @@ static const struct snd_kcontrol_new rx_mix_ec1_mux =
 static struct snd_soc_dai_ops wsa_macro_dai_ops = {
 	.hw_params = wsa_macro_hw_params,
 	.get_channel_map = wsa_macro_get_channel_map,
-	.digital_mute = wsa_macro_digital_mute,
 };
 
 static struct snd_soc_dai_driver wsa_macro_dai[] = {
@@ -602,12 +575,9 @@ static int wsa_macro_set_prim_interpolator_rate(struct snd_soc_dai *dai,
 			inp2_sel = (int_mux_cfg1_val >>
 					WSA_MACRO_MUX_INP_SHFT) &
 					WSA_MACRO_MUX_INP_MASK2;
-			if ((inp0_sel == (int_1_mix1_inp +
-						INTn_1_INP_SEL_RX0)) ||
-			    (inp1_sel == (int_1_mix1_inp +
-						INTn_1_INP_SEL_RX0)) ||
-			    (inp2_sel == int_1_mix1_inp +
-						INTn_1_INP_SEL_RX0)) {
+			if ((inp0_sel == int_1_mix1_inp) ||
+			    (inp1_sel == int_1_mix1_inp) ||
+			    (inp2_sel == int_1_mix1_inp)) {
 				int_fs_reg = BOLERO_CDC_WSA_RX0_RX_PATH_CTL +
 					     WSA_MACRO_RX_PATH_OFFSET * j;
 				dev_dbg(wsa_dev,
@@ -659,8 +629,7 @@ static int wsa_macro_set_mix_interpolator_rate(struct snd_soc_dai *dai,
 		for (j = 0; j < NUM_INTERPOLATORS; j++) {
 			int_mux_cfg1_val = snd_soc_read(codec, int_mux_cfg1) &
 							WSA_MACRO_MUX_INP_MASK1;
-			if (int_mux_cfg1_val == (int_2_inp +
-						INTn_2_INP_SEL_RX0)) {
+			if (int_mux_cfg1_val == int_2_inp) {
 				int_fs_reg =
 					BOLERO_CDC_WSA_RX0_RX_PATH_MIX_CTL +
 					WSA_MACRO_RX_PATH_OFFSET * j;
@@ -755,7 +724,6 @@ static int wsa_macro_get_channel_map(struct snd_soc_dai *dai,
 	struct snd_soc_codec *codec = dai->codec;
 	struct device *wsa_dev = NULL;
 	struct wsa_macro_priv *wsa_priv = NULL;
-	unsigned int temp = 0, ch_mask = 0, i = 0;
 
 	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
 		return -EINVAL;
@@ -772,16 +740,8 @@ static int wsa_macro_get_channel_map(struct snd_soc_dai *dai,
 		break;
 	case WSA_MACRO_AIF1_PB:
 	case WSA_MACRO_AIF_MIX1_PB:
-		for_each_set_bit(temp, &wsa_priv->active_ch_mask[dai->id],
-				WSA_MACRO_RX_MAX) {
-			ch_mask |= (1 << temp);
-			if (++i == WSA_MACRO_MAX_DMA_CH_PER_PORT)
-				break;
-		}
-		if (ch_mask & 0x0C)
-			ch_mask = ch_mask >> 0x2;
-		*rx_slot = ch_mask;
-		*rx_num = i;
+		*rx_slot = wsa_priv->active_ch_mask[dai->id];
+		*rx_num = wsa_priv->active_ch_cnt[dai->id];
 		break;
 	default:
 		dev_err(wsa_dev, "%s: Invalid AIF\n", __func__);
@@ -790,52 +750,6 @@ static int wsa_macro_get_channel_map(struct snd_soc_dai *dai,
 	return 0;
 }
 
-static int wsa_macro_digital_mute(struct snd_soc_dai *dai, int mute)
-{
-	struct snd_soc_codec *codec = dai->codec;
-	struct device *wsa_dev = NULL;
-	struct wsa_macro_priv *wsa_priv = NULL;
-	uint16_t j = 0, reg = 0, mix_reg = 0, dsm_reg = 0;
-	u16 int_mux_cfg0 = 0, int_mux_cfg1 = 0;
-	u8 int_mux_cfg0_val = 0, int_mux_cfg1_val = 0;
-
-	if (mute)
-		return 0;
-
-	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
-		return -EINVAL;
-
-	switch (dai->id) {
-	case WSA_MACRO_AIF1_PB:
-	case WSA_MACRO_AIF_MIX1_PB:
-	for (j = 0; j < NUM_INTERPOLATORS; j++) {
-		reg = BOLERO_CDC_WSA_RX0_RX_PATH_CTL +
-				(j * WSA_MACRO_RX_PATH_OFFSET);
-		mix_reg = BOLERO_CDC_WSA_RX0_RX_PATH_MIX_CTL +
-				(j * WSA_MACRO_RX_PATH_OFFSET);
-		dsm_reg = BOLERO_CDC_WSA_RX0_RX_PATH_CTL +
-				(j * WSA_MACRO_RX_PATH_OFFSET) +
-				WSA_MACRO_RX_PATH_DSMDEM_OFFSET;
-		int_mux_cfg0 = BOLERO_CDC_WSA_RX_INP_MUX_RX_INT0_CFG0 + j * 8;
-		int_mux_cfg1 = int_mux_cfg0 + 4;
-		int_mux_cfg0_val = snd_soc_read(codec, int_mux_cfg0);
-		int_mux_cfg1_val = snd_soc_read(codec, int_mux_cfg1);
-		if (snd_soc_read(codec, dsm_reg) & 0x01) {
-			if (int_mux_cfg0_val || (int_mux_cfg1_val & 0x38))
-				snd_soc_update_bits(codec, reg, 0x20, 0x20);
-			if (int_mux_cfg1_val & 0x07) {
-				snd_soc_update_bits(codec, reg, 0x20, 0x20);
-				snd_soc_update_bits(codec, mix_reg, 0x20, 0x20);
-			}
-		}
-	}
-	bolero_wsa_pa_on(wsa_dev);
-		break;
-	default:
-		break;
-	}
-	return 0;
-}
 static int wsa_macro_mclk_enable(struct wsa_macro_priv *wsa_priv,
 				 bool mclk_enable, bool dapm)
 {
@@ -856,7 +770,7 @@ static int wsa_macro_mclk_enable(struct wsa_macro_priv *wsa_priv,
 			ret = bolero_request_clock(wsa_priv->dev,
 					WSA_MACRO, MCLK_MUX0, true);
 			if (ret < 0) {
-				dev_err_ratelimited(wsa_priv->dev,
+				dev_err(wsa_priv->dev,
 					"%s: wsa request clock enable failed\n",
 					__func__);
 				goto exit;
@@ -915,14 +829,9 @@ static int wsa_macro_mclk_event(struct snd_soc_dapm_widget *w,
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
 		ret = wsa_macro_mclk_enable(wsa_priv, 1, true);
-		if (ret)
-			wsa_priv->dapm_mclk_enable = false;
-		else
-			wsa_priv->dapm_mclk_enable = true;
 		break;
 	case SND_SOC_DAPM_POST_PMD:
-		if (wsa_priv->dapm_mclk_enable)
-			wsa_macro_mclk_enable(wsa_priv, 0, true);
+		wsa_macro_mclk_enable(wsa_priv, 0, true);
 		break;
 	default:
 		dev_err(wsa_priv->dev,
@@ -930,28 +839,6 @@ static int wsa_macro_mclk_event(struct snd_soc_dapm_widget *w,
 		ret = -EINVAL;
 	}
 	return ret;
-}
-
-static int wsa_macro_mclk_reset(struct device *dev)
-{
-	struct wsa_macro_priv *wsa_priv = dev_get_drvdata(dev);
-	int count = 0;
-
-	mutex_lock(&wsa_priv->clk_lock);
-	while (__clk_is_enabled(wsa_priv->wsa_core_clk)) {
-		clk_disable_unprepare(wsa_priv->wsa_npl_clk);
-		clk_disable_unprepare(wsa_priv->wsa_core_clk);
-		count++;
-	}
-	dev_dbg(wsa_priv->dev,
-			"%s: clock reset after ssr, count %d\n", __func__, count);
-	while (count) {
-		clk_prepare_enable(wsa_priv->wsa_core_clk);
-		clk_prepare_enable(wsa_priv->wsa_npl_clk);
-		count--;
-	}
-	mutex_unlock(&wsa_priv->clk_lock);
-	return 0;
 }
 
 static int wsa_macro_mclk_ctrl(struct device *dev, bool enable)
@@ -962,11 +849,10 @@ static int wsa_macro_mclk_ctrl(struct device *dev, bool enable)
 	if (!wsa_priv)
 		return -EINVAL;
 
-	mutex_lock(&wsa_priv->clk_lock);
 	if (enable) {
 		ret = clk_prepare_enable(wsa_priv->wsa_core_clk);
 		if (ret < 0) {
-			dev_err_ratelimited(dev, "%s:wsa mclk enable failed\n", __func__);
+			dev_err(dev, "%s:wsa mclk enable failed\n", __func__);
 			goto exit;
 		}
 		ret = clk_prepare_enable(wsa_priv->wsa_npl_clk);
@@ -981,7 +867,6 @@ static int wsa_macro_mclk_ctrl(struct device *dev, bool enable)
 		clk_disable_unprepare(wsa_priv->wsa_core_clk);
 	}
 exit:
-	mutex_unlock(&wsa_priv->clk_lock);
 	return ret;
 }
 
@@ -994,27 +879,19 @@ static int wsa_macro_event_handler(struct snd_soc_codec *codec, u16 event,
 	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
 		return -EINVAL;
 
-	if (!(wsa_priv->swr_ctrl_data))
-		return -EINVAL;
-
 	switch (event) {
 	case BOLERO_MACRO_EVT_SSR_DOWN:
 		swrm_wcd_notify(
 			wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
-			SWR_DEVICE_DOWN, NULL);
+			SWR_DEVICE_SSR_DOWN, NULL);
 		swrm_wcd_notify(
 			wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
-			SWR_DEVICE_SSR_DOWN, NULL);
+			SWR_DEVICE_DOWN, NULL);
 		break;
 	case BOLERO_MACRO_EVT_SSR_UP:
-		/* reset swr after ssr/pdr */
-		wsa_priv->reset_swr = true;
 		swrm_wcd_notify(
 			wsa_priv->swr_ctrl_data[0].wsa_swr_pdev,
 			SWR_DEVICE_SSR_UP, NULL);
-		break;
-	case BOLERO_MACRO_EVT_CLK_RESET:
-		wsa_macro_mclk_reset(wsa_dev);
 		break;
 	}
 	return 0;
@@ -1163,7 +1040,6 @@ static int wsa_macro_enable_mix_path(struct snd_soc_dapm_widget *w,
 		snd_soc_write(codec, gain_reg, val);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
-		snd_soc_update_bits(codec, w->reg, 0x20, 0x00);
 		break;
 	}
 
@@ -1363,63 +1239,6 @@ static int wsa_macro_config_softclip(struct snd_soc_codec *codec,
 	return 0;
 }
 
-static bool wsa_macro_adie_lb(struct snd_soc_codec *codec, int interp_idx)
-{
-	u16 int_mux_cfg0 = 0, int_mux_cfg1 = 0;
-	u8 int_mux_cfg0_val = 0, int_mux_cfg1_val = 0;
-	u8 int_n_inp0 = 0, int_n_inp1 = 0, int_n_inp2 = 0;
-
-	int_mux_cfg0 = BOLERO_CDC_WSA_RX_INP_MUX_RX_INT0_CFG0 + interp_idx * 8;
-	int_mux_cfg1 = int_mux_cfg0 + 4;
-	int_mux_cfg0_val = snd_soc_read(codec, int_mux_cfg0);
-	int_mux_cfg1_val = snd_soc_read(codec, int_mux_cfg1);
-
-	int_n_inp0 = int_mux_cfg0_val & 0x0F;
-	if (int_n_inp0 == INTn_1_INP_SEL_DEC0 ||
-		int_n_inp0 == INTn_1_INP_SEL_DEC1)
-		return true;
-
-	int_n_inp1 = int_mux_cfg0_val >> 4;
-	if (int_n_inp1 == INTn_1_INP_SEL_DEC0 ||
-		int_n_inp1 == INTn_1_INP_SEL_DEC1)
-		return true;
-
-	int_n_inp2 = int_mux_cfg1_val >> 4;
-	if (int_n_inp2 == INTn_1_INP_SEL_DEC0 ||
-		int_n_inp2 == INTn_1_INP_SEL_DEC1)
-		return true;
-
-	return false;
-}
-
-static int wsa_macro_enable_main_path(struct snd_soc_dapm_widget *w,
-				      struct snd_kcontrol *kcontrol,
-				      int event)
-{
-	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
-	u16 reg = 0;
-	struct device *wsa_dev = NULL;
-	struct wsa_macro_priv *wsa_priv = NULL;
-
-	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
-		return -EINVAL;
-
-
-	reg = BOLERO_CDC_WSA_RX0_RX_PATH_CTL +
-			WSA_MACRO_RX_PATH_OFFSET * w->shift;
-	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		if (wsa_macro_adie_lb(codec, w->shift)) {
-			snd_soc_update_bits(codec, reg, 0x20, 0x20);
-			bolero_wsa_pa_on(wsa_dev);
-		}
-		break;
-	default:
-		break;
-	}
-	return 0;
-}
-
 static int wsa_macro_interp_get_primary_reg(u16 reg, u16 *ind)
 {
 	u16 prim_int_reg = 0;
@@ -1467,6 +1286,8 @@ static int wsa_macro_enable_prim_interpolator(
 			snd_soc_update_bits(codec,
 				prim_int_reg + WSA_MACRO_RX_PATH_DSMDEM_OFFSET,
 				0x1, 0x1);
+			snd_soc_update_bits(codec, prim_int_reg,
+					    1 << 0x5, 1 << 0x5);
 		}
 		if ((reg != prim_int_reg) &&
 		    ((snd_soc_read(codec, prim_int_reg)) & 0x10))
@@ -1477,9 +1298,6 @@ static int wsa_macro_enable_prim_interpolator(
 		if (wsa_priv->prim_int_users[ind] == 0) {
 			snd_soc_update_bits(codec, prim_int_reg,
 					1 << 0x5, 0 << 0x5);
-			snd_soc_update_bits(codec,
-				prim_int_reg + WSA_MACRO_RX_PATH_DSMDEM_OFFSET,
-				0x1, 0x0);
 			snd_soc_update_bits(codec, prim_int_reg,
 					0x40, 0x40);
 			snd_soc_update_bits(codec, prim_int_reg,
@@ -1883,66 +1701,6 @@ static int wsa_macro_set_ec_hq(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int wsa_macro_get_rx_mute_status(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct device *wsa_dev = NULL;
-	struct wsa_macro_priv *wsa_priv = NULL;
-	int wsa_rx_shift = ((struct soc_multi_mixer_control *)
-		       kcontrol->private_value)->shift;
-
-	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
-		return -EINVAL;
-
-	ucontrol->value.integer.value[0] =
-		wsa_priv->wsa_digital_mute_status[wsa_rx_shift];
-	return 0;
-}
-
-static int wsa_macro_set_rx_mute_status(struct snd_kcontrol *kcontrol,
-			       struct snd_ctl_elem_value *ucontrol)
-{
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct device *wsa_dev = NULL;
-	struct wsa_macro_priv *wsa_priv = NULL;
-	int value = ucontrol->value.integer.value[0];
-	int wsa_rx_shift = ((struct soc_multi_mixer_control *)
-			kcontrol->private_value)->shift;
-
-	if (!wsa_macro_get_data(codec, &wsa_dev, &wsa_priv, __func__))
-		return -EINVAL;
-
-	switch (wsa_rx_shift) {
-	case 0:
-		snd_soc_update_bits(codec, BOLERO_CDC_WSA_RX0_RX_PATH_CTL,
-				0x10, value << 4);
-		break;
-	case 1:
-		snd_soc_update_bits(codec, BOLERO_CDC_WSA_RX1_RX_PATH_CTL,
-				0x10, value << 4);
-		break;
-	case 2:
-		snd_soc_update_bits(codec, BOLERO_CDC_WSA_RX0_RX_PATH_MIX_CTL,
-				0x10, value << 4);
-		break;
-	case 3:
-		snd_soc_update_bits(codec, BOLERO_CDC_WSA_RX1_RX_PATH_MIX_CTL,
-				0x10, value << 4);
-		break;
-	default:
-		pr_err("%s: invalid argument rx_shift = %d\n", __func__,
-			wsa_rx_shift);
-		return -EINVAL;
-	}
-
-	dev_dbg(codec->dev, "%s: WSA Digital Mute RX %d Enable %d\n",
-		__func__, wsa_rx_shift, value);
-	wsa_priv->wsa_digital_mute_status[wsa_rx_shift] = value;
-	return 0;
-}
-
 static int wsa_macro_get_compander(struct snd_kcontrol *kcontrol,
 			       struct snd_ctl_elem_value *ucontrol)
 {
@@ -2116,26 +1874,18 @@ static int wsa_macro_rx_mux_put(struct snd_kcontrol *kcontrol,
 			dev_err(wsa_dev, "%s: AIF reset already\n", __func__);
 			return 0;
 		}
-		if (aif_rst >= WSA_MACRO_RX_MAX) {
-			dev_err(wsa_dev, "%s: Invalid AIF reset\n", __func__);
-			return 0;
-		}
 	}
 	wsa_priv->rx_port_value[widget->shift] = rx_port_value;
 
 	bit_input = widget->shift;
-
-	dev_dbg(wsa_dev,
-		"%s: mux input: %d, mux output: %d, bit: %d\n",
-		__func__, rx_port_value, widget->shift, bit_input);
+	if (widget->shift >= WSA_MACRO_RX_MIX)
+		bit_input %= WSA_MACRO_RX_MIX;
 
 	switch (rx_port_value) {
 	case 0:
-		if (wsa_priv->active_ch_cnt[aif_rst]) {
-			clear_bit(bit_input,
-				  &wsa_priv->active_ch_mask[aif_rst]);
-			wsa_priv->active_ch_cnt[aif_rst]--;
-		}
+		clear_bit(bit_input,
+			  &wsa_priv->active_ch_mask[aif_rst]);
+		wsa_priv->active_ch_cnt[aif_rst]--;
 		break;
 	case 1:
 	case 2:
@@ -2145,8 +1895,7 @@ static int wsa_macro_rx_mux_put(struct snd_kcontrol *kcontrol,
 		break;
 	default:
 		dev_err(wsa_dev,
-			"%s: Invalid AIF_ID for WSA RX MUX %d\n",
-			__func__, rx_port_value);
+			"%s: Invalid AIF_ID for WSA RX MUX\n", __func__);
 		return -EINVAL;
 	}
 
@@ -2258,18 +2007,6 @@ static const struct snd_kcontrol_new wsa_macro_snd_controls[] = {
 	SOC_SINGLE_SX_TLV("WSA_RX1 Digital Volume",
 			  BOLERO_CDC_WSA_RX1_RX_VOL_CTL,
 			  0, -84, 40, digital_gain),
-	SOC_SINGLE_EXT("WSA_RX0 Digital Mute", SND_SOC_NOPM, WSA_MACRO_RX0, 1,
-			0, wsa_macro_get_rx_mute_status,
-			wsa_macro_set_rx_mute_status),
-	SOC_SINGLE_EXT("WSA_RX1 Digital Mute", SND_SOC_NOPM, WSA_MACRO_RX1, 1,
-			0, wsa_macro_get_rx_mute_status,
-			wsa_macro_set_rx_mute_status),
-	SOC_SINGLE_EXT("WSA_RX0_MIX Digital Mute", SND_SOC_NOPM,
-			WSA_MACRO_RX_MIX0, 1, 0, wsa_macro_get_rx_mute_status,
-			wsa_macro_set_rx_mute_status),
-	SOC_SINGLE_EXT("WSA_RX1_MIX Digital Mute", SND_SOC_NOPM,
-			WSA_MACRO_RX_MIX1, 1, 0, wsa_macro_get_rx_mute_status,
-			wsa_macro_set_rx_mute_status),
 	SOC_SINGLE_EXT("WSA_COMP1 Switch", SND_SOC_NOPM, WSA_MACRO_COMP1, 1, 0,
 		wsa_macro_get_compander, wsa_macro_set_compander),
 	SOC_SINGLE_EXT("WSA_COMP2 Switch", SND_SOC_NOPM, WSA_MACRO_COMP2, 1, 0,
@@ -2430,8 +2167,8 @@ static const struct snd_soc_dapm_widget wsa_macro_dapm_widgets[] = {
 	SND_SOC_DAPM_MUX_E("WSA_RX0 INP2", SND_SOC_NOPM, 0, 0,
 		&rx0_prim_inp2_mux, wsa_macro_enable_swr,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_MUX_E("WSA_RX0 MIX INP", BOLERO_CDC_WSA_RX0_RX_PATH_MIX_CTL,
-		0, 0, &rx0_mix_mux, wsa_macro_enable_mix_path,
+	SND_SOC_DAPM_MUX_E("WSA_RX0 MIX INP", SND_SOC_NOPM, 0, 0,
+		&rx0_mix_mux, wsa_macro_enable_mix_path,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 	SND_SOC_DAPM_MUX_E("WSA_RX1 INP0", SND_SOC_NOPM, 0, 0,
 		&rx1_prim_inp0_mux, wsa_macro_enable_swr,
@@ -2442,15 +2179,11 @@ static const struct snd_soc_dapm_widget wsa_macro_dapm_widgets[] = {
 	SND_SOC_DAPM_MUX_E("WSA_RX1 INP2", SND_SOC_NOPM, 0, 0,
 		&rx1_prim_inp2_mux, wsa_macro_enable_swr,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_MUX_E("WSA_RX1 MIX INP", BOLERO_CDC_WSA_RX1_RX_PATH_MIX_CTL,
-		0, 0, &rx1_mix_mux, wsa_macro_enable_mix_path,
+	SND_SOC_DAPM_MUX_E("WSA_RX1 MIX INP", SND_SOC_NOPM, 0, 0,
+		&rx1_mix_mux, wsa_macro_enable_mix_path,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
-	SND_SOC_DAPM_MIXER_E("WSA_RX INT0 MIX", SND_SOC_NOPM,
-			0, 0, NULL, 0, wsa_macro_enable_main_path,
-			SND_SOC_DAPM_PRE_PMU),
-	SND_SOC_DAPM_MIXER_E("WSA_RX INT1 MIX", SND_SOC_NOPM,
-			1, 0, NULL, 0, wsa_macro_enable_main_path,
-			SND_SOC_DAPM_PRE_PMU),
+	SND_SOC_DAPM_MIXER("WSA_RX INT0 MIX", SND_SOC_NOPM, 0, 0, NULL, 0),
+	SND_SOC_DAPM_MIXER("WSA_RX INT1 MIX", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("WSA_RX INT0 SEC MIX", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("WSA_RX INT1 SEC MIX", SND_SOC_NOPM, 0, 0, NULL, 0),
 
@@ -2723,23 +2456,14 @@ static int wsa_swrm_clock(void *handle, bool enable)
 		if (wsa_priv->swr_clk_users == 0) {
 			ret = wsa_macro_mclk_enable(wsa_priv, 1, true);
 			if (ret < 0) {
-				dev_err_ratelimited(wsa_priv->dev,
+				dev_err(wsa_priv->dev,
 					"%s: wsa request clock enable failed\n",
 					__func__);
 				goto exit;
 			}
-			if (wsa_priv->reset_swr)
-				regmap_update_bits(regmap,
-					BOLERO_CDC_WSA_CLK_RST_CTRL_SWR_CONTROL,
-					0x02, 0x02);
 			regmap_update_bits(regmap,
 				BOLERO_CDC_WSA_CLK_RST_CTRL_SWR_CONTROL,
 				0x01, 0x01);
-			if (wsa_priv->reset_swr)
-				regmap_update_bits(regmap,
-					BOLERO_CDC_WSA_CLK_RST_CTRL_SWR_CONTROL,
-					0x02, 0x00);
-			wsa_priv->reset_swr = false;
 			regmap_update_bits(regmap,
 				BOLERO_CDC_WSA_CLK_RST_CTRL_SWR_CONTROL,
 				0x1C, 0x0C);
@@ -3001,7 +2725,6 @@ static int wsa_macro_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	wsa_priv->wsa_io_base = wsa_io_base;
-	wsa_priv->reset_swr = true;
 	INIT_WORK(&wsa_priv->wsa_macro_add_child_devices_work,
 		  wsa_macro_add_child_devices);
 	wsa_priv->swr_plat_data.handle = (void *) wsa_priv;
@@ -3045,7 +2768,6 @@ static int wsa_macro_probe(struct platform_device *pdev)
 	dev_set_drvdata(&pdev->dev, wsa_priv);
 	mutex_init(&wsa_priv->mclk_lock);
 	mutex_init(&wsa_priv->swr_clk_lock);
-	mutex_init(&wsa_priv->clk_lock);
 	wsa_macro_init_ops(&ops, wsa_io_base);
 	ret = bolero_register_macro(&pdev->dev, WSA_MACRO, &ops);
 	if (ret < 0) {
@@ -3057,7 +2779,6 @@ static int wsa_macro_probe(struct platform_device *pdev)
 reg_macro_fail:
 	mutex_destroy(&wsa_priv->mclk_lock);
 	mutex_destroy(&wsa_priv->swr_clk_lock);
-	mutex_destroy(&wsa_priv->clk_lock);
 	return ret;
 }
 
@@ -3078,7 +2799,6 @@ static int wsa_macro_remove(struct platform_device *pdev)
 	bolero_unregister_macro(&pdev->dev, WSA_MACRO);
 	mutex_destroy(&wsa_priv->mclk_lock);
 	mutex_destroy(&wsa_priv->swr_clk_lock);
-	mutex_destroy(&wsa_priv->clk_lock);
 	return 0;
 }
 

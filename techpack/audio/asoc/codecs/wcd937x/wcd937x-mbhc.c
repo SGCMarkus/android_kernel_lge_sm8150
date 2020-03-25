@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -545,13 +545,6 @@ static void wcd937x_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 	regmap_update_bits(wcd937x->regmap,
 			   WCD937X_ANA_MBHC_MECH, 0x01, 0x00);
 
-	/*
-	 * Disable surge protection before impedance detection.
-	 * This is done to give correct value for high impedance.
-	 */
-	regmap_update_bits(wcd937x->regmap,
-			   WCD937X_HPH_SURGE_HPHLR_SURGE_EN, 0xC0, 0x00);
-
 	/* First get impedance on Left */
 	d1 = d1_a[1];
 	zdet_param_ptr = &zdet_param[1];
@@ -661,9 +654,6 @@ right_ch_impedance:
 		mbhc->hph_type = WCD_MBHC_HPH_MONO;
 	}
 
-	/* Enable surge protection again after impedance detection */
-	regmap_update_bits(wcd937x->regmap,
-			   WCD937X_HPH_SURGE_HPHLR_SURGE_EN, 0xC0, 0xC0);
 zdet_complete:
 	snd_soc_write(codec, WCD937X_ANA_MBHC_BTN5, reg0);
 	snd_soc_write(codec, WCD937X_ANA_MBHC_BTN6, reg1);
@@ -966,31 +956,6 @@ void wcd937x_mbhc_hs_detect_exit(struct snd_soc_codec *codec)
 EXPORT_SYMBOL(wcd937x_mbhc_hs_detect_exit);
 
 /*
- * wcd937x_mbhc_ssr_down: stop mbhc during
- * wcd937x subsystem restart
- * @mbhc: pointer to wcd937x_mbhc structure
- * @codec: handle to snd_soc_codec *
- */
-void wcd937x_mbhc_ssr_down(struct wcd937x_mbhc *mbhc,
-		         struct snd_soc_codec *codec)
-{
-	struct wcd_mbhc *wcd_mbhc = NULL;
-
-	if (!mbhc || !codec)
-		return;
-
-	wcd_mbhc = &mbhc->wcd_mbhc;
-	if (wcd_mbhc == NULL) {
-		dev_err(codec->dev, "%s: wcd_mbhc is NULL\n", __func__);
-		return;
-	}
-
-	wcd937x_mbhc_hs_detect_exit(codec);
-	wcd_mbhc_deinit(wcd_mbhc);
-}
-EXPORT_SYMBOL(wcd937x_mbhc_ssr_down);
-
-/*
  * wcd937x_mbhc_post_ssr_init: initialize mbhc for
  * wcd937x post subsystem restart
  * @mbhc: poniter to wcd937x_mbhc structure
@@ -1013,6 +978,8 @@ int wcd937x_mbhc_post_ssr_init(struct wcd937x_mbhc *mbhc,
 		return -EINVAL;
 	}
 
+	wcd937x_mbhc_hs_detect_exit(codec);
+	wcd_mbhc_deinit(wcd_mbhc);
 	snd_soc_update_bits(codec, WCD937X_ANA_MBHC_MECH,
 				0x20, 0x20);
 	ret = wcd_mbhc_init(wcd_mbhc, codec, &mbhc_cb, &intr_ids,
@@ -1041,7 +1008,6 @@ int wcd937x_mbhc_init(struct wcd937x_mbhc **mbhc, struct snd_soc_codec *codec,
 {
 	struct wcd937x_mbhc *wcd937x_mbhc = NULL;
 	struct wcd_mbhc *wcd_mbhc = NULL;
-	struct wcd937x_pdata *pdata;
 	int ret = 0;
 
 	if (!codec) {
@@ -1066,15 +1032,6 @@ int wcd937x_mbhc_init(struct wcd937x_mbhc **mbhc, struct snd_soc_codec *codec,
 
 	/* Setting default mbhc detection logic to ADC */
 	wcd_mbhc->mbhc_detection_logic = WCD_DETECTION_ADC;
-
-	pdata = dev_get_platdata(codec->dev);
-	if (!pdata) {
-		dev_err(codec->dev, "%s: pdata pointer is NULL\n",
-			__func__);
-		ret = -EINVAL;
-		goto err;
-	}
-	wcd_mbhc->micb_mv = pdata->micbias.micb2_mv;
 
 	ret = wcd_mbhc_init(wcd_mbhc, codec, &mbhc_cb,
 				&intr_ids, wcd_mbhc_registers,

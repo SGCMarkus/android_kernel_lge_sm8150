@@ -1687,16 +1687,6 @@ unsigned int tfa98xx_get_profile_sr(int dev_idx, unsigned int prof_idx)
 	if (!dev)
 		return 0;
 
-	if (prof_idx == -1) { /* refer to prof in other device */
-		for (i = 0; i < tfa98xx_cnt_max_device(); i++) {
-			if (i == dev_idx)
-				continue;
-			if (handles_local[i].profile != -1) {
-				prof_idx = handles_local[i].profile;
-				break;
-			}
-		}
-	}
 	prof = tfa_cont_profile(dev_idx, prof_idx);
 	if (!prof)
 		return 0;
@@ -1768,16 +1758,6 @@ unsigned int tfa98xx_get_profile_chsa(int dev_idx, unsigned int prof_idx)
 	if (!dev)
 		return 0;
 
-	if (prof_idx == -1) { /* refer to prof in other device */
-		for (i = 0; i < tfa98xx_cnt_max_device(); i++) {
-			if (i == dev_idx)
-				continue;
-			if (handles_local[i].profile != -1) {
-				prof_idx = handles_local[i].profile;
-				break;
-			}
-		}
-	}
 	prof = tfa_cont_profile(dev_idx, prof_idx);
 	if (!prof)
 		return 0;
@@ -1850,16 +1830,6 @@ unsigned int tfa98xx_get_profile_tdmspks(int dev_idx, unsigned int prof_idx)
 	if (!dev)
 		return 0;
 
-	if (prof_idx == -1) { /* refer to prof in other device */
-		for (i = 0; i < tfa98xx_cnt_max_device(); i++) {
-			if (i == dev_idx)
-				continue;
-			if (handles_local[i].profile != -1) {
-				prof_idx = handles_local[i].profile;
-				break;
-			}
-		}
-	}
 	prof = tfa_cont_profile(dev_idx, prof_idx);
 	if (!prof)
 		return 0;

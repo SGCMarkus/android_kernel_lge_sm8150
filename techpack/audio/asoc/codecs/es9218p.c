@@ -1664,10 +1664,6 @@ static int __es9218_sabre_headphone_off(void)
     if( g_es9218_priv->es9218_data->always_power_on == false )
         es9218_power_gpio_L();
 
-    // set reset pin Low if reset gpio is high
-    if( __gpio_get_value(g_es9218_priv->es9218_data->reset_gpio) == 1 )
-        es9218_reset_gpio_L();
-
     es9218_power_state = ESS_PS_CLOSE;
     return 0;
 }

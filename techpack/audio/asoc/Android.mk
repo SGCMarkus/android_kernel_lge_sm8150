@@ -18,7 +18,7 @@ TARGET := msmnile
 AUDIO_SELECT  := CONFIG_SND_SOC_SM8150=m
 endif
 
-ifeq ($(call is-board-platform-in-list,$(MSMSTEPPE) atoll),true)
+ifeq ($(call is-board-platform,$(MSMSTEPPE)),true)
 TARGET := talos
 AUDIO_SELECT  := CONFIG_SND_SOC_SM6150=m
 endif
@@ -65,7 +65,7 @@ LOCAL_MODULE_DEBUG_ENABLE := true
 LOCAL_MODULE_PATH         := $(KERNEL_MODULES_OUT)
 include $(DLKM_DIR)/AndroidKernelModule.mk
 ###########################################################
-ifeq ($(call is-board-platform-in-list,msm8953 sdm670 qcs605 $(TRINKET)),true)
+ifeq ($(call is-board-platform-in-list,msm8953 sdm670 qcs605),true)
 include $(CLEAR_VARS)
 LOCAL_MODULE              := $(AUDIO_CHIPSET)_cpe_lsm.ko
 LOCAL_MODULE_KBUILD_NAME  := cpe_lsm_dlkm.ko

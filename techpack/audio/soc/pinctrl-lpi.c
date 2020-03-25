@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,15 +21,11 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/types.h>
-#include <linux/clk.h>
 #include <soc/snd_event.h>
-#include <linux/pm_runtime.h>
 #include <dsp/audio_notifier.h>
 
 #include "core.h"
 #include "pinctrl-utils.h"
-
-#define LPI_AUTO_SUSPEND_DELAY          100 /* delay in msec */
 
 #define LPI_ADDRESS_SIZE			0x20000
 
@@ -101,8 +97,6 @@ struct lpi_gpio_state {
 	struct pinctrl_dev *ctrl;
 	struct gpio_chip chip;
 	char __iomem	*base;
-	struct clk *lpass_core_hw_vote;
-	bool core_hw_vote_status;
 };
 
 static const char *const lpi_gpio_groups[] = {
@@ -134,14 +128,11 @@ static int lpi_gpio_read(struct lpi_gpio_pad *pad, unsigned int addr)
 				   __func__);
 		return 0;
 	}
-	pm_runtime_get_sync(lpi_dev);
 
 	ret = ioread32(pad->base + pad->offset + addr);
 	if (ret < 0)
 		pr_err("%s: read 0x%x failed\n", __func__, addr);
 
-	pm_runtime_mark_last_busy(lpi_dev);
-	pm_runtime_put_autosuspend(lpi_dev);
 	return ret;
 }
 
@@ -153,12 +144,8 @@ static int lpi_gpio_write(struct lpi_gpio_pad *pad, unsigned int addr,
 				   __func__);
 		return 0;
 	}
-	pm_runtime_get_sync(lpi_dev);
 
 	iowrite32(val, pad->base + pad->offset + addr);
-
-	pm_runtime_mark_last_busy(lpi_dev);
-	pm_runtime_put_autosuspend(lpi_dev);
 	return 0;
 }
 
@@ -502,25 +489,6 @@ static const struct gpio_chip lpi_gpio_template = {
 	.dbg_show		= lpi_gpio_dbg_show,
 };
 
-static int lpi_get_lpass_core_hw_clk(struct device *dev,
-				     struct lpi_gpio_state *state)
-{
-	struct clk *lpass_core_hw_vote = NULL;
-	int ret = 0;
-
-	if (state->lpass_core_hw_vote == NULL) {
-		lpass_core_hw_vote = devm_clk_get(dev, "lpass_core_hw_vote");
-		if (IS_ERR(lpass_core_hw_vote) || lpass_core_hw_vote == NULL) {
-			ret = PTR_ERR(lpass_core_hw_vote);
-			dev_dbg(dev, "%s: clk get %s failed %d\n",
-				__func__, "lpass_core_hw_vote", ret);
-			return ret;
-		}
-		state->lpass_core_hw_vote = lpass_core_hw_vote;
-	}
-	return 0;
-}
-
 static int lpi_pinctrl_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -640,18 +608,6 @@ static int lpi_pinctrl_probe(struct platform_device *pdev)
 		goto err_snd_evt;
 	}
 
-	/* Register LPASS core hw vote */
-	ret = lpi_get_lpass_core_hw_clk(dev, state);
-	if (ret)
-		dev_dbg(dev, "%s: unable to get core clk handle %d\n",
-			__func__, ret);
-
-	state->core_hw_vote_status = false;
-	pm_runtime_set_autosuspend_delay(&pdev->dev, LPI_AUTO_SUSPEND_DELAY);
-	pm_runtime_use_autosuspend(&pdev->dev);
-	pm_runtime_set_suspended(&pdev->dev);
-	pm_runtime_enable(&pdev->dev);
-
 	return 0;
 
 err_snd_evt:
@@ -665,8 +621,6 @@ err_chip:
 static int lpi_pinctrl_remove(struct platform_device *pdev)
 {
 	struct lpi_gpio_state *state = platform_get_drvdata(pdev);
-	pm_runtime_disable(&pdev->dev);
-	pm_runtime_set_suspended(&pdev->dev);
 
 	snd_event_client_deregister(&pdev->dev);
 	audio_notifier_deregister("lpi_tlmm");
@@ -681,97 +635,9 @@ static const struct of_device_id lpi_pinctrl_of_match[] = {
 
 MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
 
-static int lpi_pinctrl_runtime_resume(struct device *dev)
-{
-	struct lpi_gpio_state *state = dev_get_drvdata(dev);
-	int ret = 0;
-
-	ret = lpi_get_lpass_core_hw_clk(dev, state);
-	if (ret) {
-		dev_err(dev, "%s: unable to get core clk handle %d\n",
-			__func__, ret);
-		return 0;
-	}
-
-	ret = clk_prepare_enable(state->lpass_core_hw_vote);
-	if (ret < 0)
-		dev_err(dev, "%s: lpass core hw enable failed\n",
-			__func__);
-	else
-		state->core_hw_vote_status = true;
-
-	pm_runtime_set_autosuspend_delay(dev, LPI_AUTO_SUSPEND_DELAY);
-	return 0;
-}
-
-static int lpi_pinctrl_runtime_suspend(struct device *dev)
-{
-	struct lpi_gpio_state *state = dev_get_drvdata(dev);
-	int ret = 0;
-
-	ret = lpi_get_lpass_core_hw_clk(dev, state);
-	if (ret) {
-		dev_err(dev, "%s: unable to get core clk handle %d\n",
-			__func__, ret);
-		return 0;
-	}
-
-	if (state->core_hw_vote_status) {
-		clk_disable_unprepare(state->lpass_core_hw_vote);
-		state->core_hw_vote_status = false;
-	}
-	return 0;
-}
-
-int lpi_pinctrl_suspend(struct device *dev)
-{
-	int ret = 0;
-
-	dev_dbg(dev, "%s: system suspend\n", __func__);
-
-	if ((!pm_runtime_enabled(dev) || !pm_runtime_suspended(dev))) {
-		ret = lpi_pinctrl_runtime_suspend(dev);
-		if (!ret) {
-			/*
-			 * Synchronize runtime-pm and system-pm states:
-			 * At this point, we are already suspended. If
-			 * runtime-pm still thinks its active, then
-			 * make sure its status is in sync with HW
-			 * status. The three below calls let the
-			 * runtime-pm know that we are suspended
-			 * already without re-invoking the suspend
-			 * callback
-			 */
-			pm_runtime_disable(dev);
-			pm_runtime_set_suspended(dev);
-			pm_runtime_enable(dev);
-		}
-	}
-
-	return ret;
-}
-
-int lpi_pinctrl_resume(struct device *dev)
-{
-	return 0;
-}
-
-static const struct dev_pm_ops lpi_pinctrl_dev_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(
-		lpi_pinctrl_suspend,
-		lpi_pinctrl_resume
-	)
-	SET_RUNTIME_PM_OPS(
-		lpi_pinctrl_runtime_suspend,
-		lpi_pinctrl_runtime_resume,
-		NULL
-	)
-};
-
 static struct platform_driver lpi_pinctrl_driver = {
 	.driver = {
 		   .name = "qcom-lpi-pinctrl",
-		   .pm = &lpi_pinctrl_dev_pm_ops,
 		   .of_match_table = lpi_pinctrl_of_match,
 	},
 	.probe = lpi_pinctrl_probe,

@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -81,7 +81,6 @@ static const DECLARE_TLV_DB_LINEAR(sec_auxpcm_lb_vol_gain, 0,
 				INT_RX_VOL_MAX_STEPS);
 
 static int msm_multichannel_ec_primary_mic_ch;
-static int msm_ffecns_effect;
 
 static void msm_qti_pp_send_eq_values_(int eq_idx)
 {
@@ -1181,13 +1180,6 @@ int msm_adsp_inform_mixer_ctl(struct snd_soc_pcm_runtime *rtd,
 	}
 
 	event_data = (struct msm_adsp_event_data *)payload;
-	if (event_data->payload_len < sizeof(struct msm_adsp_event_data)) {
-		pr_err("%s: event_data size of %x is less than expected.\n",
-			__func__, event_data->payload_len);
-		ret = -EINVAL;
-		goto done;
-	}
-
 	kctl->info(kctl, &kctl_info);
 
 	if (event_data->payload_len >
@@ -1345,50 +1337,6 @@ static const struct  snd_kcontrol_new msm_multichannel_ec_controls[] = {
 	SOC_SINGLE_EXT("Multichannel EC Primary Mic Ch", SND_SOC_NOPM, 0,
 		0xFFFFFFFF, 0, msm_multichannel_ec_primary_mic_ch_get,
 		msm_multichannel_ec_primary_mic_ch_put),
-};
-
-static char const *ffecns_effect_text[] = {"NO_EFFECT", "EC_ONLY", "NS_ONLY", "ECNS"};
-
-static int msm_ffecns_put(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
-{
-	int ret = -EINVAL;
-
-	if (ucontrol->value.integer.value[0] < 0 ||
-		ucontrol->value.integer.value[0] >= ARRAY_SIZE(ffecns_effect_text)) {
-		pr_err("%s: invalid ffecns effect value %ld\n",
-			__func__, ucontrol->value.integer.value[0]);
-		return -EINVAL;
-	}
-
-	msm_ffecns_effect = ucontrol->value.integer.value[0];
-
-	pr_debug("%s: set %s for ffecns\n", __func__,
-		ffecns_effect_text[msm_ffecns_effect]);
-
-	ret = adm_set_ffecns_effect(msm_ffecns_effect);
-	if (ret)
-		pr_err("%s: failed to set %s for ffecns\n",
-			__func__, ffecns_effect_text[msm_ffecns_effect]);
-
-	return ret;
-}
-
-static int msm_ffecns_get(struct snd_kcontrol *kcontrol,
-			struct snd_ctl_elem_value *ucontrol)
-{
-	ucontrol->value.integer.value[0] = msm_ffecns_effect;
-	pr_debug("%s: ffecns effect = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	return 0;
-}
-
-static SOC_ENUM_SINGLE_EXT_DECL(ffecns_effect_enum, ffecns_effect_text);
-
-static const struct snd_kcontrol_new ec_ffecns_controls[] = {
-	SOC_ENUM_EXT("FFECNS Effect", ffecns_effect_enum,
-		msm_ffecns_get, msm_ffecns_put),
 };
 
 static const struct snd_kcontrol_new int_fm_vol_mixer_controls[] = {
@@ -1676,9 +1624,6 @@ void msm_qti_pp_add_controls(struct snd_soc_platform *platform)
 
 	snd_soc_add_platform_controls(platform, msm_multichannel_ec_controls,
 			ARRAY_SIZE(msm_multichannel_ec_controls));
-
-	snd_soc_add_platform_controls(platform, ec_ffecns_controls,
-			ARRAY_SIZE(ec_ffecns_controls));
 
 	snd_soc_add_platform_controls(platform, dsp_bit_width_controls,
 			ARRAY_SIZE(dsp_bit_width_controls));

@@ -294,11 +294,9 @@ enum msm_spkr_prot_states {
 	MSM_SPKR_PROT_DISABLED,
 	MSM_SPKR_PROT_NOT_CALIBRATED,
 	MSM_SPKR_PROT_PRE_CALIBRATED,
-	MSM_SPKR_PROT_IN_FTM_MODE,
-	MSM_SPKR_PROT_IN_V_VALI_MODE
+	MSM_SPKR_PROT_IN_FTM_MODE
 };
 #define MSM_SPKR_PROT_IN_FTM_MODE MSM_SPKR_PROT_IN_FTM_MODE
-#define MSM_SPKR_PROT_IN_V_VALI_MODE MSM_SPKR_PROT_IN_V_VALI_MODE
 
 enum msm_spkr_count {
 	SP_V2_SPKR_1,
@@ -323,37 +321,14 @@ struct audio_cal_info_spk_prot_cfg {
 };
 
 struct audio_cal_info_sp_th_vi_ftm_cfg {
-	/*
-	 * mode should be first param, add new params later to this.
-	 * we use this mode(first 4 bytes) to differentiate
-	 * whether it is TH_VI FTM or v-validation.
-	 */
-	uint32_t	mode;
-	/*
-	 * 0 - normal running mode
-	 * 1 - Calibration
-	 * 2 - FTM mode
-	 */
 	uint32_t	wait_time[SP_V2_NUM_MAX_SPKRS];
 	uint32_t	ftm_time[SP_V2_NUM_MAX_SPKRS];
-};
-
-struct audio_cal_info_sp_th_vi_v_vali_cfg {
-	/*
-	 * mode should be first param, add new params later to this.
-	 * we use this mode(first 4 bytes) to differentiate
-	 * whether it is TH_VI FTM or v-validation.
-	 */
 	uint32_t	mode;
 	/*
 	 * 0 - normal running mode
 	 * 1 - Calibration
 	 * 2 - FTM mode
-	 * 3 - V-Validation mode
 	 */
-	uint32_t	wait_time[SP_V2_NUM_MAX_SPKRS];
-	uint32_t	vali_time[SP_V2_NUM_MAX_SPKRS];
-
 };
 
 struct audio_cal_info_sp_ex_vi_ftm_cfg {
@@ -374,25 +349,8 @@ struct audio_cal_info_sp_ex_vi_param {
 };
 
 struct audio_cal_info_sp_th_vi_param {
-	/*
-	 * mode should be first param, add new params later to this.
-	 * we use this mode(first 4 bytes) to differentiate
-	 * whether it is TH_VI FTM or v-validation.
-	 */
-	uint32_t	mode;
 	int32_t		r_dc_q24[SP_V2_NUM_MAX_SPKRS];
 	int32_t		temp_q22[SP_V2_NUM_MAX_SPKRS];
-	int32_t		status[SP_V2_NUM_MAX_SPKRS];
-};
-
-struct audio_cal_info_sp_th_vi_v_vali_param {
-	/*
-	 * mode should be first param, add new params later to this.
-	 * we use this mode(first 4 bytes) to differentiate
-	 * whether it is TH_VI FTM or v-validation.
-	 */
-	uint32_t	mode;
-	uint32_t	vrms_q24[SP_V2_NUM_MAX_SPKRS];
 	int32_t		status[SP_V2_NUM_MAX_SPKRS];
 };
 
@@ -631,17 +589,6 @@ struct audio_cal_sp_th_vi_ftm_cfg {
 	struct audio_cal_type_sp_th_vi_ftm_cfg	cal_type;
 };
 
-struct audio_cal_type_sp_th_vi_v_vali_cfg {
-	struct audio_cal_type_header		cal_hdr;
-	struct audio_cal_data			cal_data;
-	struct audio_cal_info_sp_th_vi_v_vali_cfg	cal_info;
-};
-
-struct audio_cal_sp_th_vi_v_vali_cfg {
-	struct audio_cal_header			hdr;
-	struct audio_cal_type_sp_th_vi_v_vali_cfg	cal_type;
-};
-
 struct audio_cal_type_sp_ex_vi_ftm_cfg {
 	struct audio_cal_type_header		cal_hdr;
 	struct audio_cal_data			cal_data;
@@ -783,17 +730,6 @@ struct audio_cal_type_sp_th_vi_param {
 struct audio_cal_sp_th_vi_param {
 	struct audio_cal_header				hdr;
 	struct audio_cal_type_sp_th_vi_param		cal_type;
-};
-
-struct audio_cal_type_sp_th_vi_v_vali_param {
-	struct audio_cal_type_header			cal_hdr;
-	struct audio_cal_data				cal_data;
-	struct audio_cal_info_sp_th_vi_v_vali_param	cal_info;
-};
-
-struct audio_cal_sp_th_vi_v_vali_param {
-	struct audio_cal_header				hdr;
-	struct audio_cal_type_sp_th_vi_v_vali_param	cal_type;
 };
 struct audio_cal_type_sp_ex_vi_param {
 	struct audio_cal_type_header			cal_hdr;

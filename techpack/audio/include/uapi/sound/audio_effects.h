@@ -160,6 +160,7 @@ struct lgmqa_params {
     int32_t     multipleRate;
     int32_t     outputMode;
 };
+
 /* Command Payload length and size for Non-IID commands */
 #define COMMAND_PAYLOAD_LEN	3
 #define COMMAND_PAYLOAD_SZ	(COMMAND_PAYLOAD_LEN * sizeof(uint32_t))
