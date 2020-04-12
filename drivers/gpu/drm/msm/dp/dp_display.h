@@ -142,6 +142,11 @@ struct dp_display {
 #ifdef CONFIG_LGE_DISPLAY_COMMON
 	struct lge_dp_display lge_dp;
 #endif
+	int (*get_display_type)(struct dp_display *dp_display,
+			const char **display_type);
+	int (*mst_get_fixed_topology_display_type)(
+			struct dp_display *dp_display, u32 strm_id,
+			const char **display_type);
 };
 
 int dp_display_get_num_of_displays(void);
