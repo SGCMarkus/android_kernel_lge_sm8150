@@ -341,6 +341,7 @@ static void *usbpd_ipc_log;
 #define VDM_BUSY_TIME		50
 #define VCONN_ON_TIME		100
 #define SINK_TX_TIME		16
+#define DR_SWAP_RESPONSE_TIME	20
 
 #ifdef CONFIG_LGE_USB
 #define DRP_TRY_WAIT_TIME	800
@@ -513,6 +514,8 @@ struct usbpd {
 	enum usbpd_state	current_state;
 	bool			hard_reset_recvd;
 	ktime_t			hard_reset_recvd_time;
+	ktime_t			dr_swap_recvd_time;
+
 	struct list_head	rx_q;
 	spinlock_t		rx_lock;
 	struct rx_msg		*rx_ext_msg;
@@ -1603,6 +1606,9 @@ static void phy_msg_received(struct usbpd *pd, enum pd_sop_type sop,
 		kfree(rx_msg);
 		return;
 	}
+
+	if (IS_CTRL(rx_msg, MSG_DR_SWAP))
+		pd->dr_swap_recvd_time = ktime_get();
 
 	spin_lock_irqsave(&pd->rx_lock, flags);
 	list_add_tail(&rx_msg->entry, &pd->rx_q);
@@ -3058,6 +3064,7 @@ static void usbpd_sm(struct work_struct *w)
 	int ret, ms;
 	struct rx_msg *rx_msg = NULL;
 	unsigned long flags;
+	s64 dr_swap_delta;
 
 #ifdef CONFIG_LGE_USB
 	usbpd_info(&pd->dev, "handle state %s\n",
@@ -3445,6 +3452,14 @@ static void usbpd_sm(struct work_struct *w)
 				break;
 			}
 
+			dr_swap_delta = ktime_ms_delta(ktime_get(),
+						pd->dr_swap_recvd_time);
+			if (dr_swap_delta > DR_SWAP_RESPONSE_TIME) {
+				usbpd_err(&pd->dev, "DR swap timedout(%lld), do not send ACCEPT\n",
+								dr_swap_delta);
+				break;
+			}
+
 			ret = pd_send_msg(pd, MSG_ACCEPT, NULL, 0, SOP_MSG);
 			if (ret) {
 				usbpd_set_state(pd, PE_SEND_SOFT_RESET);
@@ -3764,6 +3779,14 @@ static void usbpd_sm(struct work_struct *w)
 		} else if (IS_CTRL(rx_msg, MSG_DR_SWAP)) {
 			if (pd->vdm_state == MODE_ENTERED) {
 				usbpd_set_state(pd, PE_SNK_HARD_RESET);
+				break;
+			}
+
+			dr_swap_delta = ktime_ms_delta(ktime_get(),
+						pd->dr_swap_recvd_time);
+			if (dr_swap_delta > DR_SWAP_RESPONSE_TIME) {
+				usbpd_err(&pd->dev, "DR swap timedout(%lld), do not send ACCEPT\n",
+								dr_swap_delta);
 				break;
 			}
 
