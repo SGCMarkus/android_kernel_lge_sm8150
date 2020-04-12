@@ -64,7 +64,6 @@ static void configfs_d_iput(struct dentry * dentry,
 		 * run just after configfs_attach_attr and set sd->s_dentry to
 		 * NULL even it's still in use.
  		 */
-		 */
 		if (sd->s_dentry == dentry)
 			sd->s_dentry = NULL;
 
