@@ -42,6 +42,10 @@ struct dp_aux_private {
 	struct completion comp;
 	struct drm_dp_aux drm_aux;
 
+	struct msm_dp_aux_bridge *aux_bridge;
+	struct msm_dp_aux_bridge *sim_bridge;
+	bool bridge_in_transfer;
+
 	bool cmd_busy;
 	bool native;
 	bool read;
@@ -483,6 +487,12 @@ error:
 	return ret;
 }
 
+static inline bool dp_aux_is_sideband_msg(u32 address, size_t size)
+{
+	return (address >= 0x1000 && address + size < 0x1800) ||
+			(address >= 0x2000 && address + size < 0x2200);
+}
+
 static ssize_t dp_aux_transfer_debug(struct drm_dp_aux *drm_aux,
 		struct drm_dp_aux_msg *msg)
 {
@@ -504,7 +514,8 @@ static ssize_t dp_aux_transfer_debug(struct drm_dp_aux *drm_aux,
 		goto end;
 	}
 
-	if ((msg->address + msg->size) > SZ_4K) {
+	if ((msg->address + msg->size) > SZ_4K &&
+		!dp_aux_is_sideband_msg(msg->address, msg->size)) {
 		pr_debug("invalid dpcd access: addr=0x%x, size=0x%lx\n",
 				msg->address, msg->size);
 		goto address_error;
@@ -517,7 +528,17 @@ static ssize_t dp_aux_transfer_debug(struct drm_dp_aux *drm_aux,
 
 		reinit_completion(&aux->comp);
 
-		if (aux->read) {
+		if (dp_aux_is_sideband_msg(msg->address, msg->size)) {
+			if (!aux->sim_bridge || !aux->sim_bridge->transfer) {
+				pr_err("no mst bridge available\n");
+				atomic_set(&aux->aborted, 1);
+				ret = -ETIMEDOUT;
+				goto end;
+			}
+
+			ret = aux->sim_bridge->transfer(aux->sim_bridge,
+				drm_aux, msg);
+		} else if (aux->read) {
 			timeout = wait_for_completion_timeout(&aux->comp, HZ);
 			if (!timeout) {
 				pr_err("read timeout 0x%x\n", msg->address);
@@ -663,6 +684,25 @@ unlock_exit:
 	return ret;
 }
 
+static ssize_t dp_aux_bridge_transfer(struct drm_dp_aux *drm_aux,
+		struct drm_dp_aux_msg *msg)
+{
+	struct dp_aux_private *aux = container_of(drm_aux,
+			struct dp_aux_private, drm_aux);
+	ssize_t size;
+
+	if (aux->bridge_in_transfer) {
+		size = dp_aux_transfer(drm_aux, msg);
+	} else {
+		aux->bridge_in_transfer = true;
+		size = aux->aux_bridge->transfer(aux->aux_bridge,
+				drm_aux, msg);
+		aux->bridge_in_transfer = false;
+	}
+
+	return size;
+}
+
 static void dp_aux_reset_phy_config_indices(struct dp_aux_cfg *aux_cfg)
 {
 	int i = 0;
@@ -735,6 +775,10 @@ static int dp_aux_register(struct dp_aux *dp_aux)
 		goto exit;
 	}
 	dp_aux->drm_aux = &aux->drm_aux;
+
+	/* if bridge is defined, override transfer function */
+	if (aux->aux_bridge && aux->aux_bridge->transfer)
+		aux->drm_aux.transfer = dp_aux_bridge_transfer;
 exit:
 	return ret;
 }
@@ -767,7 +811,7 @@ static void dp_aux_dpcd_updated(struct dp_aux *dp_aux)
 }
 
 static void dp_aux_set_sim_mode(struct dp_aux *dp_aux, bool en,
-		u8 *edid, u8 *dpcd)
+		u8 *edid, u8 *dpcd, struct msm_dp_aux_bridge *sim_bridge)
 {
 	struct dp_aux_private *aux;
 
@@ -782,10 +826,13 @@ static void dp_aux_set_sim_mode(struct dp_aux *dp_aux, bool en,
 
 	aux->edid = edid;
 	aux->dpcd = dpcd;
+	aux->sim_bridge = sim_bridge;
 
 	if (en) {
 		atomic_set(&aux->aborted, 0);
 		aux->drm_aux.transfer = dp_aux_transfer_debug;
+	} else if (aux->aux_bridge && aux->aux_bridge->transfer) {
+		aux->drm_aux.transfer = dp_aux_bridge_transfer;
 	} else {
 		aux->drm_aux.transfer = dp_aux_transfer;
 	}
@@ -841,7 +888,8 @@ end:
 }
 
 struct dp_aux *dp_aux_get(struct device *dev, struct dp_catalog_aux *catalog,
-		struct dp_parser *parser, struct device_node *aux_switch)
+		struct dp_parser *parser, struct device_node *aux_switch,
+		struct msm_dp_aux_bridge *aux_bridge)
 {
 	int rc = 0;
 	struct dp_aux_private *aux;
@@ -870,6 +918,7 @@ struct dp_aux *dp_aux_get(struct device *dev, struct dp_catalog_aux *catalog,
 	aux->catalog = catalog;
 	aux->cfg = parser->aux_cfg;
 	aux->aux_switch_node = aux_switch;
+	aux->aux_bridge = aux_bridge;
 	dp_aux = &aux->dp_aux;
 	aux->retry_cnt = 0;
 	aux->dp_aux.reg = 0xFFFF;
