@@ -320,6 +320,9 @@ void cam_tasklet_stop(void  *tasklet_info)
 		CAM_WARN(CAM_ISP, "task policy was changed to normal.");
 	}
 
+	if (!atomic_read(&tasklet->tasklet_active))
+		return;
+
 	atomic_set(&tasklet->tasklet_active, 0);
 	tasklet_kill(&tasklet->tasklet);
 	tasklet_disable(&tasklet->tasklet);
