@@ -7593,7 +7593,6 @@ static irqreturn_t ufshcd_intr(int irq, void *__hba)
 		ufshcd_hex_dump(hba, "host regs: ", hba->mmio_base,
 					UFSHCI_REG_SPACE_SIZE);
 	}
-
 	spin_unlock(hba->host->host_lock);
 	return retval;
 }
