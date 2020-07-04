@@ -576,7 +576,7 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 	/* Kryo2xx Silver rAp4 */
 		.desc = "Kryo2xx Silver erratum 845719",
 		.capability = ARM64_WORKAROUND_845719,
-		MIDR_RANGE(MIDR_KRYO2XX_SILVER, 0xA00004, 0xA00004),
+		ERRATA_MIDR_REV_RANGE(MIDR_KRYO2XX_SILVER, 0, 0xA00004, 0xA00004),
 	},
 #endif
 #ifdef CONFIG_CAVIUM_ERRATUM_23154
@@ -665,15 +665,11 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 	/* Cortex-A76 r0p0 to r3p0 */
 		.desc = "ARM erratum 1286807",
 		.capability = ARM64_WORKAROUND_REPEAT_TLBI,
-		MIDR_RANGE(MIDR_CORTEX_A76,
-			   MIDR_CPU_VAR_REV(0, 0),
-			   MIDR_CPU_VAR_REV(3, 0)),
+		ERRATA_MIDR_RANGE(MIDR_CORTEX_A76, 0, 0, 3, 0),
 	},
 	{
 		.capability = ARM64_WORKAROUND_REPEAT_TLBI,
-		MIDR_RANGE(MIDR_KRYO4G,
-			   MIDR_CPU_VAR_REV(12, 14),
-			   MIDR_CPU_VAR_REV(13, 14)),
+		ERRATA_MIDR_RANGE(MIDR_KRYO4G,12, 14, 13, 14),
 	},
 #endif
 #ifdef CONFIG_ARM64_ERRATUM_858921
@@ -687,7 +683,7 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 	/* KRYO2XX all versions */
 		.desc = "ARM erratum 858921",
 		.capability = ARM64_WORKAROUND_858921,
-		MIDR_ALL_VERSIONS(MIDR_KRYO2XX_GOLD),
+		ERRATA_MIDR_ALL_VERSIONS(MIDR_KRYO2XX_GOLD),
 	},
 #endif
 	{
@@ -697,17 +693,14 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 	},
 	{
 		.capability = ARM64_HARDEN_BRANCH_PREDICTOR,
-		MIDR_RANGE(MIDR_KRYO4G,
-			   MIDR_CPU_VAR_REV(12, 14),
-			   MIDR_CPU_VAR_REV(13, 14)),
+		ERRATA_MIDR_RANGE(MIDR_KRYO4G, 12, 14, 13, 14),
 		.matches = check_branch_predictor,
 	},
 	{
 		.capability = ARM64_HARDEN_BRANCH_PREDICTOR,
-		MIDR_ALL_VERSIONS(MIDR_KRYO2XX_GOLD),
+		ERRATA_MIDR_ALL_VERSIONS(MIDR_KRYO2XX_GOLD),
 		.matches = check_branch_predictor,
 	},
-#endif
 	{
 		.desc = "Speculative Store Bypass Disable",
 		.type = ARM64_CPUCAP_LOCAL_CPU_ERRATUM,
@@ -715,24 +708,19 @@ const struct arm64_cpu_capabilities arm64_errata[] = {
 		.matches = has_ssbd_mitigation,
 		.midr_range_list = arm64_ssb_cpus,
 	},
-#endif
 #ifdef CONFIG_ARM64_ERRATUM_1188873
 	{
 		.desc = "ARM erratum 1188873",
 		.capability = ARM64_WORKAROUND_1188873,
 		/* Cortex-A76 r0p0 to r2p0 */
-		MIDR_RANGE(MIDR_CORTEX_A76,
-			MIDR_CPU_VAR_REV(0, 0),
-			MIDR_CPU_VAR_REV(2, 0)),
+		ERRATA_MIDR_RANGE(MIDR_CORTEX_A76, 0, 0, 2, 0),
 
 	},
 	{
 		.desc = "ARM erratum 1188873",
 		.capability = ARM64_WORKAROUND_1188873,
 		/* Kryo-4G r15p14 */
-		MIDR_RANGE(MIDR_KRYO4G,
-			MIDR_CPU_VAR_REV(15, 14),
-			MIDR_CPU_VAR_REV(15, 15)),
+		ERRATA_MIDR_RANGE(MIDR_KRYO4G, 15, 14, 15, 15),
 	},
 #endif
 	{

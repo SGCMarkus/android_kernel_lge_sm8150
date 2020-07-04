@@ -974,15 +974,10 @@ static bool cpu_can_use_dbm(const struct arm64_cpu_capabilities *cap)
 	return has_cpu_feature && !cpu_has_broken_dbm();
 }
 
-static int cpu_enable_hw_dbm(void *entry)
+static void cpu_enable_hw_dbm(const struct arm64_cpu_capabilities *cap)
 {
-	const struct arm64_cpu_capabilities *cap =
-		(const struct arm64_cpu_capabilities *) entry;
-
 	if (cpu_can_use_dbm(cap))
 		__cpu_enable_hw_dbm();
-
-	return 0;
 }
 
 static bool has_hw_dbm(const struct arm64_cpu_capabilities *cap,
