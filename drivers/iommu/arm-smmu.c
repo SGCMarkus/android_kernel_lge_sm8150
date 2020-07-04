@@ -878,14 +878,15 @@ static void __arm_smmu_free_bitmap(unsigned long *map, int idx)
 
 static int arm_smmu_prepare_clocks(struct arm_smmu_power_resources *pwr)
 {
-	unsigned int spin_cnt, delay;
+	int i, ret = 0;
 
-	writel_relaxed(QCOM_DUMMY_VAL, sync);
-	for (delay = 1; delay < TLB_LOOP_TIMEOUT; delay *= 2) {
-		for (spin_cnt = TLB_SPIN_COUNT; spin_cnt > 0; spin_cnt--) {
-			if (!(readl_relaxed(status) & sTLBGSTATUS_GSACTIVE))
-				return;
-			cpu_relax();
+	for (i = 0; i < pwr->num_clocks; ++i) {
+		ret = clk_prepare(pwr->clocks[i]);
+		if (ret) {
+			dev_err(pwr->dev, "Couldn't prepare clock #%d\n", i);
+			while (i--)
+				clk_unprepare(pwr->clocks[i]);
+			break;
 		}
 	}
 	return ret;
@@ -1280,7 +1281,7 @@ static int __arm_smmu_tlb_sync(struct arm_smmu_device *smmu,
 {
 	unsigned int spin_cnt, delay;
 
-	writel_relaxed(0, sync);
+	writel_relaxed(QCOM_DUMMY_VAL, sync);
 	for (delay = 1; delay < TLB_LOOP_TIMEOUT; delay *= 2) {
 		for (spin_cnt = TLB_SPIN_COUNT; spin_cnt > 0; spin_cnt--) {
 			if (!(readl_relaxed(status) & sTLBGSTATUS_GSACTIVE))
