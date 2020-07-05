@@ -951,7 +951,6 @@ struct ufs_hba {
 	u32 saved_err;
 	u32 saved_uic_err;
 	u32 saved_ce_err;
-	bool silence_err_logs;
 	bool force_host_reset;
 	bool auto_h8_err;
 	struct ufs_stats ufs_stats;
