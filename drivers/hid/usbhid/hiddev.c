@@ -288,6 +288,10 @@ static int __hiddev_open(struct hiddev *hiddev, struct file *file)
 
 err_normal_power:
 	hid_hw_power(hiddev->hid, PM_HINT_NORMAL);
+	
+	spin_lock_irq(&list->hiddev->list_lock);
+	list_del(&list->node);
+	spin_unlock_irq(&list->hiddev->list_lock);
 err_drop_count:
 	hiddev->open--;
 	vfree(list);
