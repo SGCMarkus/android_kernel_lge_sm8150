@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -77,6 +77,12 @@ ol_tx_desc_pool_size_hl(struct cdp_cfg *ctrl_pdev);
 #define TXRX_HL_TX_DESC_HI_PRIO_RESERVED 20
 #endif
 
+struct peer_hang_data {
+	uint32_t tlv_header;
+	uint8_t peer_mac_addr[QDF_MAC_ADDR_SIZE];
+	uint16_t peer_timeout_bitmask;
+} qdf_packed;
+
 #if defined(CONFIG_HL_SUPPORT) && defined(FEATURE_WLAN_TDLS)
 
 void
@@ -136,7 +142,6 @@ void *ol_txrx_find_peer_by_addr(struct cdp_pdev *pdev,
 				uint8_t *peer_id);
 
 void htt_pkt_log_init(struct cdp_pdev *pdev_handle, void *scn);
-void peer_unmap_timer_work_function(void *);
 void peer_unmap_timer_handler(void *data);
 
 int ol_txrx_fw_stats_desc_pool_init(struct ol_txrx_pdev_t *pdev,

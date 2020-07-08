@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -106,7 +106,7 @@ static QDF_STATUS pmo_core_calculate_listen_interval(
 			struct pmo_vdev_priv_obj *vdev_ctx,
 			uint32_t *listen_interval)
 {
-	uint32_t max_mod_dtim;
+	uint32_t max_mod_dtim, max_dtim;
 	uint32_t beacon_interval_mod;
 	struct pmo_psoc_cfg *psoc_cfg = &vdev_ctx->pmo_psoc_ctx->psoc_cfg;
 	struct pmo_psoc_priv_obj *psoc_priv = pmo_vdev_get_psoc_priv(vdev);
@@ -131,9 +131,15 @@ static QDF_STATUS pmo_core_calculate_listen_interval(
 		if (beacon_interval_mod == 0)
 			beacon_interval_mod = 1;
 
-		max_mod_dtim = psoc_cfg->sta_max_li_mod_dtim /
-			(pmo_core_get_vdev_dtim_period(vdev)
-			 * beacon_interval_mod);
+		max_dtim = pmo_core_get_vdev_dtim_period(vdev) *
+					beacon_interval_mod;
+
+		if (!max_dtim) {
+			pmo_err("Invalid dtim period");
+			return QDF_STATUS_E_INVAL;
+		}
+
+		max_mod_dtim = psoc_cfg->sta_max_li_mod_dtim / max_dtim;
 
 		if (max_mod_dtim <= 0)
 			max_mod_dtim = 1;
@@ -473,18 +479,10 @@ QDF_STATUS pmo_core_psoc_user_space_suspend_req(struct wlan_objmgr_psoc *psoc,
 		goto out;
 	}
 
-	/* Suspend all components before sending target suspend command */
-	status = pmo_suspend_all_components(psoc, type);
-	if (status != QDF_STATUS_SUCCESS) {
-		pmo_err("Failed to suspend all component");
-		goto dec_psoc_ref;
-	}
-
 	status = pmo_core_psoc_configure_suspend(psoc);
 	if (status != QDF_STATUS_SUCCESS)
 		pmo_err("Failed to configure suspend");
 
-dec_psoc_ref:
 	pmo_psoc_put_ref(psoc);
 out:
 	pmo_exit();
@@ -651,18 +649,10 @@ QDF_STATUS pmo_core_psoc_user_space_resume_req(struct wlan_objmgr_psoc *psoc,
 		goto out;
 	}
 
-	/* Resume all components */
-	status = pmo_resume_all_components(psoc, type);
-	if (status != QDF_STATUS_SUCCESS) {
-		pmo_err("Failed to resume all the components");
-		goto dec_psoc_ref;
-	}
-
 	status = pmo_core_psoc_configure_resume(psoc);
 	if (status != QDF_STATUS_SUCCESS)
 		pmo_err("Failed to configure resume");
 
-dec_psoc_ref:
 	pmo_psoc_put_ref(psoc);
 out:
 	pmo_exit();
@@ -761,7 +751,7 @@ pmo_core_enable_wow_in_fw(struct wlan_objmgr_psoc *psoc,
 			pmo_tgt_psoc_get_host_credits(psoc),
 			pmo_tgt_psoc_get_pending_cmnds(psoc));
 		pmo_tgt_update_target_suspend_flag(psoc, false);
-		qdf_trigger_self_recovery();
+		qdf_trigger_self_recovery(psoc, QDF_SUSPEND_TIMEOUT);
 		goto out;
 	}
 
@@ -779,7 +769,7 @@ pmo_core_enable_wow_in_fw(struct wlan_objmgr_psoc *psoc,
 		pmo_err("No Credits after HTC ACK:%d, pending_cmds:%d,"
 			 "cannot resume back", host_credits, wmi_pending_cmds);
 		htc_dump_counter_info(pmo_core_psoc_get_htc_handle(psoc));
-		qdf_trigger_self_recovery();
+		qdf_trigger_self_recovery(psoc, QDF_SUSPEND_TIMEOUT);
 	}
 	pmo_debug("WOW enabled successfully in fw: credits:%d pending_cmds: %d",
 		host_credits, wmi_pending_cmds);
@@ -816,7 +806,7 @@ QDF_STATUS pmo_core_psoc_suspend_target(struct wlan_objmgr_psoc *psoc,
 	if (QDF_IS_STATUS_ERROR(status)) {
 		pmo_err("Failed to get ACK from firmware for pdev suspend");
 		pmo_tgt_update_target_suspend_flag(psoc, false);
-		qdf_trigger_self_recovery();
+		qdf_trigger_self_recovery(psoc, QDF_SUSPEND_TIMEOUT);
 	}
 
 out:
@@ -1075,7 +1065,7 @@ QDF_STATUS pmo_core_psoc_send_host_wakeup_ind_to_fw(
 		pmo_err("Pending commands %d credits %d",
 			pmo_tgt_psoc_get_pending_cmnds(psoc),
 			pmo_tgt_psoc_get_host_credits(psoc));
-		qdf_trigger_self_recovery();
+		qdf_trigger_self_recovery(psoc, QDF_RESUME_TIMEOUT);
 	} else {
 		pmo_debug("Host wakeup received");
 	}
@@ -1148,7 +1138,7 @@ QDF_STATUS pmo_core_psoc_resume_target(struct wlan_objmgr_psoc *psoc,
 		pmo_fatal("Pending commands %d credits %d",
 			pmo_tgt_psoc_get_pending_cmnds(psoc),
 			pmo_tgt_psoc_get_host_credits(psoc));
-		qdf_trigger_self_recovery();
+		qdf_trigger_self_recovery(psoc, QDF_RESUME_TIMEOUT);
 	} else {
 		pmo_debug("Host wakeup received");
 	}
@@ -1422,6 +1412,7 @@ QDF_STATUS pmo_core_config_modulated_dtim(struct wlan_objmgr_vdev *vdev,
 	uint32_t max_mod_dtim;
 	QDF_STATUS status;
 	uint8_t vdev_id;
+	uint32_t max_dtim;
 
 	pmo_enter();
 
@@ -1439,9 +1430,18 @@ QDF_STATUS pmo_core_config_modulated_dtim(struct wlan_objmgr_vdev *vdev,
 	if (!beacon_interval_mod)
 		beacon_interval_mod = 1;
 
-	max_mod_dtim = psoc_cfg->sta_max_li_mod_dtim /
-		(pmo_core_get_vdev_dtim_period(vdev)
+	max_dtim = (pmo_core_get_vdev_dtim_period(vdev)
 		 * beacon_interval_mod);
+
+	if (!max_dtim) {
+		pmo_err("Invalid dtim period");
+		pmo_vdev_put_ref(vdev);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	max_mod_dtim = psoc_cfg->sta_max_li_mod_dtim /
+		max_dtim;
+
 	if (!max_mod_dtim)
 		max_mod_dtim = 1;
 
