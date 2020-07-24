@@ -1852,8 +1852,13 @@ int lge_dsi_panel_get(struct dsi_panel *panel, struct device_node *of_node)
 			pr_warn("failed to initialize drs mngr\n");
 	}
 
-	if (panel->lge.use_color_manager && panel->lge.use_bc_dimming_work)
-		lge_bc_dim_work_init(panel);
+	if (panel->lge.use_color_manager) {
+		pr_info("default cm_preset_step 2\n");
+		panel->lge.cm_preset_step = 2;
+
+		if (panel->lge.use_bc_dimming_work)
+			lge_bc_dim_work_init(panel);
+	}
 
 	INIT_DELAYED_WORK(&panel->lge.panel_dead_work, lge_mdss_panel_dead_work);
 

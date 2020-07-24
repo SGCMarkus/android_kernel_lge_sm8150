@@ -1205,6 +1205,14 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 	pr_info("[%s:%d]: Restart sequence for %s completed.\n",
 			current->comm, current->pid, desc->name);
 
+// LGE_ModemBSP_S, [SSR] W/A : prevent remaining wakelock for esoc ssr
+	if (!strcmp(desc->name, "esoc0"))
+	{
+		__pm_relax(&dev->ssr_wlock);
+		pr_err("[MBSP]Completed to relax wakelock (%s) \n", &dev->wlname);
+	}
+// LGE_ModemBSP_E, [SSR]
+
 err:
 	/* Reset subsys count */
 	if (ret)

@@ -172,9 +172,9 @@ static struct delayed_work mcu_int_check_work;
    const uint8_t MCU_VER[] = "001";
    const uint8_t LATTICE_VER[] = "114";
  */
-#define MCU_VER                14
+#define MCU_VER                15
 #define LATTICE_VER           115
-#define MCU_VER_STRING       "014"
+#define MCU_VER_STRING       "015"
 #define LATTICE_VER_STRING   "115"
 
 

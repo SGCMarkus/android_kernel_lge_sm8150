@@ -26,7 +26,7 @@
 
 #define FILE_PATH_LEN	256
 #define PROC_NAME_LEN	16
-#define PROF_BUF_SIZE	2000
+#define PROF_BUF_SIZE	3000
 #define PROF_TIMEOUT	60
 #define PROF_NOT	0
 #define PROF_INIT	1

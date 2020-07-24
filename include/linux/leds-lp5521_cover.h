@@ -88,6 +88,16 @@ struct lp5521_platform_data {
 
 #define LP5521_MAX_LEDS			3	/* Maximum number of LEDs */
 #define LP5521_MAX_ENGINES		3	/* Maximum number of engines */
+#define LP5521_PROGRAM_LENGTH		32	/* in bytes */
+
+struct lp5521_pattern_cmd {
+	u8 r[LP5521_PROGRAM_LENGTH];
+	u8 g[LP5521_PROGRAM_LENGTH];
+	u8 b[LP5521_PROGRAM_LENGTH];
+	unsigned int pc_r;
+	unsigned int pc_g;
+	unsigned int pc_b;
+};
 
 struct lp5521_chip {
 	struct lp5521_platform_data *pdata;
@@ -96,6 +106,8 @@ struct lp5521_chip {
 	struct lp5521_engine	engines[LP5521_MAX_ENGINES];
 	struct lp5521_led	leds[LP5521_MAX_LEDS];
 	struct class		*cover_led_class;
+	struct lp5521_pattern_cmd blink_cmd;
+	u8			blink_flag;
 	u8			num_channels;
 	u8			num_leds;
 	int id_pattern_play;

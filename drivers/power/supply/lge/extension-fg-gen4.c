@@ -482,7 +482,7 @@ static int lge_get_ui_soc(struct fg_dev *fg, int msoc_raw)
 static int backup_from_cycle_counter(
 	struct fg_dev *fg, struct cycle_counter *ori, u16 *backup)
 {
-	int i;
+	int i = 0, total = 0;
 
 	if (!ori) {
 		fg_dbg(fg, FG_LGE, "origin value is not defined - error.\n");
@@ -497,8 +497,17 @@ static int backup_from_cycle_counter(
 		fg_dbg(fg, FG_LGE, "backup_from: %d: %d -> %d\n",
 			i, ori->count[i], backup[i]);
 		backup[i] = ori->count[i];
+		total += backup[i];
 	}
 	mutex_unlock(&ori->lock);
+
+	if (total > (3000 * BUCKET_COUNT)) {
+		fg_dbg(fg, FG_LGE,
+			"total counter(%d) is over..clear backup_from\n", total / BUCKET_COUNT);
+		for (i = 0; i < BUCKET_COUNT; i++) {
+			backup[i] = 0;
+		}
+	}
 
 	return 0;
 }

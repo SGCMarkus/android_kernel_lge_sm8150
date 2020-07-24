@@ -44,7 +44,6 @@
 #include <soc/qcom/lge/lge_boot_mode.h>
 #endif
 
-#define LP5521_PROGRAM_LENGTH		32	/* in bytes */
 #define LP5521_ENG_MASK_BASE		0x30	/* 00110000 */
 #define LP5521_ENG_STATUS_MASK		0x07	/* 00000111 */
 
@@ -130,15 +129,6 @@ enum lp5521_wait_type {
 	LP5521_CYCLE_920ms,
 	LP5521_CYCLE_982ms,
 	LP5521_CYCLE_MAX,
-};
-
-struct lp5521_pattern_cmd {
-	u8 r[LP5521_PROGRAM_LENGTH];
-	u8 g[LP5521_PROGRAM_LENGTH];
-	u8 b[LP5521_PROGRAM_LENGTH];
-	unsigned int pc_r;
-	unsigned int pc_g;
-	unsigned int pc_b;
 };
 
 struct lp5521_wait_param {
@@ -1360,12 +1350,15 @@ static ssize_t store_led_blink(struct device *dev,
 				const char *buf, size_t len)
 {
 	struct lp5521_chip *chip = i2c_get_clientdata(to_i2c_client(dev));
+	struct i2c_client *client = chip->client;
 	unsigned int rgb = 0;
 	int on = 0;
 	int off = 0;
 	struct lp5521_led_pattern ptn = { };
 	struct lp5521_pattern_cmd cmd = { };
 	u8 jump_pc = 0;
+	int ret = 0;
+	u8 enable_status = 0;
 
 	if (!cover_led_status && !chip->force_led_mode) {
 		return len;
@@ -1407,6 +1400,14 @@ static ssize_t store_led_blink(struct device *dev,
 	WARN_ON(_is_pc_overflow(&ptn));
 
 	_run_led_pattern(chip, &ptn);
+
+
+	ret = lp5521_read(client, LP5521_REG_ENABLE, &enable_status);
+	if (ret || (enable_status != LP5521_ENABLE_RUN_PROGRAM)) {
+		LP5521_INFO_MSG("[%s] Chip not found\n", __func__);
+		chip->blink_flag = 1;
+		chip->blink_cmd = cmd;
+	}
 
 	return len;
 }
@@ -1531,12 +1532,16 @@ static const struct attribute_group lp5521_group = {
 	.attrs = lp5521_attributes,
 };
 
+static const struct attribute_group *lp5521_groups[] = {
+	&lp5521_group,
+	NULL,
+};
+
 static int lp5521_register_sysfs(struct i2c_client *client)
 {
 	struct device *dev = &client->dev;
 	struct lp5521_chip *chip = i2c_get_clientdata(to_i2c_client(dev));
 	struct device *class_device = NULL;
-	const struct attribute_group *lp5521_group_pointer = &lp5521_group;
 
 	chip->cover_led_class = class_create(THIS_MODULE, "cover_led");
 	if (IS_ERR(chip->cover_led_class)) {
@@ -1545,7 +1550,7 @@ static int lp5521_register_sysfs(struct i2c_client *client)
 	}
 
 	class_device = device_create_with_groups(chip->cover_led_class,
-			dev, 0, chip, &lp5521_group_pointer, "rgb_led");
+			dev, 0, chip, lp5521_groups, "rgb_led");
 	if (IS_ERR(class_device)) {
 		LP5521_ERR_MSG("Failed device_create_with_group\n");
 		class_destroy(chip->cover_led_class);
@@ -1623,6 +1628,12 @@ int lp5521_cover_connect(void)
 	int ret = 0;
 	int i = 0;
 	u8 buf = 0;
+	struct lp5521_led_pattern ptn = { };
+
+	if (!chip->pdata) {
+		LP5521_ERR_MSG("[%s] null pointer check!\n", __func__);
+		goto fail;
+	}
 
 	LP5521_INFO_MSG("[%s] start\n", __func__);
 
@@ -1670,6 +1681,19 @@ int lp5521_cover_connect(void)
 
 	lp5521_run_led_pattern(chip->id_pattern_play, chip);
 
+	if (chip->blink_flag) {
+		LP5521_INFO_MSG("[%s] blink pattern start\n", __func__);
+
+		ptn.r = chip->blink_cmd.r;
+		ptn.size_r = chip->blink_cmd.pc_r;
+		ptn.g = chip->blink_cmd.g;
+		ptn.size_g = chip->blink_cmd.pc_g;
+		ptn.b = chip->blink_cmd.b;
+		ptn.size_b = chip->blink_cmd.pc_b;
+
+		_run_led_pattern(chip, &ptn);
+		chip->blink_flag = 0;
+	}
 fail:
 	return ret;
 }
@@ -1823,6 +1847,7 @@ static void lp5521_shutdown(struct i2c_client *client)
 		chip->pdata->release_resources();
 
 	devm_kfree(&client->dev, chip);
+	chip->pdata = NULL;
 	LP5521_INFO_MSG("[%s] complete\n", __func__);
 }
 

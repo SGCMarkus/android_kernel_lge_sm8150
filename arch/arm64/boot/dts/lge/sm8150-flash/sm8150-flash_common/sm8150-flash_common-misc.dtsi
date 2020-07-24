@@ -73,6 +73,6 @@
 		compatible = "ti,lp5521";
 		status = "ok";
 		reg = <0x32>;
-		ti,led_current = <18 3 3>; /* Red, Green, Blue */
+		ti,led_current = <10 2 3>; /* Red, Green, Blue */
 	};
 };

@@ -36,9 +36,9 @@
 #define FG_MEM_IF_PM8150B		0x0D
 #define FG_ADC_RR_PM8150B		0x13
 
-#define SDAM_COOKIE_OFFSET		0x80
-#define SDAM_CYCLE_COUNT_OFFSET		0x81
-#define SDAM_CAP_LEARN_OFFSET		0x91
+#define SDAM_CYCLE_COUNT_OFFSET		0x80
+#define SDAM_CAP_LEARN_OFFSET		0x90
+#define SDAM_COOKIE_OFFSET		0x92
 #define SDAM_COOKIE			0xA5
 #define SDAM_FG_PARAM_LENGTH		20
 
@@ -1336,6 +1336,11 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 	struct fg_gen4_chip *chip = data;
 	int id, rc = 0;
 	u8 tmp[2];
+#ifdef CONFIG_LGE_PM
+	/* this function is called at boot time */
+	int total_count = 0;
+	struct fg_dev *fg = &chip->fg;
+#endif
 
 	if (!chip)
 		return -ENODEV;
@@ -1344,9 +1349,17 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 		return -EINVAL;
 
 	for (id = 0; id < length; id++) {
+#ifdef CONFIG_LGE_PM
+		if (chip->fg_nvmem) {
+			rc = nvmem_device_read(chip->fg_nvmem,
+				SDAM_CYCLE_COUNT_OFFSET + (id * 2), 2, tmp);
+			total_count += (tmp[0] | tmp[1] << 8);
+		}
+#else
 		if (chip->fg_nvmem)
 			rc = nvmem_device_read(chip->fg_nvmem,
 				SDAM_CYCLE_COUNT_OFFSET + (id * 2), 2, tmp);
+#endif
 		else
 			rc = fg_sram_read(&chip->fg, CYCLE_COUNT_WORD + id,
 					CYCLE_COUNT_OFFSET, (u8 *)tmp, 2,
@@ -1356,6 +1369,21 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 		else
 			*buf++ = tmp[0] | tmp[1] << 8;
 	}
+
+#ifdef CONFIG_LGE_PM
+	if (total_count > (3000 * length)) {
+		memset(chip->counter->count, 0, sizeof(chip->counter->count));
+		memset(chip->counter->started, 0, sizeof(chip->counter->started));
+		memset(chip->counter->last_soc, 0, sizeof(chip->counter->last_soc));
+
+		nvmem_device_write(chip->fg_nvmem,
+			SDAM_CYCLE_COUNT_OFFSET, BUCKET_COUNT * 2, (u8 *)buf);
+
+		fg_dbg(fg, FG_LGE,
+			"total counter(%d) is over..clear FG SDAM cycle count\n",
+				total_count / length);
+	}
+#endif
 
 	return rc;
 }

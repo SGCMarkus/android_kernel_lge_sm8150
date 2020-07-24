@@ -857,7 +857,6 @@ static int pil_init_image_trusted(struct pil_desc *pil,
 	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_INIT_IMAGE_CMD),
 			&desc);
 
-    pr_err(" ##### %s : %d : {PAS_INIT_IMAGE_CMD} ret - %d #####\n",__func__,__LINE__,ret);
 	scm_ret = desc.ret[0];
 
 	dma_free_attrs(&dev, size, mdata_buf, mdata_phys, attrs);
@@ -884,7 +883,6 @@ static int pil_mem_setup_trusted(struct pil_desc *pil, phys_addr_t addr,
 	desc.arginfo = SCM_ARGS(3);
 	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_MEM_SETUP_CMD),
 			&desc);
-    pr_err(" ##### %s : %d : {PAS_MEM_SETUP_CMD} ret - %d #####\n",__func__,__LINE__,ret);
 	scm_ret = desc.ret[0];
 
 	if (ret)
@@ -919,7 +917,6 @@ static int pil_auth_and_reset(struct pil_desc *pil)
 
 	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL,
 		       PAS_AUTH_AND_RESET_CMD), &desc);
-    pr_err(" ##### %s : %d : {PAS_AUTH_AND_RESET_CMD} ret - %d #####\n",__func__,__LINE__,rc);
 	scm_ret = desc.ret[0];
 
 	scm_pas_disable_bw();
@@ -971,7 +968,6 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 
 	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
 		       &desc);
-    pr_err(" ##### %s : %d : {PAS_SHUTDOWN_CMD} ret - %d #####\n",__func__,__LINE__,rc);
 	scm_ret = desc.ret[0];
 
 	disable_unprepare_clocks(d->proxy_clks, d->proxy_clk_count);
@@ -1016,7 +1012,6 @@ static int pil_deinit_image_trusted(struct pil_desc *pil)
 
 	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
 			       &desc);
-    pr_err(" ##### %s : %d : {PAS_SHUTDOWN_CMD} ret - %d #####\n",__func__,__LINE__,rc);
 	scm_ret = desc.ret[0];
 
 	if (rc)

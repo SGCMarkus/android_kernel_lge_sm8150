@@ -968,11 +968,6 @@ static int dp_display_process_hpd_high(struct dp_display_private *dp)
 	dp->process_hpd_connect = false;
 	dp_display_process_mst_hpd_high(dp, true);
 
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
-	if (dd_get_force_disconnection())
-		dd_set_force_disconnection(false);
-#endif
-
 #ifdef CONFIG_LGE_DISPLAY_COMMON
 	lge_set_dp_hpd(&dp->dp_display, 1);
 #endif
@@ -982,6 +977,11 @@ end:
 
 	if (!rc)
 		dp_display_send_hpd_notification(dp);
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (dd_get_force_disconnection())
+		dd_set_force_disconnection(false);
+#endif
 
 	return rc;
 }
@@ -1205,6 +1205,25 @@ static int dp_display_handle_disconnect(struct dp_display_private *dp)
 			set_dd_skip_uevent(0);
 			hallic_handle_5v_boost_gpios(0);
 		}
+	}
+	/*
+	 * power_on is still true at this point means that this disconnection is not triggered by framework
+	 * so, wait for 'unpreparing DP' triggered by framework
+	 * if it doesn't come in 1 sec, DD should go to OFF state instead of SUSPEND state
+	 * for that, make 'skip_uevent' 0
+	 */
+	if (dp->dp_display.lge_dp.skip_uevent && dp->power_on && !dp->hpd->hpd_high) {
+		int retry_count = 500;
+		pr_info("%s : waiting for powermode malfunction\n", __func__);
+
+		do {
+			usleep_range(2000, 2100);
+			if (--retry_count == 0) {
+				dp->dp_display.lge_dp.skip_uevent = 0;
+				break;
+			}
+		} while(dp->power_on);
+		pr_info("%s : powermode waiting finished\n", __func__);
 	}
 #endif
 	rc = dp_display_process_hpd_low(dp);

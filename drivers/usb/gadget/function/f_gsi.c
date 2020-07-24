@@ -3010,7 +3010,11 @@ static int gsi_bind(struct usb_configuration *c, struct usb_function *f)
 		 * for windows7/windows10 to avoid data stall issues
 		 */
 		if (gsi->rndis_id == RNDIS_ID_UNKNOWN)
+#ifdef CONFIG_LGE_USB_GADGET
+			gsi->rndis_id = WIRELESS_CONTROLLER_REMOTE_NDIS;
+#else
 			gsi->rndis_id = MISC_RNDIS_OVER_ETHERNET;
+#endif
 
 		switch (gsi->rndis_id) {
 		default:

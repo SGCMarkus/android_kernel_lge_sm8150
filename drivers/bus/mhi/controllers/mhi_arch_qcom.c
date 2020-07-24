@@ -320,6 +320,10 @@ static void mhi_bl_dl_cb(struct mhi_device *mhi_device,
 	} else {
 		ipc_log_string(arch_info->boot_ipc_log, "%s %s", DLOG, buf);
 	}
+	
+// LGE_ModemBSP_S, [DEBUG] Print esoc sbl log on kernel log
+        pr_err("esoc sbl : %s", buf);
+// LGE_ModemBSP_E, [DEBUG] Print esoc sbl log on kernel log
 }
 
 static void mhi_bl_dummy_cb(struct mhi_device *mhi_dev,
