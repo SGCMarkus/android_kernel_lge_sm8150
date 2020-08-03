@@ -283,14 +283,11 @@ int lge_backlight_device_update_status(struct backlight_device *bd)
 			msm_mode_object_event_notify(&c_conn->base.base,
 					c_conn->base.dev, &event, (u8 *)&brightness);
 			rc = c_conn->ops.set_backlight(&c_conn->base, c_conn->display, bl_lvl);
-			pr_info("BR:%d BL:%d %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 		}
 	} else if (!panel->lge.allow_bl_update) {
 		panel->lge.bl_lvl_unset = bl_lvl;
-		pr_info("brightness = %d, bl_lvl = %d -> differed (not allow) %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 	} else {
 		panel->lge.bl_lvl_unset = bl_lvl;
-		pr_info("brightness = %d, bl_lvl = %d -> differed %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 	}
 	mutex_unlock(&display->display_lock);
 

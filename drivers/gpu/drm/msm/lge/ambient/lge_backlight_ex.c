@@ -137,13 +137,10 @@ static int lge_backlight_ex_device_update_status(struct backlight_device *bd)
 			&& panel->lge.allow_bl_update_ex) {
 		panel->lge.bl_ex_lvl_unset = -1;
 		dsi_display_set_backlight_ex(display, bl_lvl);
-		pr_info("BR:%d BL:%d %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 	} else if (!panel->lge.allow_bl_update_ex) {
 		panel->lge.bl_ex_lvl_unset = bl_lvl;
-		pr_info("brightness=%d, bl_lvl=%d -> differed (not allow)\n", brightness, bl_lvl);
 	} else {
 		panel->lge.bl_ex_lvl_unset = bl_lvl;
-		pr_info("brightness=%d, bl_lvl=%d -> differed\n", brightness, bl_lvl);
 	}
 	mutex_unlock(&display->display_lock);
 
