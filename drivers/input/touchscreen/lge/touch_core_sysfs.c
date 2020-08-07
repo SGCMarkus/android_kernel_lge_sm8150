@@ -34,7 +34,7 @@
 static char ime_str[3][8] = {"OFF", "ON", "SWYPE"};
 static char incoming_call_str[7][15] = {"IDLE", "RINGING", "OFFHOOK", "CDMA_RINGING", "CDMA_OFFHOOK", "LTE_RINGING", "LTE_OFFHOOK"};
 static char mfts_str[4][8] = {"NONE", "FOLDER", "FLAT", "CURVED"};
-static int lpwg_status = 0;
+int lpwg_status = 0;
 
 int ignore_compared_event = 0;
 
@@ -249,28 +249,25 @@ static ssize_t store_lpwg_notify(struct device *dev,
 	return count;
 }
 
-static int tap2wake_knocked[4] = { 1, 1, 0, 0 };
+int tap2wake_status = 0;
 
 static ssize_t show_tap2wake(struct device *dev, char *buf)
 {
-	return scnprintf(buf, PAGE_SIZE, "%d\n", lpwg_status);
+	return scnprintf(buf, PAGE_SIZE, "%d\n", tap2wake_status);
 }
 
 static ssize_t store_tap2wake(struct device *dev,
 		const char *buf, size_t count)
 {
-	struct touch_core_data *ts = to_touch_core(dev);
 	int status = 0;
+	sscanf(buf, "%d", &status);
 
-	sscanf(buf, "%d", &tap2wake_knocked[0]);
+    if(status < 0 || status > 1) {
+        TOUCH_E("invalid tap2wake status(%d)\n", status);
+        return 0;
+    }
 
-	if (ts->driver->lpwg) {
-		mutex_lock(&ts->lock);
-		TOUCH_I("tap2wake %s\n", (status) ? "Enabled" : "Disabled");
-		ts->driver->lpwg(ts->dev, LPWG_MASTER, tap2wake_knocked);
-		lpwg_status = status;
-		mutex_unlock(&ts->lock);
-	}
+    tap2wake_status = status;
 
 	return count;
 }
