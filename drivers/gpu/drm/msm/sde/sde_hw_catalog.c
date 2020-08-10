@@ -523,9 +523,6 @@ static struct sde_prop_type sde_perf_prop[] = {
 
 	{PERF_CDP_SETTING, "qcom,sde-cdp-setting", false,
 			PROP_TYPE_U32_ARRAY},
-	{PERF_CPU_MASK, "qcom,sde-qos-cpu-mask", false, PROP_TYPE_U32},
-	{PERF_CPU_DMA_LATENCY, "qcom,sde-qos-cpu-dma-latency", false,
-			PROP_TYPE_U32},
 	{PERF_QOS_LUT_MACROTILE_QSEED, "qcom,sde-qos-lut-macrotile-qseed",
 			false, PROP_TYPE_U32_ARRAY},
 	{PERF_SAFE_LUT_MACROTILE_QSEED, "qcom,sde-safe-lut-macrotile-qseed",
