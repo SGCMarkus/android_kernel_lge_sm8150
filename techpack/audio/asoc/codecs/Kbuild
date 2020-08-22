@@ -154,6 +154,10 @@ ifdef CONFIG_SND_SOC_MSM_HDMI_CODEC_RX
 	HDMICODEC_OBJS += msm_hdmi_codec_rx.o
 endif
 
+ifdef CONFIG_SND_SOC_ES9218P
+	ES9218_OBJS += es9218p.o
+endif
+
 ifdef CONFIG_SND_SOC_WCD_IRQ
 	CORE_OBJS += wcd-irq.o
 endif
@@ -237,6 +241,9 @@ wcd_spi_dlkm-y := $(SPI_OBJS)
 
 obj-$(CONFIG_SND_SOC_WCD_MBHC) += mbhc_dlkm.o
 mbhc_dlkm-y := $(MBHC_OBJS)
+
+obj-$(CONFIG_SND_SOC_ES9218P) += es9218_dlkm.o
+es9218_dlkm-y := $(ES9218_OBJS)
 
 obj-$(CONFIG_SND_SOC_MSM_HDMI_CODEC_RX) += hdmi_dlkm.o
 hdmi_dlkm-y := $(HDMICODEC_OBJS)

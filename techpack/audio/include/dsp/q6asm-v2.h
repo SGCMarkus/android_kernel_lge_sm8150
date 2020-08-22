@@ -748,4 +748,8 @@ uint8_t q6asm_get_stream_id_from_token(uint32_t token);
 int q6asm_adjust_session_clock(struct audio_client *ac,
 		uint32_t adjust_time_lsw,
 		uint32_t adjust_time_msw);
+#ifdef CONFIG_SND_LGE_MQA
+int q6asm_set_lgmqa_param_one(struct audio_client *ac, int cmd, int val);
+int q6asm_set_lgmqa_param_properties(struct audio_client *ac, long *val);
+#endif
 #endif /* __Q6_ASM_H__ */

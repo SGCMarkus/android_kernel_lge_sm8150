@@ -616,7 +616,7 @@ static const struct reg_default wcd934x_defaults[] = {
 	{ WCD934X_MICB1_TEST_CTL_3,                        0xa4 },
 	{ WCD934X_MICB2_TEST_CTL_1,                        0x1a },
 	{ WCD934X_MICB2_TEST_CTL_2,                        0x18 },
-	{ WCD934X_MICB2_TEST_CTL_3,                        0xa4 },
+	{ WCD934X_MICB2_TEST_CTL_3,                        0x24 },
 	{ WCD934X_MICB3_TEST_CTL_1,                        0x1a },
 	{ WCD934X_MICB3_TEST_CTL_2,                        0x18 },
 	{ WCD934X_MICB3_TEST_CTL_3,                        0xa4 },

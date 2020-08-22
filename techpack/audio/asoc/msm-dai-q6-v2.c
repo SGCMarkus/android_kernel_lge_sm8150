@@ -357,6 +357,27 @@ static DEFINE_MUTEX(tdm_mutex);
 static atomic_t tdm_group_ref[IDX_GROUP_TDM_MAX];
 
 /* cache of group cfg per parent node */
+#ifdef CONFIG_MACH_LGE
+static struct afe_param_id_group_device_tdm_cfg tdm_group_cfg = {
+	AFE_API_VERSION_GROUP_DEVICE_TDM_CONFIG,
+	AFE_GROUP_DEVICE_ID_TERTIARY_TDM_RX,
+	0,
+	{AFE_PORT_ID_TERTIARY_TDM_RX,
+	AFE_PORT_ID_TERTIARY_TDM_RX_1,
+	AFE_PORT_ID_TERTIARY_TDM_RX_2,
+	AFE_PORT_ID_TERTIARY_TDM_RX_3,
+	AFE_PORT_ID_TERTIARY_TDM_RX_4,
+	AFE_PORT_ID_TERTIARY_TDM_RX_5,
+	AFE_PORT_ID_TERTIARY_TDM_RX_6,
+	AFE_PORT_ID_TERTIARY_TDM_RX_7},
+	8,
+	48000,
+	16,
+	8,
+	16,
+	0xFF,
+};
+#else
 static struct afe_param_id_group_device_tdm_cfg tdm_group_cfg = {
 	AFE_API_VERSION_GROUP_DEVICE_TDM_CONFIG,
 	AFE_GROUP_DEVICE_ID_QUATERNARY_TDM_RX,
@@ -376,12 +397,16 @@ static struct afe_param_id_group_device_tdm_cfg tdm_group_cfg = {
 	32,
 	0xFF,
 };
-
+#endif
 static u32 num_tdm_group_ports;
 
 static struct afe_clk_set tdm_clk_set = {
 	AFE_API_VERSION_CLOCK_SET,
+#ifdef CONFIG_MACH_LGE
+	Q6AFE_LPASS_CLK_ID_TER_TDM_EBIT,
+#else
 	Q6AFE_LPASS_CLK_ID_QUAD_TDM_EBIT,
+#endif
 	Q6AFE_LPASS_IBIT_CLK_DISABLE,
 	Q6AFE_LPASS_CLK_ATTRIBUTE_INVERT_COUPLE_NO,
 	Q6AFE_LPASS_CLK_ROOT_DEFAULT,
@@ -5189,6 +5214,12 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		dai_data->port_config.i2s.bit_width = 24;
 		dai_data->bitwidth = 24;
 		break;
+#ifdef CONFIG_MACH_LGE
+	case SNDRV_PCM_FORMAT_S32_LE:
+		dai_data->port_config.i2s.bit_width = 32;
+		dai_data->bitwidth = 32;
+		break;
+#endif
 	default:
 		pr_err("%s: format %d\n",
 			__func__, params_format(params));
@@ -9051,7 +9082,12 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.aif_name = "TERT_TDM_RX_0",
 			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |
 				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000 |
+#ifdef CONFIG_MACH_LGE
+				SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_352800| SNDRV_PCM_RATE_384000,
+#else
 				SNDRV_PCM_RATE_176400 | SNDRV_PCM_RATE_352800,
+#endif
 			.formats = SNDRV_PCM_FMTBIT_S16_LE |
 				   SNDRV_PCM_FMTBIT_S24_LE |
 				   SNDRV_PCM_FMTBIT_S32_LE,

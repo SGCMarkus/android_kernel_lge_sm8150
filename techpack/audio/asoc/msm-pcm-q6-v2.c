@@ -393,11 +393,19 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 				ADSP_ASM_API_VERSION_V2) &&
 					q6core_use_Q6_32ch_support())
+#ifdef CONFIG_MACH_LGE // 24bit ASM patch
+			ret = q6asm_open_write_v5(prtd->audio_client,
+				fmt_type, 24);
+		else
+			ret = q6asm_open_write_v4(prtd->audio_client,
+				fmt_type, 24);
+#else
 			ret = q6asm_open_write_v5(prtd->audio_client,
 				fmt_type, bits_per_sample);
 		else
 			ret = q6asm_open_write_v4(prtd->audio_client,
 				fmt_type, bits_per_sample);
+#endif
 
 		if (ret < 0) {
 			pr_err("%s: q6asm_open_write failed (%d)\n",
