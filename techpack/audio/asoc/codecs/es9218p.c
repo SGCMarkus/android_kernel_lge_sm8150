@@ -42,7 +42,7 @@
 #endif
 
 #include    "es9218p.h"
-#include    "../../../../../../kernel/msm-4.14/include/soc/qcom/lge/board_lge.h"
+#include    "../../../../include/soc/qcom/lge/board_lge.h"
 
 #define     ES9218P_SYSFS               // use this feature only for user debug, not release
 
