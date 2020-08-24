@@ -677,26 +677,26 @@ static ssize_t show_swipe_available(struct device *dev, char *buf)
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_U, ts->swipe[SWIPE_U].available);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
-			SWIPE_L, ts->swipe[SWIPE_L].available);
-	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_R, ts->swipe[SWIPE_R].available);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
-			SWIPE_L2, ts->swipe[SWIPE_L2].available);
+			SWIPE_L, ts->swipe[SWIPE_L].available);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_R2, ts->swipe[SWIPE_R2].available);
+	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
+			SWIPE_L2, ts->swipe[SWIPE_L2].available);
 
 	TOUCH_I("%s: ts->swipe[SWIPE_D].available = %d\n", __func__,
 			ts->swipe[SWIPE_D].available);
 	TOUCH_I("%s: ts->swipe[SWIPE_U].available = %d\n", __func__,
 			ts->swipe[SWIPE_U].available);
-	TOUCH_I("%s: ts->swipe[SWIPE_L].available = %d\n", __func__,
-			ts->swipe[SWIPE_L].available);
 	TOUCH_I("%s: ts->swipe[SWIPE_R].available = %d\n", __func__,
 			ts->swipe[SWIPE_R].available);
-	TOUCH_I("%s: ts->swipe[SWIPE_L2].available = %d\n", __func__,
-			ts->swipe[SWIPE_L2].available);
+	TOUCH_I("%s: ts->swipe[SWIPE_L].available = %d\n", __func__,
+			ts->swipe[SWIPE_L].available);
 	TOUCH_I("%s: ts->swipe[SWIPE_R2].available = %d\n", __func__,
 			ts->swipe[SWIPE_R2].available);
+	TOUCH_I("%s: ts->swipe[SWIPE_L2].available = %d\n", __func__,
+			ts->swipe[SWIPE_L2].available);
 
 	return ret;
 }
@@ -713,26 +713,26 @@ static ssize_t show_swipe_enable(struct device *dev, char *buf)
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_U, ts->swipe[SWIPE_U].enable);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
-			SWIPE_L, ts->swipe[SWIPE_L].enable);
-	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_R, ts->swipe[SWIPE_R].enable);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
-			SWIPE_L2, ts->swipe[SWIPE_L2].enable);
+			SWIPE_L, ts->swipe[SWIPE_L].enable);
 	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
 			SWIPE_R2, ts->swipe[SWIPE_R2].enable);
+	ret += snprintf(buf + ret, PAGE_SIZE, "%d %d\n",
+			SWIPE_L2, ts->swipe[SWIPE_L2].enable);
 
 	TOUCH_I("%s: ts->swipe[SWIPE_D].enable = %d\n", __func__,
 			ts->swipe[SWIPE_D].enable);
 	TOUCH_I("%s: ts->swipe[SWIPE_U].enable = %d\n", __func__,
 			ts->swipe[SWIPE_U].enable);
-	TOUCH_I("%s: ts->swipe[SWIPE_L].enable = %d\n", __func__,
-			ts->swipe[SWIPE_L].enable);
 	TOUCH_I("%s: ts->swipe[SWIPE_R].enable = %d\n", __func__,
 			ts->swipe[SWIPE_R].enable);
-	TOUCH_I("%s: ts->swipe[SWIPE_L2].enable = %d\n", __func__,
-			ts->swipe[SWIPE_L2].enable);
+	TOUCH_I("%s: ts->swipe[SWIPE_L].enable = %d\n", __func__,
+			ts->swipe[SWIPE_L].enable);
 	TOUCH_I("%s: ts->swipe[SWIPE_R2].enable = %d\n", __func__,
 			ts->swipe[SWIPE_R2].enable);
+	TOUCH_I("%s: ts->swipe[SWIPE_L2].enable = %d\n", __func__,
+			ts->swipe[SWIPE_L2].enable);
 
 	return ret;
 }
