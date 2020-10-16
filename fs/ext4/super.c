@@ -5044,9 +5044,9 @@ static int ext4_commit_super(struct super_block *sb, int sync)
 #ifdef CONFIG_MACH_LGE
 	if (es && (sb->s_flags & MS_RDONLY)) {
 		if (VERITY_BLOCK(es->s_volume_name))
-		 printk("EXT4-fs : skipping %s for read only verity block(%s)\n",
+			printk("EXT4-fs : skipping %s for read only verity block(%s)\n",
 				__func__, es->s_volume_name);
-		 return error;
+		return error;
 	}
 #endif
 
