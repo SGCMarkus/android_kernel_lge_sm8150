@@ -28,6 +28,10 @@
 #include "./settings_panel/dsi-panel-sw43410-mp-dsc-qhd-cmd.dtsi"
 #include "./settings_panel/dsi-panel-rm69299-dv1-tovismd-fhd-cmd.dtsi"
 #include "./settings_panel/dsi-panel-rm692A9-pp1-tovismd-fhd-cmd.dtsi"
+#include "./settings_panel/dsi-panel-r66456-pp1-tianmamd-fhd-cmd.dtsi"
+#include "./settings_panel/dsi-panel-r66456-dv1-tianmamd-fhd-cmd.dtsi"
+#include "./settings_panel/dsi-panel-r66456-dv2-tianmamd-fhd-cmd.dtsi"
+#include "./settings_panel/dsi-panel-r66456-pv-tianmamd-fhd-cmd.dtsi"
 
 &soc {
 	dsi_panel_pwr_supply_sm8150: dsi_panel_pwr_supply_sm8150 {
@@ -166,6 +170,38 @@
 		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
 		qcom,dsi-panel = <&dsi_rm692A9_tovismd_pp1_fhd_cmd>;
 	};
+	dsi_r66456_tianmamd_pp1_1080_2340_cmd_display: qcom,dsi-display@37 {
+		label = "dsi_r66456_tianmamd_pp1_1080_2340_cmd_display";
+		qcom,display-type = "primary";
+		qcom,dsi-ctrl-num = <0>;
+		qcom,dsi-phy-num = <0>;
+		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+		qcom,dsi-panel = <&dsi_r66456_tianmamd_pp1_fhd_cmd>;
+	};
+	dsi_r66456_tianmamd_dv1_1080_2340_cmd_display: qcom,dsi-display@38 {
+		label = "dsi_r66456_tianmamd_dv1_1080_2340_cmd_display";
+		qcom,display-type = "primary";
+		qcom,dsi-ctrl-num = <0>;
+		qcom,dsi-phy-num = <0>;
+		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+		qcom,dsi-panel = <&dsi_r66456_tianmamd_dv1_fhd_cmd>;
+	};
+	dsi_r66456_tianmamd_dv2_1080_2340_cmd_display: qcom,dsi-display@39 {
+		label = "dsi_r66456_tianmamd_dv2_1080_2340_cmd_display";
+		qcom,display-type = "primary";
+		qcom,dsi-ctrl-num = <0>;
+		qcom,dsi-phy-num = <0>;
+		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+		qcom,dsi-panel = <&dsi_r66456_tianmamd_dv2_fhd_cmd>;
+	};
+	dsi_r66456_tianmamd_pv_1080_2340_cmd_display: qcom,dsi-display@40 {
+		label = "dsi_r66456_tianmamd_pv_1080_2340_cmd_display";
+		qcom,display-type = "primary";
+		qcom,dsi-ctrl-num = <0>;
+		qcom,dsi-phy-num = <0>;
+		qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
+		qcom,dsi-panel = <&dsi_r66456_tianmamd_pv_fhd_cmd>;
+	};
 
 };
 
@@ -191,6 +227,10 @@
 			 &dsi_rm69299_tovismd_1080_2248_cmd_display
 			 &dsi_rm69299_tovismd_dv1_1080_2248_cmd_display
 			 &dsi_rm692A9_tovismd_pp1_1080_2340_cmd_display
+			 &dsi_r66456_tianmamd_pp1_1080_2340_cmd_display
+			 &dsi_r66456_tianmamd_dv1_1080_2340_cmd_display
+			 &dsi_r66456_tianmamd_dv2_1080_2340_cmd_display
+			 &dsi_r66456_tianmamd_pv_1080_2340_cmd_display
 			 &dsi_sw43408a_dsc_1440_3120_cmd_display
 			 &dsi_sw43410_dsc_1440_3120_cmd_display_pxw
 			 &dsi_sw43410_pp2_dsc_1440_3120_cmd_display
@@ -441,6 +481,70 @@
 	lge,dcs-brightness-bigendian;
 	lge,default-brightness = <158>;
 	lge,reset-after-ddvd;
+};
+
+&dsi_r66456_tianmamd_pp1_fhd_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_sm8150>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <10>;
+	qcom,mdss-dsi-bl-max-level = <511>;
+	qcom,mdss-brightness-max-level = <511>;
+	qcom,platform-te-gpio = <&tlmm 8 0>;
+	qcom,platform-reset-gpio = <&tlmm 6 0>;
+	lge,man-name = "TIANMAMD";
+	lge,ddic-name = "r66456";
+	lge,use-labibb;
+	lge,dcs-brightness-bigendian;
+	lge,default-brightness = <158>;
+	lge,reset-after-ddvd;
+};
+
+&dsi_r66456_tianmamd_dv1_fhd_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_sm8150>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <10>;
+	qcom,mdss-dsi-bl-max-level = <511>;
+	qcom,mdss-brightness-max-level = <511>;
+	qcom,platform-te-gpio = <&tlmm 8 0>;
+	qcom,platform-reset-gpio = <&tlmm 6 0>;
+	lge,man-name = "TIANMAMD";
+	lge,ddic-name = "r66456";
+	lge,use-labibb;
+	lge,dcs-brightness-bigendian;
+	lge,default-brightness = <158>;
+	lge,reset-after-ddvd;
+};
+
+&dsi_r66456_tianmamd_dv2_fhd_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_sm8150>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <10>;
+	qcom,mdss-dsi-bl-max-level = <511>;
+	qcom,mdss-brightness-max-level = <511>;
+	qcom,platform-te-gpio = <&tlmm 8 0>;
+	qcom,platform-reset-gpio = <&tlmm 6 0>;
+	lge,man-name = "TIANMAMD";
+	lge,ddic-name = "r66456a";
+	lge,use-labibb;
+	lge,dcs-brightness-bigendian;
+	lge,default-brightness = <158>;
+	lge,reset-after-ddvd;
+};
+
+&dsi_r66456_tianmamd_pv_fhd_cmd {
+	qcom,panel-supply-entries = <&dsi_panel_pwr_supply_sm8150>;
+	qcom,mdss-dsi-bl-pmic-control-type = "bl_ctrl_dcs";
+	qcom,mdss-dsi-bl-min-level = <10>;
+	qcom,mdss-dsi-bl-max-level = <511>;
+	qcom,mdss-brightness-max-level = <511>;
+	qcom,platform-te-gpio = <&tlmm 8 0>;
+	qcom,platform-reset-gpio = <&tlmm 6 0>;
+	lge,man-name = "TIANMAMD";
+	lge,ddic-name = "r66456a";
+	lge,use-labibb;
+	lge,dcs-brightness-bigendian;
+	lge,default-brightness = <158>;
+ 	lge,reset-after-ddvd;
 };
 
 &dsi_sim_cmd_display {
