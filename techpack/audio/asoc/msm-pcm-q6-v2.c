@@ -31,6 +31,10 @@
 #include <linux/dma-mapping.h>
 #include <linux/msm_audio.h>
 
+#ifdef CONFIG_MACH_LGE
+#include <soc/qcom/subsystem_restart.h>
+#endif
+
 #include <linux/of_device.h>
 #include <sound/tlv.h>
 #include <sound/pcm_params.h>
@@ -412,6 +416,10 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 			__func__, ret);
 			q6asm_audio_client_free(prtd->audio_client);
 			prtd->audio_client = NULL;
+#ifdef CONFIG_MACH_LGE
+			if (ret == -ETIMEDOUT || ret == -EALREADY || ret == -ENODATA)
+				subsystem_restart("adsp");
+#endif
 			return -ENOMEM;
 		}
 

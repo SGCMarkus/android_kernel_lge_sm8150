@@ -9313,30 +9313,30 @@ EXPORT_SYMBOL(q6asm_set_lgesoundmabl_allparam);
 #endif //CONFIG_SND_LGE_MABL
 
 #ifdef CONFIG_SND_LGE_STEREO_SPEAKER
-int q6asm_set_lgestereo_enable(struct audio_client *ac, int enable)
+int q6asm_set_lgestereo_send_command(struct audio_client *ac, int module_id, int param_id, int value)
 {
-        struct asm_lgestereo_param_enable lgestereo_enable;
+        struct asm_lgestereo_param_value lgestereo_param_value;
 	struct param_hdr_v3 param_info;
         int rc  = 0;
 
-        pr_debug("%s: enable:%d\n", __func__, enable);
+        pr_info("%s: module_id 0x%x param_id 0x%x value 0x%d\n", __func__, module_id,param_id,value);
 
         if (!ac || ac->apr == NULL) {
                 pr_err("%s: APR handle NULL\n", __func__);
                 rc = -EINVAL;
                 goto fail_cmd;
         }
-        memset(&lgestereo_enable, 0, sizeof(lgestereo_enable));
+        memset(&lgestereo_param_value, 0, sizeof(lgestereo_param_value));
         memset(&param_info, 0, sizeof(param_info));
 
-        param_info.module_id = CAPI_V2_MODULE_ID_LGE_STEREO;
+        param_info.module_id = module_id;
         param_info.instance_id = INSTANCE_ID_0;
-        param_info.param_id = CAPI_V2_PARAM_LGE_STEREO_ENABLE;
-        param_info.param_size = sizeof(lgestereo_enable);
+        param_info.param_id = param_id;
+        param_info.param_size = sizeof(lgestereo_param_value);
 
-        lgestereo_enable.enable = enable;
+        lgestereo_param_value.value = value;
 
-        rc = q6asm_pack_and_set_pp_param_in_band(ac, param_info, (u8 *) &lgestereo_enable);
+        rc = q6asm_pack_and_set_pp_param_in_band(ac, param_info, (u8 *) &lgestereo_param_value);
         if (rc)
 		        pr_err("%s: set-params send failed paramid[0x%x] rc %d\n",
 		           __func__, param_info.param_id, rc);
@@ -9344,73 +9344,8 @@ fail_cmd:
         return rc;
 }
 
-EXPORT_SYMBOL(q6asm_set_lgestereo_enable);
+EXPORT_SYMBOL(q6asm_set_lgestereo_send_command);
 
-int q6asm_set_lgestereo_chswap(struct audio_client *ac, int chswap)
-{
-        struct asm_lgestereo_param_chswap lgestereo_chswap;
-	struct param_hdr_v3 param_info;
-        int rc  = 0;
-
-        pr_debug("%s: chswap:%d\n", __func__, chswap);
-
-        if (!ac || ac->apr == NULL) {
-                pr_err("%s: APR handle NULL\n", __func__);
-                rc = -EINVAL;
-                goto fail_cmd;
-        }
-        memset(&lgestereo_chswap, 0, sizeof(lgestereo_chswap));
-        memset(&param_info, 0, sizeof(param_info));
-
-        param_info.module_id = CAPI_V2_MODULE_ID_LGE_STEREO;
-        param_info.instance_id = INSTANCE_ID_0;
-        param_info.param_id = CAPI_V2_PARAM_LGE_STEREO_CH_SWAP;
-        param_info.param_size = sizeof(lgestereo_chswap);
-
-        lgestereo_chswap.chswap = chswap;
-
-        rc = q6asm_pack_and_set_pp_param_in_band(ac, param_info, (u8 *) &lgestereo_chswap);
-        if (rc)
-		        pr_err("%s: set-params send failed paramid[0x%x] rc %d\n",
-		           __func__, param_info.param_id, rc);
-fail_cmd:
-        return rc;
-}
-
-EXPORT_SYMBOL(q6asm_set_lgestereo_chswap);
-
-int q6asm_set_lgestereo_downmixing(struct audio_client *ac, int downmixing)
-{
-        struct asm_lgestereo_param_downmixing lgestereo_downmixing;
-	struct param_hdr_v3 param_info;
-        int rc  = 0;
-
-        pr_debug("%s: downmixing:%d\n", __func__, downmixing);
-
-        if (!ac || ac->apr == NULL) {
-                pr_err("%s: APR handle NULL\n", __func__);
-                rc = -EINVAL;
-                goto fail_cmd;
-        }
-        memset(&lgestereo_downmixing, 0, sizeof(lgestereo_downmixing));
-        memset(&param_info, 0, sizeof(param_info));
-
-        param_info.module_id = CAPI_V2_MODULE_ID_LGE_STEREO;
-        param_info.instance_id = INSTANCE_ID_0;
-        param_info.param_id = CAPI_V2_PARAM_LGE_STEREO_DOWNMIXING;
-        param_info.param_size = sizeof(lgestereo_downmixing);
-
-        lgestereo_downmixing.downmixing = downmixing;
-
-        rc = q6asm_pack_and_set_pp_param_in_band(ac, param_info, (u8 *) &lgestereo_downmixing);
-        if (rc)
-		        pr_err("%s: set-params send failed paramid[0x%x] rc %d\n",
-		           __func__, param_info.param_id, rc);
-fail_cmd:
-        return rc;
-}
-
-EXPORT_SYMBOL(q6asm_set_lgestereo_downmixing);
 #endif
 
 #ifdef CONFIG_SND_LGE_MQA

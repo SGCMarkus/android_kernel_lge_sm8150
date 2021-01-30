@@ -1139,7 +1139,7 @@ int tavil_mbhc_init(struct wcd934x_mbhc **mbhc, struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec, WCD934X_MBHC_CTL_BCS, 0x01, 0x01);
 	}
 
-#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_FLASH)
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_MH2LM)
 	snd_soc_write(codec, WCD934X_MICB2_TEST_CTL_3, 0x24);
 #endif
 

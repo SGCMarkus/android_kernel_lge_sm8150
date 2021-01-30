@@ -226,6 +226,12 @@ struct es9218_data {
     int     reset_gpio;     //HIFI_RESET_N
     int     power_gpio;     //HIFI_LDO_SW
     int     hph_switch;     //HIFI_MODE2
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+    int     switch_gpio;    //SWITCH_GPIO
+    int     headset_state;
+    bool    ess_hifi_exception;
+    bool    us_sku;         //For US HiFi THD register value
+#endif
     int     ear_dbg;
     int     hw_rev;
 #ifdef DEDICATED_I2C

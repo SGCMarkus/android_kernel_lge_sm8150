@@ -73,9 +73,16 @@ static struct mutex routing_lock;
 static struct cal_type_data *cal_data[MAX_ROUTING_CAL_TYPES];
 
 #ifdef CONFIG_SND_LGE_STEREO_SPEAKER
-static int lgestereo_enable_with_fe_id; //fe dai index to get audio_client information
+static bool lgestereo_enable;
 static int lgestereo_chswap;
 static int lgestereo_downmixing;
+
+struct lgestereo_fe_list {
+	int fe_id;
+	struct list_head lgestereo_list;
+};
+
+LIST_HEAD( lgestereo_list_head );
 
 static int lge_mapping_table_usecase_to_fe_id(int enable);
 static bool lge_is_supported_fe_id(int fe_id);
@@ -1154,7 +1161,7 @@ static int msm_routing_get_adm_topology(int fedai_id, int session_type,
 		if (cal_block != NULL) {
 			topology = ((struct audio_cal_info_adm_top *)
 				cal_block->cal_info)->topology;
-			cal_utils_mark_cal_used(cal_block);
+			//cal_utils_mark_cal_used(cal_block); // [AudioBSP] unnecessary for multi voice recognition
 		}
 		mutex_unlock(&cal_data[ADM_LSM_TOPOLOGY_CAL_TYPE_IDX]->lock);
 	}
@@ -17906,19 +17913,83 @@ static bool lge_is_supported_fe_id(int usecase)
 	return result;
 
 }
+
+static bool lge_add_item_to_list(int fe_id)
+{
+	bool ret = true;
+	struct lgestereo_fe_list *temp = NULL;
+	struct list_head *ptr, *next;
+
+	if(list_empty(&lgestereo_list_head) == false) {
+		list_for_each_safe( ptr, next, &lgestereo_list_head) {
+			temp = list_entry( ptr, struct lgestereo_fe_list, lgestereo_list);
+			if(fe_id == temp->fe_id) {
+				pr_debug("%s: existed fe_id for %d\n", __func__, fe_id);
+				return false;
+			}
+		}
+	}
+
+	temp = (struct lgestereo_fe_list *)kmalloc( sizeof(struct lgestereo_fe_list), GFP_KERNEL );
+	temp->fe_id = fe_id;
+	list_add_tail( &temp->lgestereo_list, &lgestereo_list_head);
+
+	return ret;
+}
+
+static void lge_remove_item_in_list(void)
+{
+	struct lgestereo_fe_list *temp = NULL;
+	struct list_head *ptr, *next;
+
+	if(list_empty(&lgestereo_list_head) == false) {
+		list_for_each_safe( ptr, next, &lgestereo_list_head) {
+			temp = list_entry( ptr, struct lgestereo_fe_list, lgestereo_list);
+			list_del( ptr );
+			kfree(temp);
+		}
+	}
+	if(list_empty(&lgestereo_list_head) == true)
+		pr_debug("%s: removed all fe_id\n", __func__);
+}
+
+static int lge_dsp_stereo_send_command(int param_id, int value)
+{
+	struct msm_pcm_routing_fdai_data fe_dai;
+	struct audio_client *ac = NULL;
+	int rc = 0;
+	struct lgestereo_fe_list *temp = NULL;
+	struct list_head *ptr, *next;
+
+//search enabled fe_id and send command
+	list_for_each_safe( ptr, next, &lgestereo_list_head) {
+		temp = list_entry( ptr, struct lgestereo_fe_list, lgestereo_list);
+		msm_pcm_routing_get_fedai_info(temp->fe_id, SESSION_TYPE_RX, &fe_dai);
+		ac = q6asm_get_audio_client(fe_dai.strm_id);
+		if (ac == NULL) {
+			pr_info("%s: Could not get audio client for session: %d\n",__func__, fe_dai.strm_id);
+			list_del( ptr );
+			kfree(temp);
+		} else {
+			rc = q6asm_set_lgestereo_send_command(ac,CAPI_V2_MODULE_ID_LGE_STEREO,param_id,value);
+		}
+	}
+	
+	return rc;
+}
+
+
 static int lge_dsp_sound_stereo_enable_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	ucontrol->value.integer.value[0] = lgestereo_enable_with_fe_id;
-	pr_debug("%stereo_enable_with_fe_id  %d\n", __func__, lgestereo_enable_with_fe_id);
+	ucontrol->value.integer.value[0] = lgestereo_enable;
+	pr_debug("%s: stereo_enable %d\n", __func__, lgestereo_enable);
 	return 0;
 }
 
 static int lge_dsp_sound_stereo_enable_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct msm_pcm_routing_fdai_data fe_dai;
-	struct audio_client *ac = NULL;
 	int rc = 0;
 	int usecase_id = -1, fe_id = -1;
 
@@ -17926,35 +17997,24 @@ static int lge_dsp_sound_stereo_enable_put(struct snd_kcontrol *kcontrol,
 	fe_id = lge_mapping_table_usecase_to_fe_id(usecase_id);
 
 	if(!lge_is_supported_fe_id(fe_id))
-	{
-		if(fe_id == -1) {
-			pr_debug("%s: stream is disabled\n", __func__);
-		} else {
-			pr_err("%s: unsupported fe_id: %d\n", __func__, fe_id);
-			return rc;
-		}
-	} else {
-		lgestereo_enable_with_fe_id = fe_id;
-	}
+		lgestereo_enable = false;
+	else
+		lgestereo_enable = true;
 
-	msm_pcm_routing_get_fedai_info(lgestereo_enable_with_fe_id, SESSION_TYPE_RX, &fe_dai);
-	ac = q6asm_get_audio_client(fe_dai.strm_id);
-	if (ac == NULL) {
-		pr_info("%s: Could not get audio client for session: %d\n",
-		      __func__, fe_dai.strm_id);
-		return rc;
-	}
+	pr_debug("%s: usecase_id %d is %s\n", __func__,usecase_id,(lgestereo_enable ? "enabled" : "disabled"));
 
-	if(fe_id >= 0) //enable module
-		rc = q6asm_set_lgestereo_enable(ac,1);
-	else {//disable module
-		rc = q6asm_set_lgestereo_enable(ac,0);
-		lgestereo_enable_with_fe_id = fe_id;
-	}
+//add to current fe_id in the list if it is not existed
+	if(lgestereo_enable)
+		lge_add_item_to_list(fe_id);
 
-	pr_info("%s: usecase_id %d, fe_id %d, lgestereo_enable_with_fe_id %d\n",
-		__func__, usecase_id, fe_id, lgestereo_enable_with_fe_id);
+	rc = lge_dsp_stereo_send_command(CAPI_V2_PARAM_LGE_STEREO_ENABLE, (int)lgestereo_enable);
+	if(rc)
+		pr_err("%s: failed to send message. usecase_id %d is %s\n",
+			__func__,usecase_id,(lgestereo_enable ? "enabled" : "disabled"));
 
+//remove all item in the list if lgestereo is disabled
+	if(!lgestereo_enable)
+		lge_remove_item_in_list();
 	return rc;
 }
 
@@ -17969,8 +18029,6 @@ static int lge_dsp_sound_stereo_chswap_get(struct snd_kcontrol *kcontrol,
 static int lge_dsp_sound_stereo_chswap_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct msm_pcm_routing_fdai_data fe_dai;
-	struct audio_client *ac = NULL;
 	int rc = 0;
 	int ch_swap = 0;
 
@@ -17978,32 +18036,17 @@ static int lge_dsp_sound_stereo_chswap_put(struct snd_kcontrol *kcontrol,
 
 	pr_debug("%s: ch_swap %d\n", __func__,ch_swap);
 
-	if(lgestereo_enable_with_fe_id < 0){
+	if(!lgestereo_enable){
 		pr_err("%s: lgestereo module is not enabled\n",__func__);
 		return rc;
 	}
 
-	if(!lge_is_supported_fe_id(lgestereo_enable_with_fe_id))
-	{
-		if(lgestereo_enable_with_fe_id == -1) {
-			pr_debug("%s: stream is disabled\n", __func__);
-			return rc;
-		}
-		pr_err("%s: unsupported fe_id: %d\n", __func__, lgestereo_enable_with_fe_id);
-		return rc;
-	}
-
-	msm_pcm_routing_get_fedai_info(lgestereo_enable_with_fe_id, SESSION_TYPE_RX, &fe_dai);
-	ac = q6asm_get_audio_client(fe_dai.strm_id);
-	if (ac == NULL) {
-		pr_info("%s: Could not get audio client for session: %d\n",
-		      __func__, fe_dai.strm_id);
-		return rc;
-	}
-	rc = q6asm_set_lgestereo_chswap(ac,ch_swap);
-	if(!rc) {
+	rc = lge_dsp_stereo_send_command(CAPI_V2_PARAM_LGE_STEREO_CH_SWAP, (int)ch_swap);
+	if(!rc)
 		lgestereo_chswap = ch_swap;
-	}
+	else
+		pr_err("%s: failed to send message. 0x%x is %d\n",__func__,CAPI_V2_PARAM_LGE_STEREO_CH_SWAP,ch_swap);
+
 	return rc;
 }
 
@@ -18018,8 +18061,6 @@ static int lge_dsp_sound_stereo_downmixing_get(struct snd_kcontrol *kcontrol,
 static int lge_dsp_sound_stereo_downmixing_put(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	struct msm_pcm_routing_fdai_data fe_dai;
-	struct audio_client *ac = NULL;
 	int rc = 0;
 	int downmixing = 0;
 
@@ -18027,32 +18068,17 @@ static int lge_dsp_sound_stereo_downmixing_put(struct snd_kcontrol *kcontrol,
 
 	pr_debug("%s: downmixing %d\n", __func__,downmixing);
 
-	if(lgestereo_enable_with_fe_id < 0){
+	if(!lgestereo_enable){
 		pr_err("%s: lgestereo module is not enabled\n",__func__);
 		return rc;
 	}
 
-	if(!lge_is_supported_fe_id(lgestereo_enable_with_fe_id))
-	{
-		if(lgestereo_enable_with_fe_id == -1) {
-			pr_debug("%s: stream is disabled\n", __func__);
-			return rc;
-		}
-		pr_err("%s: unsupported fe_id: %d\n", __func__, lgestereo_enable_with_fe_id);
-		return rc;
-	}
-
-	msm_pcm_routing_get_fedai_info(lgestereo_enable_with_fe_id, SESSION_TYPE_RX, &fe_dai);
-	ac = q6asm_get_audio_client(fe_dai.strm_id);
-	if (ac == NULL) {
-		pr_info("%s: Could not get audio client for session: %d\n",
-		      __func__, fe_dai.strm_id);
-		return rc;
-	}
-	rc = q6asm_set_lgestereo_downmixing(ac,downmixing);
-	if(!rc) {
+	rc = lge_dsp_stereo_send_command(CAPI_V2_PARAM_LGE_STEREO_DOWNMIXING, (int)downmixing);
+	if(!rc)
 		lgestereo_downmixing = downmixing;
-	}
+	else
+		pr_err("%s: failed to send message. 0x%x is %d\n",__func__,CAPI_V2_PARAM_LGE_STEREO_DOWNMIXING,downmixing);
+
 	return rc;
 }
 
@@ -18746,7 +18772,7 @@ static const char * const wsa_rx_0_vi_fb_tx_rch_mux_text[] = {
 
 static const char * const mi2s_rx_vi_fb_tx_mux_text[] = {
 	"ZERO", "SENARY_TX"
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	,"SEC_MI2S_TX"
 #endif
 };
@@ -18778,7 +18804,7 @@ static const int wsa_rx_0_vi_fb_tx_rch_value[] = {
 
 static const int mi2s_rx_vi_fb_tx_value[] = {
 	MSM_BACKEND_DAI_MAX, MSM_BACKEND_DAI_SENARY_MI2S_TX
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	,MSM_BACKEND_DAI_SECONDARY_MI2S_TX
 #endif
 };
@@ -18811,7 +18837,7 @@ static const struct soc_enum wsa_rx_0_vi_fb_rch_mux_enum =
 	ARRAY_SIZE(wsa_rx_0_vi_fb_tx_rch_mux_text),
 	wsa_rx_0_vi_fb_tx_rch_mux_text, wsa_rx_0_vi_fb_tx_rch_value);
 
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 static const struct soc_enum mi2s_rx_vi_fb_mux_enum =
 	SOC_VALUE_ENUM_DOUBLE(0, MSM_BACKEND_DAI_SECONDARY_MI2S_RX, 0, 0,
 	ARRAY_SIZE(mi2s_rx_vi_fb_tx_mux_text),
@@ -23629,14 +23655,14 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"WSA_RX_0_VI_FB_LCH_MUX", "WSA_CDC_DMA_TX_0", "WSA_CDC_DMA_TX_0"},
 	{"WSA_RX_0_VI_FB_RCH_MUX", "WSA_CDC_DMA_TX_0", "WSA_CDC_DMA_TX_0"},
 	{"PRI_MI2S_RX_VI_FB_MUX", "SENARY_TX", "SENARY_TX"},
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	{"PRI_MI2S_RX_VI_FB_MUX", "SEC_MI2S_TX", "SEC_MI2S_TX"},
 #endif
 	{"INT4_MI2S_RX_VI_FB_MONO_CH_MUX", "INT5_MI2S_TX", "INT5_MI2S_TX"},
 	{"INT4_MI2S_RX_VI_FB_STEREO_CH_MUX", "INT5_MI2S_TX", "INT5_MI2S_TX"},
 	{"SLIMBUS_0_RX", NULL, "SLIM0_RX_VI_FB_LCH_MUX"},
 	{"SLIMBUS_0_RX", NULL, "SLIM0_RX_VI_FB_RCH_MUX"},
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	{"SEC_MI2S_RX", NULL, "PRI_MI2S_RX_VI_FB_MUX"},
 #endif
 	{"WSA_CDC_DMA_RX_0", NULL, "WSA_RX_0_VI_FB_LCH_MUX"},

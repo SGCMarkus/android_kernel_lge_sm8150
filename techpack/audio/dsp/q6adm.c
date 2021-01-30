@@ -2902,7 +2902,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		 __func__, port_id, path, rate, channel_mode, perf_mode,
 		 topology);
 
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	if(port_id == AFE_PORT_ID_SECONDARY_MI2S_RX) {
 		bit_width = 24;
 	}

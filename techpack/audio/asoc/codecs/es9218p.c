@@ -357,6 +357,18 @@ static u8  advance_harmonic_comp_left[4] = {0x76, 0x02, 0x3c, 0x00};
 static u8  advance_harmonic_comp_right[4] = {0x53, 0x02, 0x32, 0x00};
 static u8  aux_harmonic_comp_left[4] = {0x5e, 0x01, 0xd0, 0xfd};
 static u8  aux_harmonic_comp_right[4] = {0x22, 0x01, 0xee, 0xfd};
+#elif defined(CONFIG_MACH_SM8150_MH2LM)
+static u8  advance_harmonic_comp_left[4] = {0xCB, 0x01, 0x43, 0x00};
+static u8  advance_harmonic_comp_right[4] = {0x7F, 0x01, 0x41, 0x00};
+static u8  aux_harmonic_comp_left[4] = {0xFE, 0x00, 0xFD, 0xFD};
+static u8  aux_harmonic_comp_right[4] = {0xC5, 0x00, 0x2B, 0xFE};
+#if 0
+static u8  us_advance_harmonic_comp_left[4] = {0xF4, 0x01, 0x32, 0x00};
+static u8  us_advance_harmonic_comp_right[4] = {0xCF, 0x01, 0x50, 0x00};
+static u8  us_aux_harmonic_comp_left[4] = {0x2F, 0x01, 0xDA, 0xFD};
+static u8  us_aux_harmonic_comp_right[4] = {0xE7, 0x00, 0x00, 0xFE};
+bool us_sku = false;
+#endif
 #else
 static u8  advance_harmonic_comp_left[4] = {0x30, 0x02, 0x3c, 0x00};
 static u8  advance_harmonic_comp_right[4] = {0xd6, 0x01, 0x3c, 0x00};
@@ -736,6 +748,55 @@ static void es9218_power_gpio_L(void)
     pr_info("%s(): pa_gpio_level = %d\n", __func__, __gpio_get_value(g_es9218_priv->es9218_data->power_gpio));
 }
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+int es9218_mode_get(void) {
+	pr_info("%s(): hifi power state [%d]\n", __func__, es9218_power_state);
+	return es9218_power_state;
+}
+EXPORT_SYMBOL(es9218_mode_get);
+#endif
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+int es9218_hifi_exception_state_get(void) {
+	pr_info("%s(): hifi exception [%d]\n", __func__, es9218_power_state);
+	if(es9218_power_state != ESS_PS_BYPASS)
+		g_es9218_priv->es9218_data->ess_hifi_exception = true;
+	return es9218_power_state;
+}
+EXPORT_SYMBOL(es9218_hifi_exception_state_get);
+void es9218_hifi_exception_state_put(void) {
+	g_es9218_priv->es9218_data->ess_hifi_exception = false;
+}
+EXPORT_SYMBOL(es9218_hifi_exception_state_put);
+
+void es9218_headset_state(int detection) {
+	pr_info("%s(): headset_state = %d, detection = %d [1:Insertion 0: Removal]\n", __func__, g_es9218_priv->es9218_data->headset_state, detection);
+	g_es9218_priv->es9218_data->headset_state = detection;
+}
+EXPORT_SYMBOL(es9218_headset_state);
+
+void es9218_hsdet_l_switch_gpio_H(void)
+{
+    if(g_es9218_priv->es9218_data->switch_gpio >= 0) {
+        gpio_set_value(g_es9218_priv->es9218_data->switch_gpio, 1);
+        pr_info("%s(): hsdet_l_switch = %d\n", __func__, __gpio_get_value(g_es9218_priv->es9218_data->switch_gpio));
+    } else {
+        pr_info("%s(): No hsdet_l_switch.\n", __func__);
+    }
+}
+
+void es9218_hsdet_l_switch_gpio_L(void)
+{
+	if(g_es9218_priv->es9218_data->switch_gpio >= 0) {
+        gpio_set_value(g_es9218_priv->es9218_data->switch_gpio, 0);
+        pr_info("%s(): hsdet_l_switch = %d\n", __func__, __gpio_get_value(g_es9218_priv->es9218_data->switch_gpio));
+    } else {
+        pr_info("%s(): No hsdet_l_switch.\n", __func__);
+    }
+}
+EXPORT_SYMBOL(es9218_hsdet_l_switch_gpio_L);
+#endif
+
 static void es9218_reset_gpio_H(void)
 {
 #ifdef USE_CONTROL_EXTERNAL_LDO_FOR_DVDD
@@ -748,12 +809,26 @@ static void es9218_reset_gpio_H(void)
     gpio_set_value(g_es9218_priv->es9218_data->reset_gpio, 1);
 
     pr_info("%s(): pa_gpio_level = %d\n", __func__, __gpio_get_value(g_es9218_priv->es9218_data->reset_gpio));
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+    if(g_es9218_priv->es9218_data->headset_state) {
+        mdelay(1);
+        es9218_hsdet_l_switch_gpio_H();
+    } else {
+        pr_info("%s: Headset removal status. So, don't set to high switch pin.[%d]\n", __func__, g_es9218_priv->es9218_data->headset_state);
+    }
+#endif
 }
 
 static void es9218_reset_gpio_L(void)
 {
 #ifdef USE_CONTROL_EXTERNAL_LDO_FOR_DVDD
     int ret;
+#endif
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+    es9218_hsdet_l_switch_gpio_L();
+    mdelay(1);
 #endif
 
     gpio_set_value(g_es9218_priv->es9218_data->reset_gpio, 0);
@@ -2553,8 +2628,31 @@ static int es9218_chip_state_get(struct snd_kcontrol *kcontrol,
     mutex_lock(&g_es9218_priv->power_lock);
     es9218_power_gpio_H();
     mdelay(1);
+#ifdef WORKAROUND_FOR_CORNER_SAMPLES
     es9218_reset_gpio_H();
     mdelay(1);
+
+    /*
+     * workaround 1 : set RESETB high twice
+     * improvement for auto power on sequence inside ES921P chip
+     * it's expected to prevent i2c failure
+     */
+    es9218_reset_gpio_L();
+    mdelay(1);
+    es9218_reset_gpio_H();
+    mdelay(2);
+
+    /*
+     * workaround 2 : send a I2C cmd of soft_reset
+     * improvement for auto power on sequence inside ES921P chip
+     * it's expected to read default values of registers WELL
+     */
+    i2c_smbus_write_byte_data(g_es9218_priv->i2c_client, ES9218P_REG_00, 0x01);
+    mdelay(1);
+#else /* Original code. Finally, we MUST use code below if ESS confirms that chips have no problems */
+    es9218_reset_gpio_H();
+    mdelay(1);
+#endif
 
     if(!g_ess_rev_check) // ESS Revision check is one time during the booting.
     {
@@ -2711,7 +2809,11 @@ static int es9218_sabre_wcdon2bypass_put(struct snd_kcontrol *kcontrol,
     pr_err("%s(): entry wcd on : %d \n ", __func__ , ret);
 
     if(ret == 0) {
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+        if(es9218_start && !g_es9218_priv->es9218_data->ess_hifi_exception) {
+#else
         if(es9218_start) {
+#endif
             if( __es9218_sabre_headphone_on() == 0 )
                 es9218p_sabre_bypass2hifi();
             es9218_is_amp_on = 1;
@@ -2942,6 +3044,18 @@ static int es9218_populate_get_pdata(struct device *dev,
     }
 
     pr_info("%s: reset gpio %d", __func__, pdata->reset_gpio);
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+    pdata->switch_gpio = of_get_named_gpio(dev->of_node,
+            "dac,switch-gpio", 0);
+
+    if (pdata->switch_gpio < 0) {
+        pr_err("Looking up %s property in node %s failed %d\n", "dac,switch-gpio", dev->of_node->full_name, pdata->switch_gpio);
+        //goto err;
+    }
+
+    pr_info("%s: switch gpio %d", __func__, pdata->switch_gpio);
+#endif
 
     pdata->hph_switch = of_get_named_gpio(dev->of_node,
             "dac,hph-sw", 0);
@@ -3258,9 +3372,19 @@ static int es9218_startup(struct snd_pcm_substream *substream,
 
         es9218_sabre_audio_active();
     } else {
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+        if(!g_es9218_priv->es9218_data->ess_hifi_exception) {
+            pr_info("%s() : state = %s : goto HIFI !!\n", __func__, power_state[es9218_power_state]);
+            if( __es9218_sabre_headphone_on() == 0 )
+                es9218p_sabre_bypass2hifi();
+        } else {
+            pr_info("%s() : ess hifi exception status = %d. state = %s. \n", __func__, g_es9218_priv->es9218_data->ess_hifi_exception, power_state[es9218_power_state]);
+        }
+#else
         pr_info("%s() : state = %s : goto HIFI !!\n", __func__, power_state[es9218_power_state]);
         if( __es9218_sabre_headphone_on() == 0 )
             es9218p_sabre_bypass2hifi();
+#endif
     }
     es9218_is_amp_on = 1;
     es9218_start = 1;
@@ -3311,6 +3435,7 @@ static int es9218_hw_free(struct snd_pcm_substream *substream,
 {
     struct snd_soc_codec *codec = dai->codec;
 
+    mdelay(20);
     dev_info(codec->dev, "%s(): entry\n", __func__);
 
     return 0;
@@ -3483,6 +3608,25 @@ static int es9218_probe(struct i2c_client *client,const struct i2c_device_id *id
     }
     gpio_set_value(pdata->reset_gpio, 0);
 
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+    if (pdata->switch_gpio >= 0) {
+        pr_info("%s: request msm switch gpio [%d] \n", __func__, pdata->switch_gpio);
+
+        ret = gpio_request(pdata->switch_gpio, "hsdet_l_switch");
+        if (ret < 0) {
+            pr_err("%s(): msm switch request failed\n", __func__);
+            goto hsdet_l_switch_gpio_request_error;
+        }
+        ret = gpio_direction_output(pdata->switch_gpio, 1);
+        if (ret < 0) {
+            pr_err("%s: msm switch set failed\n", __func__);
+            goto hsdet_l_switch_gpio_request_error;
+        }
+        gpio_set_value(pdata->switch_gpio, 0);
+    }
+    pdata->ess_hifi_exception = false;
+
+#endif
     ret = snd_soc_register_codec(&client->dev,
                       &soc_codec_dev_es9218,
                       es9218_dai, ARRAY_SIZE(es9218_dai));
@@ -3503,6 +3647,10 @@ reset_gpio_request_error:
     gpio_free(pdata->reset_gpio);
 power_gpio_request_error:
     gpio_free(pdata->power_gpio);
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+hsdet_l_switch_gpio_request_error:
+    gpio_free(pdata->switch_gpio);
+#endif
 #if 0
 ear_dbg_gpio_request_error:
     gpio_free(pdata->ear_dbg);

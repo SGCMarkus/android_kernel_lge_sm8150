@@ -30,14 +30,25 @@
 #include "wcd-mbhc-adc.h"
 #include "wcd-mbhc-v2.h"
 #include "pdata.h"
-
+#ifdef CONFIG_SND_SOC_ES9218P
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+int es9218_sabre_headphone_off(void);
+int es9218_mode_get(void);
+#define ESS_PS_BYPASS 2
+#endif
+#endif
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+#define WCD_MBHC_ADC_HS_THRESHOLD_MV    1900
+#else
 #define WCD_MBHC_ADC_HS_THRESHOLD_MV    1700
+#endif
 #define WCD_MBHC_ADC_HPH_THRESHOLD_MV   75
 #define WCD_MBHC_ADC_MICBIAS_MV         1800
 #define WCD_MBHC_FAKE_INS_RETRY         4
 
 #ifdef CONFIG_MACH_LGE
 #define LGE_ELECTRICAL_REMOVAL_THRESHOLD 420
+#define LGE_ADVANCED_HEADSET_THRESHOLD   600
 #endif
 
 static int wcd_mbhc_get_micbias(struct wcd_mbhc *mbhc)
@@ -108,7 +119,9 @@ static int wcd_measure_adc_continuous(struct wcd_mbhc *mbhc)
 					     wcd_mbhc_get_micbias(mbhc));
 	pr_debug("%s: adc_result: 0x%x, output_mv: %d\n",
 		 __func__, adc_result, output_mv);
-
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	pr_info("[LGE MBHC] %s: ADC result: 0x%x output_mv: %d\n", __func__, adc_result, output_mv);
+#endif
 	return output_mv;
 }
 
@@ -171,7 +184,10 @@ static int wcd_measure_adc_once(struct wcd_mbhc *mbhc, int mux_ctl)
 			__func__, adc_complete, adc_timeout, output_mv);
 		ret = output_mv;
 	}
-
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	pr_info("[LGE MBHC] %s: adc complete: %d, adc timeout: %d output_mV: %d ADC result: 0x%x\n",
+			__func__, adc_complete, adc_timeout, output_mv, adc_result);
+#endif
 	pr_debug("%s: leave\n", __func__);
 
 	return ret;
@@ -586,6 +602,7 @@ static void wcd_mbhc_adc_detect_plug_type(struct wcd_mbhc *mbhc)
 
 static void wcd_micbias_disable(struct wcd_mbhc *mbhc)
 {
+	pr_info("[LGE MBHC] %s: micbias_enable[%d] \n", __func__, mbhc->micbias_enable);
 	if (mbhc->micbias_enable) {
 		mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(
 			mbhc->codec, MIC_BIAS_2, false);
@@ -632,6 +649,9 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	int cross_conn;
 	int try = 0;
 	int hs_threshold, micbias_mv;
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	u8 fsm_en = 0;
+#endif
 
 	pr_debug("%s: enter\n", __func__);
 
@@ -643,6 +663,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 
 	WCD_MBHC_RSC_LOCK(mbhc);
 	/* Mask ADC COMPLETE interrupt */
+	pr_info("[LGE MBHC] %s: disable insertion electrical irq \n", __func__);
 	wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, false);
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 
@@ -656,6 +677,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
 		pr_debug("%s: cross connection found, Plug type %d\n",
 			 __func__, plug_type);
+		pr_info("[LGE MBHC] %s: cross connection found, Plug type %d\n", __func__, plug_type);
 		goto correct_plug_type;
 	}
 	/* Find plug type */
@@ -677,6 +699,36 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	}
 
 #ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
+		pr_info("[LGE MBHC] %s: HIGH_HPH is detected. Raise MIC Bias2 to 2.7v and checking impedance \n", __func__);
+		if (mbhc->impedance_detect && mbhc->mbhc_cb->compute_impedance && (mbhc->mbhc_cfg->linein_th != 0)) {
+			/* Set MUX_CTL to AUTO for Z-det */
+			WCD_MBHC_REG_READ(WCD_MBHC_FSM_EN, fsm_en);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MUX_CTL,
+						 MUX_CTL_AUTO);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
+			mbhc->mbhc_cb->compute_impedance(mbhc, &mbhc->zl, &mbhc->zr);
+			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN,
+						 fsm_en);
+			pr_info("[LGE MBHC] %s: Impedance zl=%d, zr=%d \n", __func__, mbhc->zl, mbhc->zr);
+			mbhc->extn_cable = true;
+			if ((mbhc->zl < LGE_ADVANCED_HEADSET_THRESHOLD) || (mbhc->zr < LGE_ADVANCED_HEADSET_THRESHOLD)) {
+				mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(mbhc->codec,MIC_BIAS_2, true);
+				pr_info("[LGE MBHC] %s: Force 4pin Headset. plug_type:0x%x, zl=%d , zr=%d\n",
+					__func__, plug_type,mbhc->zl,mbhc->zr);
+				mbhc->micbias_enable = true;
+				mbhc->LGE_HIGH_HPH_HEADSET = true;
+
+				plug_type = MBHC_PLUG_TYPE_HEADSET;
+				WCD_MBHC_RSC_LOCK(mbhc);
+				wcd_mbhc_find_plug_and_report(mbhc, plug_type);
+				WCD_MBHC_RSC_UNLOCK(mbhc);
+			}
+		}
+	}
+#else
 	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
 		plug_type = MBHC_PLUG_TYPE_HEADSET;
 		pr_info("[LGE MBHC] %s: HIGH_HPH is detected. Report headset quickly.\n", __func__);
@@ -685,6 +737,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		wcd_mbhc_find_plug_and_report(mbhc, plug_type);
 		WCD_MBHC_RSC_UNLOCK(mbhc);
 	}
+#endif
 #endif
 	/*
 	 * Set DETECTION_DONE bit for HEADSET and ANC_HEADPHONE,
@@ -697,12 +750,37 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 1);
 	}
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if(mbhc->extn_cable && (plug_type == MBHC_PLUG_TYPE_HEADSET) && !mbhc->micbias_enable) {
+		pr_info("[LGE MBHC] %s: Gender + Headset(4 pole). Enable micbias to 2.7 \n", __func__);
+		mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(mbhc->codec,MIC_BIAS_2, true);
+		mbhc->micbias_enable = true;
+	}
+#endif
+
 correct_plug_type:
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if (cross_conn > 0 && mbhc->extn_cable) {
+		output_mv = wcd_measure_adc_continuous(mbhc);
+		plug_type = wcd_mbhc_get_plug_from_adc(mbhc, output_mv);
+		pr_info("[LGE MBHC] %s: cross connection exception. plug type is %d output_mv %d \n", __func__, plug_type, output_mv);
+		if ((plug_type == MBHC_PLUG_TYPE_HEADSET ||
+			 plug_type == MBHC_PLUG_TYPE_HEADPHONE) &&
+			(!wcd_swch_level_remove(mbhc))) {
+			WCD_MBHC_RSC_LOCK(mbhc);
+			wcd_mbhc_find_plug_and_report(mbhc, plug_type);
+			WCD_MBHC_RSC_UNLOCK(mbhc);
+		}
+	}
+#endif
 	timeout = jiffies + msecs_to_jiffies(HS_DETECT_PLUG_TIME_MS);
 	while (!time_after(jiffies, timeout)) {
 		if (mbhc->hs_detect_work_stop) {
 			pr_debug("%s: stop requested: %d\n", __func__,
 					mbhc->hs_detect_work_stop);
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if (!mbhc->extn_cable)
+#endif
 			wcd_micbias_disable(mbhc);
 			goto exit;
 		}
@@ -712,6 +790,9 @@ correct_plug_type:
 		if (mbhc->hs_detect_work_stop) {
 			pr_debug("%s: stop requested: %d\n", __func__,
 					mbhc->hs_detect_work_stop);
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if (!mbhc->extn_cable)
+#endif
 			wcd_micbias_disable(mbhc);
 			goto exit;
 		}
@@ -729,8 +810,13 @@ correct_plug_type:
 		 */
 		plug_type = wcd_mbhc_get_plug_from_adc(mbhc, output_mv);
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		if ((output_mv > hs_threshold) &&
+		    (spl_hs_count < WCD_MBHC_SPL_HS_CNT) && !mbhc->extn_cable) {
+#else
 		if ((output_mv > hs_threshold) &&
 		    (spl_hs_count < WCD_MBHC_SPL_HS_CNT)) {
+#endif
 			spl_hs = wcd_mbhc_adc_check_for_spl_headset(mbhc,
 								&spl_hs_count);
 			output_mv = wcd_measure_adc_once(mbhc, MUX_CTL_IN2P);
@@ -801,18 +887,75 @@ correct_plug_type:
 		}
 
 		pr_info("[LGE MBHC] %s: plug_type [%d] output_mv [%d]\n", __func__, plug_type, output_mv);
+
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		if(mbhc->extn_cable && plug_type == MBHC_PLUG_TYPE_HEADPHONE && mbhc->current_plug != MBHC_PLUG_TYPE_HEADPHONE) {
+			pr_info("[LGE MBHC] %s: report Headphone(3-pole) in correct-loop. \n", __func__);
+			WCD_MBHC_RSC_LOCK(mbhc);
+			wcd_mbhc_find_plug_and_report(mbhc, plug_type);
+			WCD_MBHC_RSC_UNLOCK(mbhc);
+			continue;
+		}
+#endif
+
 		if (output_mv > WCD_MBHC_ADC_HS_THRESHOLD_MV) {
 #ifdef CONFIG_MACH_LGE
-	        if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
-	            pr_debug("[LGE MBHC] %s: cable is HIGH_HPH in correct-loop. Report 4-pin Headset.\n", __func__);
-	            plug_type = MBHC_PLUG_TYPE_HEADSET;
-	            if (mbhc->is_hs_recording == true)
-	                goto enable_supply;
-	            else
-	                wrk_complete = false;
-		} else {
-	            pr_info("[LGE MBHC] %s: 3-pin is detected first and then changed to HIGH_HPH. Doing Nothing.\n", __func__);
-	        }
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if (mbhc->impedance_detect && mbhc->mbhc_cb->compute_impedance && (mbhc->mbhc_cfg->linein_th != 0)) {
+				pr_info("[LGE MBHC] %s: cable is HIGH_HPH in correct-loop. checking Imp.\n", __func__);
+				if((mbhc->zl > LGE_ADVANCED_HEADSET_THRESHOLD || mbhc->zr > LGE_ADVANCED_HEADSET_THRESHOLD) && mbhc->extn_cable) {
+					/* Set MUX_CTL to AUTO for Z-det */
+					WCD_MBHC_REG_READ(WCD_MBHC_FSM_EN, fsm_en);
+					WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+					WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MUX_CTL, MUX_CTL_AUTO);
+					WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
+					mbhc->mbhc_cb->compute_impedance(mbhc, &mbhc->zl, &mbhc->zr);
+					WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, fsm_en);
+					pr_info("[LGE MBHC] %s: re-check Impedance zl=%d, zr=%d \n", __func__, mbhc->zl, mbhc->zr);
+				}
+				if ((mbhc->zl < LGE_ADVANCED_HEADSET_THRESHOLD) || (mbhc->zr < LGE_ADVANCED_HEADSET_THRESHOLD)) {
+					if ((snd_soc_read(mbhc->codec, 0x0623) & 0x3f) != 0x22) {
+						pr_info("[LGE MBHC] %s: Raise mic bias to 2.7v in correct-loop\n", __func__);
+						mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(mbhc->codec,
+											MIC_BIAS_2, true);
+					}
+					pr_info("[LGE MBHC] %s: High Impedance Headset found. current_plug[%d], plug_type[%d], zl[%d], zr[%d], extn_exception[%d]. \n",
+						__func__, mbhc->current_plug, plug_type, mbhc->zl, mbhc->zr, mbhc->extn_exception);
+					if(mbhc->extn_cable && !(mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE && mbhc->extn_exception)) {
+						pr_info("[LGE MBHC] %s: report Headset in correct-loop. \n", __func__);
+						plug_type = MBHC_PLUG_TYPE_HEADSET;
+						mbhc->micbias_enable = true;
+						wrk_complete = false;
+						goto report;
+					}
+				} else {
+					pr_info("[LGE MBHC] %s: cable is extension cable found. line=%d, plug_type[%d], zl=%d, zr=%d\n",
+							__func__, __LINE__, plug_type, mbhc->zl, mbhc->zr);
+					plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
+					wrk_complete = true;
+				}
+			} else {
+					pr_info("[LGE MBHC] %s: cable is extension cable found. line=%d, plug_type[%d], \n",
+							__func__, __LINE__, plug_type);
+					plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
+					wrk_complete = true;
+			}
+#else
+			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
+				pr_info("[LGE MBHC] %s: cable is HIGH_HPH in correct-loop. Report 4-pin Headset.\n", __func__);
+				if ((snd_soc_read(mbhc->codec, 0x0623) & 0x3f) != 0x22) {
+					pr_info("[LGE MBHC] %s: Raise mic bias to 2.7v in correct-loop\n", __func__);
+					mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(mbhc->codec, MIC_BIAS_2, true);
+				}
+				plug_type = MBHC_PLUG_TYPE_HEADSET;
+				if (mbhc->is_hs_recording == true)
+					goto enable_supply;
+				else
+					wrk_complete = false;
+			} else {
+				pr_info("[LGE MBHC] %s: 3-pin is detected first and then changed to HIGH_HPH. Doing Nothing.\n", __func__);
+			}
+#endif
 #else /* Qualcomm Orig. */
 			pr_debug("%s: cable is extension cable\n", __func__);
 			plug_type = MBHC_PLUG_TYPE_HIGH_HPH;
@@ -821,6 +964,7 @@ correct_plug_type:
 		} else {
 			pr_debug("%s: cable might be headset: %d\n", __func__,
 				 plug_type);
+			pr_info("[LGE MBHC] %s: cable might be headset: %d\n", __func__, plug_type);
 			if (plug_type != MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 				plug_type = wcd_mbhc_get_plug_from_adc(
 						mbhc, output_mv);
@@ -828,6 +972,7 @@ correct_plug_type:
 				    spl_hs_count == WCD_MBHC_SPL_HS_CNT) {
 					spl_hs_reported = true;
 					WCD_MBHC_RSC_LOCK(mbhc);
+					pr_info("[LGE MBHC] %s: report headset[%d]\n", __func__, plug_type);
 					wcd_mbhc_find_plug_and_report(mbhc,
 								    plug_type);
 					WCD_MBHC_RSC_UNLOCK(mbhc);
@@ -883,7 +1028,13 @@ correct_plug_type:
 			goto enable_supply;
 		}
 	}
+
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH &&
+		(!mbhc->mbhc_cfg->detect_extn_cable)) {
+#else /* Qualcomm Orig. */
 	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
+#endif
 		if (wcd_is_special_headset(mbhc)) {
 			pr_debug("%s: Special headset found %d\n",
 					__func__, plug_type);
@@ -906,8 +1057,16 @@ report:
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, 0);
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, 0);
 
+/* [MOBILE_19 / TD 32767, 33466] : specipic headset w/a
+   [Risk]
+   [japan model] : DBM cable(gender) mis-recognition monitoring.
+   [other model] : no need HIGH HPH Type. So, there is no risk. */
 #ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if(plug_type == MBHC_PLUG_TYPE_HIGH_HPH && mbhc->LGE_HIGH_HPH_HEADSET) {
+#else
 	if(plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
+#endif
 		pr_info("%s: Change HIGH HPH to Headset. \n", __func__);
 		plug_type = MBHC_PLUG_TYPE_HEADSET;
 		if ((snd_soc_read(mbhc->codec, 0x0623) & 0x3f) != 0x22) {
@@ -964,19 +1123,51 @@ exit:
 		mbhc->micbias_enable = false;
 	}
 
+#ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
 	if (mbhc->mbhc_cfg->detect_extn_cable &&
-	    ((plug_type == MBHC_PLUG_TYPE_HEADPHONE) ||
-	     (plug_type == MBHC_PLUG_TYPE_HEADSET)) &&
-	     !(mbhc->LGE_HIGH_HPH_HEADSET && ((mbhc->zl > LGE_ELECTRICAL_REMOVAL_THRESHOLD) && (mbhc->zr > LGE_ELECTRICAL_REMOVAL_THRESHOLD))) &&
-	    !mbhc->hs_detect_work_stop) {
+		((plug_type == MBHC_PLUG_TYPE_HEADPHONE) ||
+		(plug_type == MBHC_PLUG_TYPE_HEADSET)) &&
+		!mbhc->hs_detect_work_stop) {
 		WCD_MBHC_RSC_LOCK(mbhc);
-		pr_info("[LGE MBHC] %s: enable WCD_MBHC_ELEC_HS_REM \n", __func__);
+		pr_info("[LGE MBHC] %s: enable removal electrical irq \n", __func__);
+		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_REM, true);
+		WCD_MBHC_RSC_UNLOCK(mbhc);
+	} else if (mbhc->mbhc_cfg->detect_extn_cable &&
+		!mbhc->hs_detect_work_stop && plug_type == MBHC_PLUG_TYPE_HIGH_HPH) {
+		pr_info("[LGE MBHC] %s: report MBHC_PLUG_TYPE_HIGH_HPH type again. enable insertion electrical irq \n", __func__);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE, 1);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, 3);
+		WCD_MBHC_RSC_LOCK(mbhc);
+		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, true);
+		WCD_MBHC_RSC_UNLOCK(mbhc);
+	} else {
+		pr_info("[LGE MBHC] %s: Don't enable WCD_MBHC_ELEC_HS_REM \n", __func__);
+	}
+#else
+	if (mbhc->mbhc_cfg->detect_extn_cable &&
+		((plug_type == MBHC_PLUG_TYPE_HEADPHONE) ||
+		(plug_type == MBHC_PLUG_TYPE_HEADSET)) &&
+		!(mbhc->LGE_HIGH_HPH_HEADSET && ((mbhc->zl > LGE_ELECTRICAL_REMOVAL_THRESHOLD) && (mbhc->zr > LGE_ELECTRICAL_REMOVAL_THRESHOLD))) &&
+		!mbhc->hs_detect_work_stop) {
+		WCD_MBHC_RSC_LOCK(mbhc);
+		pr_info("[LGE MBHC] %s: enable removal electrical irq \n", __func__);
 		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_REM, true);
 		WCD_MBHC_RSC_UNLOCK(mbhc);
 	} else {
 		pr_info("[LGE MBHC] %s: Don't enable WCD_MBHC_ELEC_HS_REM \n", __func__);
 	}
-
+#endif
+#else /* QCT Original */
+	if (mbhc->mbhc_cfg->detect_extn_cable &&
+		((plug_type == MBHC_PLUG_TYPE_HEADPHONE) ||
+		(plug_type == MBHC_PLUG_TYPE_HEADSET)) &&
+		!mbhc->hs_detect_work_stop) {
+		WCD_MBHC_RSC_LOCK(mbhc);
+		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_REM, true);
+		WCD_MBHC_RSC_UNLOCK(mbhc);
+	}
+#endif
 	/*
 	 * Enable ADC COMPLETE interrupt for HEADPHONE.
 	 * Btn release may happen after the correct work, ADC COMPLETE
@@ -985,7 +1176,7 @@ exit:
 #ifndef CONFIG_MACH_LGE
 	if (plug_type == MBHC_PLUG_TYPE_HEADPHONE) {
 		WCD_MBHC_RSC_LOCK(mbhc);
-		pr_info("[LGE MBHC] %s: WCD_MBHC_ELEC_HS_INS enable \n", __func__);
+		pr_info("[LGE MBHC] %s: enable insertion electrical irq \n", __func__);
 		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS,
 				     true);
 		WCD_MBHC_RSC_UNLOCK(mbhc);
@@ -1015,6 +1206,10 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 	timeout = jiffies +
 		  msecs_to_jiffies(WCD_FAKE_REMOVAL_MIN_PERIOD_MS);
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	mbhc->extn_exception = true;
+#endif
+
 	do {
 		retry++;
 		/*
@@ -1027,11 +1222,13 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 
 		pr_debug("%s: Check for fake removal: output_mv %d\n",
 			 __func__, output_mv);
-		pr_info("[LGE MBHC] %s: Check for fake removal: output_mv %d\n",
-			__func__, output_mv);
+		pr_info("[LGE MBHC] %s: Check for fake removal: output_mv: [%d] adc_threshold[%d] retry[%d]\n",
+			__func__, output_mv, adc_threshold, retry);
 		if ((output_mv <= adc_threshold) &&
 		    retry > FAKE_REM_RETRY_ATTEMPTS) {
 			pr_debug("%s: headset is NOT actually removed\n",
+				 __func__);
+			pr_info("[LGE MBHC] %s: headset is NOT actually removed\n",
 				 __func__);
 			goto exit;
 		}
@@ -1041,6 +1238,16 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 		pr_debug("%s: Switch level is low ", __func__);
 		goto exit;
 	}
+
+#ifdef CONFIG_SND_SOC_ES9218P
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if(es9218_mode_get() != ESS_PS_BYPASS) {
+		pr_info("[LGE MBHC] %s: es9218 power state isn't by-pass. So, turn off ess amp.\n", __func__);
+		es9218_sabre_headphone_off();
+		msleep(5);
+	}
+#endif
+#endif
 
 	if (mbhc->mbhc_cfg->moisture_en) {
 		if (mbhc->mbhc_cb->hph_pa_on_status)
@@ -1085,7 +1292,18 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 		 * follows ELEC_REM one when HEADPHONE is removed.
 		 */
 #ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		pr_info("[LGE MBHC] %s: remove headset/headphone from extention cable.\n", __func__);
+		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
+			mbhc->extn_cable_hph_rem = true;
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, 0);
+		wcd_mbhc_elec_hs_report_unplug(mbhc);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
+#else
         pr_info("[LGE MBHC] %s: Do nothing..\n", __func__);
+#endif
 #else // QCT Original
 		if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
 			mbhc->extn_cable_hph_rem = true;
@@ -1107,7 +1325,17 @@ static irqreturn_t wcd_mbhc_adc_hs_rem_irq(int irq, void *data)
 #endif
 		}
 	}
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if (mbhc->mbhc_cb->mbhc_micbias_control && mbhc->micbias_enable) {
+		pr_info("[LGE MBHC] %s: disable MIC BIAS \n", __func__);
+		mbhc->mbhc_cb->mbhc_micbias_control(mbhc->codec, MIC_BIAS_2,
+			MICB_DISABLE);
+	}
+#endif
 exit:
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	mbhc->extn_exception = false;
+#endif
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	pr_debug("%s: leave\n", __func__);
 	pr_info("[LGE MBHC] %s: leave\n", __func__);
@@ -1130,6 +1358,10 @@ static irqreturn_t wcd_mbhc_adc_hs_ins_irq(int irq, void *data)
 	 */
 	if (mbhc->extn_cable_hph_rem == true) {
 		mbhc->extn_cable_hph_rem = false;
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE, 0);
+		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE, 1);
+#endif
 		pr_debug("%s: leave\n", __func__);
 		pr_info("[LGE MBHC] %s: extn_cable_hph_rem leave\n", __func__);
 		return IRQ_HANDLED;
@@ -1138,6 +1370,7 @@ static irqreturn_t wcd_mbhc_adc_hs_ins_irq(int irq, void *data)
 	do {
 		WCD_MBHC_REG_READ(WCD_MBHC_IN2P_CLAMP_STATE, clamp_state);
 		if (clamp_state) {
+			pr_info("[LGE MBHC] %s: fake insertion irq, leave. clamp_state[%d]\n", __func__, clamp_state);
 			pr_debug("%s: fake insertion irq, leave\n", __func__);
 			return IRQ_HANDLED;
 		}
@@ -1159,7 +1392,7 @@ static irqreturn_t wcd_mbhc_adc_hs_ins_irq(int irq, void *data)
 		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, false);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 1);
 		wcd_mbhc_find_plug_and_report(mbhc, MBHC_PLUG_TYPE_HEADSET);
-		pr_info("[LGE MBHC] %s: report Headset.\n", __func__);
+		pr_info("[LGE MBHC] %s: report Headset. and disable insertion electrical irq\n", __func__);
 		WCD_MBHC_RSC_UNLOCK(mbhc);
 		return IRQ_HANDLED;
 	}
@@ -1175,6 +1408,7 @@ static irqreturn_t wcd_mbhc_adc_hs_ins_irq(int irq, void *data)
 
 	pr_debug("%s: Disable electrical headset insertion interrupt\n",
 		 __func__);
+	pr_info("[LGE MBHC] %s: disable insertion electrical irq \n", __func__);
 	wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, false);
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, 0);
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_ISRC_EN, 0);

@@ -32,9 +32,18 @@
 #include <sound/jack.h>
 #include "msm-cdc-pinctrl.h"
 #include "wcdcal-hwdep.h"
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+#include <soc/qcom/lge/board_lge.h>
+#endif
 #ifdef CONFIG_SND_SOC_ES9218P
 int es9218_sabre_headphone_on(void);
 int es9218_sabre_headphone_off(void);
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+void es9218_hsdet_l_switch_gpio_L(void);
+void es9218_headset_state(int detection);
+int es9218_hifi_exception_state_get(void);
+void es9218_hifi_exception_state_put(void);
+#endif
 #endif
 
 #include "wcd-mbhc-legacy.h"
@@ -44,7 +53,9 @@ int es9218_sabre_headphone_off(void);
 
 
 #ifdef CONFIG_MACH_LGE
-
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+static int lge_extn_cable_flag;
+#endif
 //temp #include <soc/qcom/lge/board_lge.h>
 
 #if defined(CONFIG_SND_SOC_ES9218P)
@@ -64,6 +75,10 @@ int es9218_sabre_headphone_off(void);
 #define LGE_SWITCH_NAME_ADVANCED	"h2w_advanced"
 #define LGE_SWITCH_NAME_AUX			"h2w_aux"
 #define LGE_SWITCH_NAME_AUX_HIDDEN 	"h2w_aux_hidden"
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+#define ESS_PS_BYPASS 2
+#endif
 
 char *button_name[3] = {"Volume Up" , "Voice Assist" , "Hook Key"};
 
@@ -106,16 +121,32 @@ static void lge_set_edev_name(struct wcd_mbhc *mbhc, int status)
 	normal_threshold = 3;		// normal type w/ DAC
 	pr_debug("%s: enter\n", __func__);
 
-	if (((mbhc->zl == 0) && (mbhc->zr == 0)) ||
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	if ((mbhc->mbhc_cfg->detect_extn_cable) && (status == SND_JACK_LINEOUT))
+		strcpy((char *)mbhc->edev->name,"h2w_aux_hidden");
+	else if (((mbhc->zl == 0) && (mbhc->zr == 0)) ||
 		((mbhc->zl > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) || (mbhc->zr > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold)))
 		strcpy((char *)mbhc->edev->name,"h2w_aux");
+	else if (mbhc->zl < LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold)
+		strcpy((char *)mbhc->edev->name,"h2w");
 	else if ( (mbhc->zr >= LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold && mbhc->zr < LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) ||
 		(mbhc->zl >= LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold && mbhc->zl < LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) )
 		strcpy((char *)mbhc->edev->name,"h2w_advanced");
-	else if (mbhc->zl < LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold)
-		strcpy((char *)mbhc->edev->name,"h2w");
 	else
 		strcpy((char *)mbhc->edev->name,"h2w_aux");
+#else
+	if (((mbhc->zl == 0) && (mbhc->zr == 0)) ||
+		((mbhc->zl > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) || (mbhc->zr > LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold)))
+		strcpy((char *)mbhc->edev->name,"h2w_aux");
+	else if (mbhc->zl < LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold)
+		strcpy((char *)mbhc->edev->name,"h2w");
+	else if ( (mbhc->zr >= LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold && mbhc->zr < LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) ||
+		(mbhc->zl >= LGE_NORMAL_HEADSET_THRESHOLD-normal_threshold && mbhc->zl < LGE_ADVANCED_HEADSET_THRESHOLD-advanced_threshold) )
+		strcpy((char *)mbhc->edev->name,"h2w_advanced");
+	else
+		strcpy((char *)mbhc->edev->name,"h2w_aux");
+#endif
+
 #else
 	// defensive code
 	if ( mbhc->zl == 0 ) mbhc->zl = LGE_TAVIL_ZDET_FLOATING_IMPEDANCE;
@@ -158,6 +189,13 @@ static int lge_set_extcon_device(struct wcd_mbhc *mbhc, int status)
 			break;
 		case SND_JACK_LINEOUT:
 			result = LGE_LINEOUT;
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if ((mbhc->mbhc_cfg->detect_extn_cable) && (status == SND_JACK_LINEOUT)) {
+				mbhc->extn_cable = true;
+				result = LGE_AUX_HIDDEN;
+				pr_info("[LGE MBHC] AUX HIDDEN jack is inserted.\n");
+			}
+#endif
 			break;
 		default:
 			pr_err("[LGE MBHC] Unsupported jack type(0x%x) is reported.\n", status);
@@ -166,6 +204,9 @@ static int lge_set_extcon_device(struct wcd_mbhc *mbhc, int status)
 
 	if (result != NO_DEVICE) {
 		lge_set_edev_name(mbhc, status);
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		if(result != LGE_AUX_HIDDEN)
+#endif
 		pr_info("[LGE MBHC] %s %s is Inserted. jack_type=0x%x\n",
 			(result-1)?"3 Pin":"4 Pin",
 			(mbhc->zr < (LGE_ADVANCED_HEADSET_THRESHOLD))?"Headset":"AUX Cable",
@@ -198,6 +239,7 @@ void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 #endif
 
 #endif
+	pr_info("[LGE MBHC] %s: status[0x%x], mask[0x%x]\n", __func__, status, mask);
 	snd_soc_jack_report(jack, status, mask);
 #if defined(CONFIG_SND_SOC_ES9218P)
 		if (status == 0 && mask == WCD_MBHC_JACK_MASK)
@@ -753,6 +795,15 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				~WCD_MBHC_JACK_BUTTON_MASK;
 		}
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		pr_info("[LGE MBHC] %s : mbhc->micbias_enable[%d]\n", __func__, mbhc->micbias_enable);
+		if (!mbhc->micbias_enable && (snd_soc_read(mbhc->codec, 0x0623) & 0x3f) == 0x22) {
+			pr_info("[LGE MBHC] %s : restore micbais to default.(2.7->2.1v) \n", __func__);
+			if (mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic)
+				mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(codec, MIC_BIAS_2, false);
+		}
+#endif
+
 		if (mbhc->micbias_enable) {
 			if (mbhc->mbhc_cb->mbhc_micbias_control)
 				mbhc->mbhc_cb->mbhc_micbias_control(
@@ -794,8 +845,13 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		    jack_type == SND_JACK_LINEOUT) &&
 		    (mbhc->hph_status && mbhc->hph_status != jack_type)) {
 
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if (mbhc->micbias_enable &&
+				mbhc->hph_status == SND_JACK_HEADSET && !mbhc->micbias_enable) {
+#else
 			if (mbhc->micbias_enable &&
 			    mbhc->hph_status == SND_JACK_HEADSET) {
+#endif
 				if (mbhc->mbhc_cb->mbhc_micbias_control)
 					mbhc->mbhc_cb->mbhc_micbias_control(
 						codec, MIC_BIAS_2,
@@ -816,8 +872,22 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			mbhc->zl = mbhc->zr = 0;
 			pr_debug("%s: Reporting removal (%x)\n",
 				 __func__, mbhc->hph_status);
-			pr_info("[LGE MBHC] %s: Reporting removal (%x)\n",
-				 __func__, mbhc->hph_status);
+
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+			if ( !((mbhc->mbhc_cfg->detect_extn_cable) && (mbhc->hph_status == SND_JACK_LINEOUT))) {
+				pr_info("[LGE MBHC] %s: Reporting removal (%x)\n", __func__, mbhc->hph_status);
+				wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
+					0, WCD_MBHC_JACK_MASK);
+#if defined(CONFIG_SND_SOC_ES9218P)
+				if( mbhc->hph_status & WCD_MBHC_JACK_MASK ) {
+					pr_info("[LGE MBHC] %s: call #2 es9218_sabre_headphone_on().\n", __func__);
+					pr_debug("[LGE MBHC] %s: remove jack(%d) and report insertion of another jack.\n", __func__, mbhc->hph_status);
+					es9218_sabre_headphone_on();
+				}
+#endif
+			}
+#else
+			pr_info("[LGE MBHC] %s: Reporting removal (%x)\n", __func__, mbhc->hph_status);
 			wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 					    0, WCD_MBHC_JACK_MASK);
 #if defined(CONFIG_SND_SOC_ES9218P)
@@ -826,6 +896,7 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
                     pr_info("[LGE MBHC] %s: remove jack(%d) and report insertion of another jack.\n", __func__, mbhc->hph_status);
                     es9218_sabre_headphone_on();
                 }
+#endif
 #endif
 
 			if (mbhc->hph_status == SND_JACK_LINEOUT) {
@@ -836,7 +907,7 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 				pr_debug("%s: set up elec removal detection\n",
 					  __func__);
 				usleep_range(200, 210);
-				pr_info("[LGE MBHC] %s: WCD_MBHC_ELEC_HS_REM enable \n", __func__);
+				pr_info("[LGE MBHC] %s: enable removal electrical irq \n", __func__);
 				wcd_mbhc_hs_elec_irq(mbhc,
 						     WCD_MBHC_ELEC_HS_REM,
 						     true);
@@ -874,6 +945,17 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		if (is_pa_on) {
 			wcd_mbhc_set_and_turnoff_hph_padac(mbhc);
 			pr_info("[LGE MBHC] %s: Impedance debugging patch PA [%d]\n", __func__, is_pa_on);
+		}
+#endif
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+		if(es9218_hifi_exception_state_get() != ESS_PS_BYPASS) { // check ESS mode ESS_BYPASS = 2
+			pr_info("[LGE MBHC] %s: ess hifi exception status. To read the L/R impedance, change the ESS state from HIFI to Bypass", __func__);
+			es9218_sabre_headphone_off();
+			mdelay(1);
+			es9218_sabre_headphone_on();
+			mdelay(1);
+			mbhc->ess_hifi_exception = true;
 		}
 #endif
 
@@ -943,9 +1025,30 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		pr_debug("%s: Reporting insertion %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
 		pr_info("[LGE MBHC] Impedance zl: %d, zr:%d\n", mbhc->zl, mbhc->zr);
+
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+		if(mbhc->ess_hifi_exception) { // restore ess hifi mode
+			pr_info("[LGE MBHC] %s: restore ESS state. Bypass->HiFi", __func__);
+			es9218_sabre_headphone_on();
+			mdelay(1);
+			mbhc->ess_hifi_exception = false;
+			es9218_hifi_exception_state_put();
+		}
+#endif
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		if (mbhc->mbhc_cfg->detect_extn_cable) {
+			wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
+				mbhc->hph_status, WCD_MBHC_JACK_MASK);
+		} else {
+			wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
+				(mbhc->hph_status | SND_JACK_MECHANICAL),
+				WCD_MBHC_JACK_MASK);
+		}
+#else
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				    (mbhc->hph_status | SND_JACK_MECHANICAL),
 				    WCD_MBHC_JACK_MASK);
+#endif
 		wcd_mbhc_clr_and_turnon_hph_padac(mbhc);
 	}
 	pr_debug("%s: leave hph_status %x\n", __func__, mbhc->hph_status);
@@ -978,6 +1081,7 @@ void wcd_mbhc_elec_hs_report_unplug(struct wcd_mbhc *mbhc)
 	 * Disable HPHL trigger and MIC Schmitt triggers.
 	 * Setup for insertion detection.
 	 */
+	pr_info("[LGE MBHC] %s: disable removal electrical irq \n", __func__);
 	wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_REM,
 			     false);
 	wcd_enable_curr_micbias(mbhc, WCD_MBHC_EN_NONE);
@@ -987,6 +1091,7 @@ void wcd_mbhc_elec_hs_report_unplug(struct wcd_mbhc *mbhc)
 
 	/* Set the detection type appropriately */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE, 1);
+	pr_info("[LGE MBHC] %s: enable insertion electrical irq \n", __func__);
 	wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS,
 			     true);
 }
@@ -1061,7 +1166,7 @@ void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 			 */
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC,
 						 3);
-			pr_info("[LGE MBHC] %s: WCD_MBHC_ELEC_HS_INS enable \n", __func__);
+			pr_info("[LGE MBHC] %s: enable insertion electrical irq \n", __func__);
 			wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS,
 					     true);
 		} else {
@@ -1123,6 +1228,10 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 
 	WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
 
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+	es9218_headset_state(detection_type);
+#endif
+
 	/* Set the detection type appropriately */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
 				 !detection_type);
@@ -1177,12 +1286,19 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			mbhc->mbhc_fn->wcd_mbhc_detect_plug_type(mbhc);
 	} else if ((mbhc->current_plug != MBHC_PLUG_TYPE_NONE)
 			&& !detection_type) {
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+		es9218_hsdet_l_switch_gpio_L();
+#endif
 		/* Disable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(mbhc, false);
 		/* Disable HW FSM */
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		mbhc->extn_cable = false;
+		mbhc->extn_exception = false;
+#endif
 		if (mbhc->mbhc_cb->mbhc_common_micb_ctrl)
 			mbhc->mbhc_cb->mbhc_common_micb_ctrl(codec,
 					MBHC_COMMON_MICB_TAIL_CURR, false);
@@ -1225,6 +1341,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			jack_type = SND_JACK_UNSUPPORTED;
 			break;
 		}
+		pr_info("[LGE MBHC] %s: disable ins/rem electrical irq \n", __func__);
 		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_REM, false);
 		wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, false);
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_DETECTION_TYPE, 1);
@@ -1249,6 +1366,13 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		}
 
 	} else if (!detection_type) {
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+		es9218_hsdet_l_switch_gpio_L();
+#endif
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+		mbhc->extn_cable = false;
+		mbhc->extn_exception = false;
+#endif
 		/* Disable external voltage source to micbias if present */
 		if (mbhc->mbhc_cb->enable_mb_source)
 			mbhc->mbhc_cb->enable_mb_source(mbhc, false);
@@ -1861,6 +1985,15 @@ int wcd_mbhc_start(struct wcd_mbhc *mbhc, struct wcd_mbhc_config *mbhc_cfg)
 
 	/* update the mbhc config */
 	mbhc->mbhc_cfg = mbhc_cfg;
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	mbhc->mbhc_cfg->detect_extn_cable = lge_extn_cable_flag;
+#ifdef CONFIG_LGE_USB_FACTORY
+	if(lge_get_factory_boot()){
+		mbhc->mbhc_cfg->detect_extn_cable = 0;
+		dev_err(card->dev, "%s, factory mode true, extn cable detection off %d ",__func__,mbhc->mbhc_cfg->detect_extn_cable );
+	}
+#endif
+#endif
 
 	dev_dbg(mbhc->codec->dev, "%s: enter\n", __func__);
 
@@ -1984,7 +2117,9 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	const char *gnd_switch = "qcom,msm-mbhc-gnd-swh";
 	const char *hs_thre = "qcom,msm-mbhc-hs-mic-max-threshold-mv";
 	const char *hph_thre = "qcom,msm-mbhc-hs-mic-min-threshold-mv";
-
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	const char *lge_extn_cable = "lge,msm-mbhc-extn-cable";
+#endif
 	pr_debug("%s: enter\n", __func__);
 
 	ret = of_property_read_u32(card->dev->of_node, hph_switch, &hph_swh);
@@ -2003,6 +2138,11 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 
 	ret = of_property_read_u32(card->dev->of_node, hs_thre,
 				&(mbhc->hs_thr));
+
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	mbhc->hs_thr = 1900;
+#endif
+
 	if (ret)
 		dev_dbg(card->dev,
 			"%s: missing %s in dt node\n", __func__, hs_thre);
@@ -2012,6 +2152,13 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	if (ret)
 		dev_dbg(card->dev,
 			"%s: missing %s in dt node\n", __func__, hph_thre);
+
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	ret = of_property_read_u32(card->dev->of_node, lge_extn_cable, &lge_extn_cable_flag);
+	if (ret) {
+		pr_info("%s: missing %s in dt node\n", __func__, lge_extn_cable);
+	}
+#endif
 
 	ret = of_property_read_u32_array(card->dev->of_node,
 					 "qcom,msm-mbhc-moist-cfg",
@@ -2151,6 +2298,13 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	}
 	pr_info("%s register voc_mute_staus excon device\n",__func__);
 #endif /* CONFIG_SND_LGE_VOC_MUTE_DET */
+#ifdef CONFIG_SND_USE_MBHC_EXTN_CABLE
+	mbhc->extn_cable = false;
+	mbhc->extn_exception = false;
+#endif
+#ifdef CONFIG_SND_SOC_HSDET_L_SWITCH
+	mbhc->ess_hifi_exception = false;
+#endif
 #endif
 	switch (mbhc->mbhc_detection_logic) {
 	case WCD_DETECTION_LEGACY:

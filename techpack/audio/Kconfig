@@ -90,6 +90,8 @@ config SND_SOC_BOLERO
 	tristate "SND_SOC_BOLERO"
 config SND_SOC_CPE
 	tristate "SND_SOC_CPE"
+config SND_SOC_CS35L41
+	tristate "SND_SOC_CS35L41"
 config SND_SOC_CS43131
 	tristate "SND_SOC_CS43131"
 config SND_SOC_CSRA66X0
@@ -102,6 +104,8 @@ config SND_SOC_ES9218P
 	tristate "SND_SOC_ES9218P"
 config SND_SOC_EXT_CODEC
 	tristate "SND_SOC_EXT_CODEC"
+config SND_SOC_HSDET_L_SWITCH
+	tristate "SND_SOC_HSDET_L_SWITCH"
 config SND_SOC_INT_CODEC
 	tristate "SND_SOC_INT_CODEC"
 config SND_SOC_LGE_ESS_DIGITAL_FILTER
@@ -178,6 +182,8 @@ config SND_SOC_WCD_SPI
 	tristate "SND_SOC_WCD_SPI"
 config SND_SOC_WSA881X
 	tristate "SND_SOC_WSA881X"
+config SND_USE_MBHC_EXTN_CABLE
+	tristate "SND_USE_MBHC_EXTN_CABLE"
 config SOUNDWIRE
 	tristate "SOUNDWIRE"
 config SOUNDWIRE_MSTR_CTRL

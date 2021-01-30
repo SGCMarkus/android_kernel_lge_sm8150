@@ -77,9 +77,16 @@
 #define MSM_LL_QOS_VALUE 300 /* time in us to ensure LPM doesn't go in C3/C4 */
 #define MSM_HIFI_ON 1
 
+#if defined(CONFIG_SND_SOC_CS35L41)
+#define CS43131_NAME_1 "cs35l41.0-0040"
+#define CS43131_NAME_2 "cs35l41.0-0041"
+#endif
 #define TDM_MAX_SLOTS		8
+#ifdef CONFIG_MACH_LGE
+#define TDM_SLOT_WIDTH_BITS	16
+#else
 #define TDM_SLOT_WIDTH_BITS	32
-
+#endif
 enum {
 	SLIM_RX_0 = 0,
 	SLIM_RX_1,
@@ -513,7 +520,7 @@ static struct dev_config proxy_rx_cfg = {
 /* Default configuration of MI2S channels */
 static struct dev_config mi2s_rx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	[SEC_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S24_LE, 2},
 #else
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
@@ -525,7 +532,7 @@ static struct dev_config mi2s_rx_cfg[] = {
 
 static struct dev_config mi2s_tx_cfg[] = {
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-#if defined(CONFIG_SND_SOC_TFA9872)
+#if defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41)
 	[SEC_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S24_LE, 2},
 #else
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
@@ -878,6 +885,9 @@ int	sma6101_module_dep(void);
 #endif
 #if defined(CONFIG_SND_SOC_CS43131)
 int cs43130_module_dep(void);
+#endif
+#if defined(CONFIG_SND_SOC_CS35L41)
+int	cs35l41_module_dep(void);
 #endif
 
 /*
@@ -5468,15 +5478,6 @@ static int msm_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 					SNDRV_PCM_HW_PARAM_RATE);
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
-#ifdef CONFIG_MACH_LGE
-	if (cpu_dai->id == AFE_PORT_ID_TERTIARY_TDM_RX) {
-		channels->min = channels->max =
-				tdm_rx_cfg[TDM_TERT][TDM_0].channels;
-		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
-			       tdm_rx_cfg[TDM_TERT][TDM_0].bit_format);
-		rate->min = rate->max =
-				tdm_rx_cfg[TDM_TERT][TDM_0].sample_rate;
-#else
 	if (cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_RX) {
 		channels->min = channels->max =
 				tdm_rx_cfg[TDM_QUAT][TDM_0].channels;
@@ -5484,6 +5485,14 @@ static int msm_tdm_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 			       tdm_rx_cfg[TDM_QUAT][TDM_0].bit_format);
 		rate->min = rate->max =
 				tdm_rx_cfg[TDM_QUAT][TDM_0].sample_rate;
+#ifdef CONFIG_MACH_LGE
+	} else if (cpu_dai->id == AFE_PORT_ID_TERTIARY_TDM_RX) {
+		channels->min = channels->max =
+				tdm_rx_cfg[TDM_TERT][TDM_0].channels;
+		param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+			       tdm_rx_cfg[TDM_TERT][TDM_0].bit_format);
+		rate->min = rate->max =
+				tdm_rx_cfg[TDM_TERT][TDM_0].sample_rate;
 #endif
 	} else if (cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_RX_1) {
 		channels->min = channels->max =
@@ -5524,12 +5533,12 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
-#ifdef CONFIG_MACH_LGE
-	int slot_width = 16;
-#else
 	int slot_width = TDM_SLOT_WIDTH_BITS;
-#endif
+#ifdef CONFIG_MACH_LGE
+	int channels, slots = 2;
+#else
 	int channels, slots = TDM_MAX_SLOTS;
+#endif
 	unsigned int slot_mask, rate, clk_freq;
 	unsigned int *slot_offset;
 	unsigned int path_dir = 0, interface = 0, channel_interface = 0;
@@ -7442,7 +7451,7 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ops = &msm_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
-#ifndef CONFIG_SND_SOC_TFA9872
+#if !(defined(CONFIG_SND_SOC_TFA9872)||defined(CONFIG_SND_SOC_CS35L41))
 	{
 		.name = LPASS_BE_SEC_MI2S_RX,
 		.stream_name = "Secondary MI2S Playback",
@@ -7710,28 +7719,150 @@ static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 };
 #ifdef CONFIG_MACH_LGE
 /* Removed dummy dai. because of joan crash issue */
-
-#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)
+//multi codec component configuration
+#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO) || defined(CONFIG_SND_SOC_CS35L41)
 static struct snd_soc_dai_link_component multi_codecs[] = {
+#if defined(CONFIG_SND_SOC_SMA6101)
 	{
 		.name = "tfa98xx-codec.0-0034",
 		.dai_name = "tfa98xx-aif-0-34"
 	},
-#if defined(CONFIG_SND_SOC_SMA6101)
 	{
 		.name = "sma6101-codec.0-001e",
 		.dai_name = "sma6101-piezo"
 	},
 #elif defined(CONFIG_SND_SOC_TFA9872_STEREO)
 	{
+		.name = "tfa98xx-codec.0-0034",
+		.dai_name = "tfa98xx-aif-0-34"
+	},
+	{
 		.name = "tfa98xx-codec.0-0035",
 		.dai_name = "tfa98xx-aif-0-35"
+	},
+#elif defined(CONFIG_SND_SOC_CS35L41)
+	{
+		.name = "cs35l41-codec.0-0040",
+//	    .of_node = NULL,
+		.dai_name = "cs35l41-pcm"
+	},
+	{
+		.name = "cs35l41-codec.0-0041",
+//	    .of_node = NULL,
+		.dai_name = "cs35l41-pcm"
 	},
 #endif
 };
 
 static struct snd_soc_dai_link_component multi_codecs_rx[ARRAY_SIZE(multi_codecs)];
 static struct snd_soc_dai_link_component multi_codecs_tx[ARRAY_SIZE(multi_codecs)];
+#endif
+//prefix configuration for multi codec
+#if defined(CONFIG_SND_SOC_CS35L41)
+static struct snd_soc_codec_conf cs35l41_codec_conf[] = {
+           {
+		     .dev_name = CS43131_NAME_1,
+                     .name_prefix = "Left",
+           },
+           {
+                     .dev_name = CS43131_NAME_2,
+                     .name_prefix = "Right",
+           },
+};
+
+static const struct snd_kcontrol_new cs35l41_controls[] = {
+            SOC_DAPM_PIN_SWITCH("Left Speaker"),
+            SOC_DAPM_PIN_SWITCH("Right Speaker"),
+};
+
+static struct snd_soc_dapm_widget cs35l41_widgets[] = {
+            SND_SOC_DAPM_SPK("Left Speaker", NULL),
+            SND_SOC_DAPM_SPK("Right Speaker", NULL),
+};
+
+static struct snd_soc_dapm_route cs35l41_audio_paths[] = {
+     { "Left Speaker", NULL, "Left SPK" },
+     { "Right Speaker", NULL, "Right SPK" },
+};
+
+static int cs35l41_codec_init(struct snd_soc_pcm_runtime *rtd)
+{
+	int ret = 0;
+	struct snd_soc_codec *codec = rtd->codec;
+	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
+	struct snd_soc_component *component = NULL;
+	struct snd_soc_card *card = rtd->card;
+	char *dapm_widget_str = NULL;
+	int prefix_len = 0;
+	int str_max = 30;
+
+	pr_info("%s: cs35l41_codec_init enter\n", __func__);
+
+	ret = snd_soc_add_card_controls(card, cs35l41_controls, ARRAY_SIZE(cs35l41_controls));
+	if (ret < 0) {
+		pr_err("%s: snd_soc_add_card_controls failed, err %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	ret = snd_soc_dapm_new_controls(&card->dapm, cs35l41_widgets,ARRAY_SIZE(cs35l41_widgets));
+	if (ret < 0) {
+		pr_err("%s: snd_soc_dapm_new_controls failed, err %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	ret = snd_soc_dapm_add_routes(&card->dapm, cs35l41_audio_paths,ARRAY_SIZE(cs35l41_audio_paths));
+	if (ret < 0) {
+		pr_err("%s: snd_soc_dapm_add_routes failed, err %d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	list_for_each_entry(component, &card->component_dev_list, card_list) {
+		if(component != NULL) {
+			dapm = snd_soc_component_get_dapm(component);
+			if (!strcmp(component->name, CS43131_NAME_1)||!strcmp(component->name, CS43131_NAME_2)) {
+				if(component->name_prefix != NULL) {
+					prefix_len = strlen(component->name_prefix);
+					dapm_widget_str = kzalloc(prefix_len + str_max, GFP_KERNEL);
+
+					if (!dapm_widget_str) {
+						pr_err("%s: Null for dapm_widget_str prefix - %s",__func__,component->name_prefix);
+						return -ENOMEM;
+					}
+
+					strcpy(dapm_widget_str, component->name_prefix);
+					strcat(dapm_widget_str, " Speaker");
+					snd_soc_dapm_ignore_suspend(&card->dapm, dapm_widget_str);
+					memset(dapm_widget_str + prefix_len, 0, str_max);
+
+					strcpy(dapm_widget_str, component->name_prefix);
+					strcat(dapm_widget_str, " AMP Capture");
+					snd_soc_dapm_ignore_suspend(dapm, dapm_widget_str);
+					memset(dapm_widget_str + prefix_len, 0, str_max);
+
+					strcpy(dapm_widget_str, component->name_prefix);
+					strcat(dapm_widget_str, " SPK");
+					snd_soc_dapm_ignore_suspend(dapm, dapm_widget_str);
+					memset(dapm_widget_str + prefix_len, 0, str_max);
+
+					strcpy(dapm_widget_str, component->name_prefix);
+					strcat(dapm_widget_str, " AMP Playback");
+					snd_soc_dapm_ignore_suspend(dapm, dapm_widget_str);
+
+					if (dapm_widget_str != NULL)
+						kfree(dapm_widget_str);
+				}
+			}
+		}
+	}
+
+	snd_soc_dapm_sync(&card->dapm);
+	snd_soc_dapm_sync(dapm);
+
+	return ret;
+}
 #endif
 static struct snd_soc_dai_link msm_lge_dai_links[] = {
 #if defined(CONFIG_SND_SOC_ES9218P)
@@ -7786,7 +7917,7 @@ static struct snd_soc_dai_link msm_lge_dai_links[] = {
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
 	},
 #endif
-#ifdef CONFIG_SND_SOC_TFA9872
+#if defined(CONFIG_SND_SOC_TFA9872)
 	{
 		.name = LPASS_BE_SEC_MI2S_RX,
 		.stream_name = "Secondary MI2S Playback",
@@ -7824,6 +7955,37 @@ static struct snd_soc_dai_link msm_lge_dai_links[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &msm_mi2s_be_ops,
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+	},
+#elif defined(CONFIG_SND_SOC_CS35L41)
+	{
+		.name = LPASS_BE_SEC_MI2S_RX,
+		.stream_name = "Secondary MI2S Playback",
+		.cpu_dai_name = "msm-dai-q6-mi2s.1",
+		.platform_name = "msm-pcm-routing",
+		.codecs = multi_codecs_rx,
+		.num_codecs = ARRAY_SIZE(multi_codecs_rx),
+		.init = &cs35l41_codec_init,
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_RX,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &msm_mi2s_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	{
+		.name = LPASS_BE_SEC_MI2S_TX,
+		.stream_name = "Secondary MI2S Capture",
+		.cpu_dai_name = "msm-dai-q6-mi2s.1",
+		.platform_name = "msm-pcm-routing",
+		.codecs = multi_codecs_tx,
+		.num_codecs = ARRAY_SIZE(multi_codecs_tx),
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_SECONDARY_MI2S_TX,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &msm_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
 #else
@@ -8034,7 +8196,7 @@ static int msm_populate_dai_link_component_of_node(
 	struct device *cdev = card->dev;
 	struct snd_soc_dai_link *dai_link = card->dai_link;
 	struct device_node *np;
-#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)
+#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)||defined(CONFIG_SND_SOC_CS35L41)
 	int j;
 #endif
 
@@ -8091,7 +8253,7 @@ static int msm_populate_dai_link_component_of_node(
 				dai_link[i].cpu_dai_name = NULL;
 			}
 		}
-//#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)
+//#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)||defined(CONFIG_SND_SOC_CS35L41)
 		//pr_info("%d: codec_name=%s num_codecs=%d\n", i, dai_link[i].codec_name, dai_link[i].num_codecs);
 //#endif
 		/* populate codec_of_node for snd card dai links */
@@ -8112,7 +8274,7 @@ static int msm_populate_dai_link_component_of_node(
 			dai_link[i].codec_of_node = np;
 			dai_link[i].codec_name = NULL;
 		}
-#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)
+#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)||defined(CONFIG_SND_SOC_CS35L41)
 		if (dai_link[i].codecs && (dai_link[i].num_codecs > 0)) {
 			for (j = 0; j < dai_link[i].num_codecs; j++) {
 				pr_info("dai_link[%d].codecs[%d].name = %s\n",i, j, dai_link[i].codecs[j].name);
@@ -8287,7 +8449,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 			__func__);
 		return NULL;
 	}
-#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)
+#if defined(CONFIG_SND_SOC_SMA6101) || defined(CONFIG_SND_SOC_TFA9872_STEREO)||defined(CONFIG_SND_SOC_CS35L41)
 	memcpy(multi_codecs_rx, multi_codecs, sizeof(multi_codecs));
 	memcpy(multi_codecs_tx, multi_codecs, sizeof(multi_codecs));
 #endif
@@ -8740,7 +8902,9 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 #if defined(CONFIG_SND_SOC_CS43131)
 	cs43130_module_dep();
 #endif
-
+#if defined(CONFIG_SND_SOC_CS35L41)
+	cs35l41_module_dep();
+#endif
 
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
@@ -8845,6 +9009,11 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		if (ret)
 			goto err;
 	}
+
+#if defined(CONFIG_SND_SOC_CS35L41)
+	card->codec_conf = cs35l41_codec_conf;
+	card->num_configs = ARRAY_SIZE(cs35l41_codec_conf);
+#endif
 
 	ret = devm_snd_soc_register_card(&pdev->dev, card);
 	if (ret == -EPROBE_DEFER) {

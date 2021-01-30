@@ -29,6 +29,9 @@
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
 #include "q6afecal-hwdep.h"
+#ifdef CONFIG_MACH_LGE
+#include <soc/qcom/subsystem_restart.h>
+#endif
 
 #if defined(CONFIG_SND_SOC_TFA9872)
 #define AFE_PORT_ID_TFA9872_RX AFE_PORT_ID_SECONDARY_MI2S_RX
@@ -1135,6 +1138,10 @@ static int afe_apr_send_pkt(void *data, wait_queue_head_t *wait)
 					&this_afe.status)));
 				ret = adsp_err_get_lnx_err_code(
 						atomic_read(&this_afe.status));
+#ifdef CONFIG_MACH_LGE
+				if (ret == -ENODATA)
+					subsystem_restart("adsp");
+#endif
 			} else {
 				ret = 0;
 			}
