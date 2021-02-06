@@ -28,7 +28,8 @@ fw-shipped-$(CONFIG_FPGA_MGR_ICE40_SPI_LGE) += lattice/lg_singlewire_s48_impl_1.
 
 fw-shipped-$(CONFIG_FPGA_MGR_ICE40_SPI_LGE) += mcu/FLASH_SYSTEM.img
 
-fw-shipped-$(CONFIG_SAR_ATMF04_12QFN) += atmf04/atmf04_2CH_V0.37.fw
+fw-shipped-$(CONFIG_SAR_ATMF04_12QFN) += atmf04/ALMF04_Sar2CH_V1.38T.fw
+fw-shipped-$(CONFIG_SAR_ATMF04_F37) += atmf04/atmf04_2CH_V0.37.fw
 fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 
 # Directories which we _might_ need to create, so we have a rule for them.
