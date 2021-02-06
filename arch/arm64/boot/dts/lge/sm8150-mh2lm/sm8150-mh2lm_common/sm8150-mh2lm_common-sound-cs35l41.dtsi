@@ -1,0 +1,153 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&audio_apr {
+	sound-tavil {
+		lge,3rd-spk-amp = <1>;
+	};
+};
+
+&tlmm {
+	cs35l41_l_int {
+		cs35l41_l_int_default: cs35l41_l_int_default {
+			mux {
+				pins = "gpio26";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio26";
+				drive-strength = <2>; /* 2 mA */
+				bias-pull-up;
+				input-enable;
+			};
+		};
+	};
+	cs35l41_r_int {
+		cs35l41_r_int_default: cs35l41_r_int_default {
+			mux {
+				pins = "gpio125";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio125";
+				drive-strength = <2>; /* 2 mA */
+				bias-pull-up;
+				input-enable;
+			};
+		};
+	};
+	cs35l41_reset {
+		cs35l41_reset_default: cs35l41_reset_default {
+			mux {
+				pins = "gpio36";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio36";
+				drive-strength = <2>;
+				bias-pull-down;
+				output-high;
+			};
+		};
+	};
+};
+
+&soc {
+	qcom,msm-dai-mi2s {
+		compatible = "qcom,msm-dai-mi2s";
+		qcom,msm-dai-q6-mi2s-sec {
+                        compatible = "qcom,msm-dai-q6-mi2s";
+                        qcom,msm-dai-q6-mi2s-dev-id = <1>;
+                        qcom,msm-mi2s-rx-lines = <2>; /* SD1 used as output */
+                        qcom,msm-mi2s-tx-lines = <1>; /* SD0 used as input */
+		};
+	};
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	cs35l41_l: cs35l41@40 {
+		#sound-dai-cells = <1>;
+		compatible = "cirrus,cs35l41";
+		status = "ok";
+		reg = <0x40>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cs35l41_l_int_default>,<&cs35l41_reset_default>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
+		reset-gpios = <&tlmm 36 0x0>;
+
+		cirrus,fwname-use-revid;
+		cirrus,boost-peak-milliamp = <4500>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,fast-switch = "spk_bypass_off.txt", "spk_bypass_on.txt";
+
+		cirrus,gpio-config2 {
+			cirrus,gpio-src-select = <0x4>;
+			cirrus,gpio-output-enable;
+		};
+	};
+
+	cs35l41_r: cs35l41@41 {
+		#sound-dai-cells = <1>;
+		compatible = "cirrus,cs35l41";
+		reg = <0x41>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cs35l41_r_int_default>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <125 IRQ_TYPE_LEVEL_LOW>;
+		reset-gpios = <&tlmm 36 0x0>;
+
+		cirrus,right-channel-amp;
+		cirrus,fwname-use-revid;
+		cirrus,boost-peak-milliamp = <4500>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,fast-switch = "rcv_bypass_off.txt", "rcv_bypass_on.txt";
+
+		cirrus,gpio-config2 {
+			cirrus,gpio-src-select = <0x4>;
+			cirrus,gpio-output-enable;
+		};
+	};
+
+	adsps {
+           #address-cells = <1>;
+           #size-cells = <0>;
+   
+               adsp@2b80000 {
+                   reg = <0x2b80000>;
+                   firmware {
+  
+                        Calibration {
+                        cirrus,wmfw-file = "prot";
+                        cirrus,bin-file = "cal";
+                        };
+  
+                        Playback {
+                        cirrus,wmfw-file = "prot";
+                        cirrus,bin-file = "prot";
+                       };
+   
+                   };
+               };
+           };
+
+};

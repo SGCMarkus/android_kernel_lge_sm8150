@@ -14,105 +14,27 @@
 #include "../sm8150-mh2lm_common/sm8150-mh2lm_common-pinctrl.dtsi"
 
 &tlmm {
-	qupv3_se8_spibus {
-		qupv3_se8_spibus_active: qupv3_se8_spibus_active {
+	pmx_isdbt_en {
+		isdbt_en_active: isdbt_en_active {
 			mux {
-				pins = "gpio88", "gpio89", "gpio90";
-				function = "qup8";
-			};
-			config {
-				pins = "gpio88", "gpio89", "gpio90";
-				drive-strength = <6>;
-				bias-disable;
-			};
-		};
-		qupv3_se8_spibus_sleep: qupv3_se8_spibus_sleep {
-			mux {
-				pins = "gpio88", "gpio89", "gpio90";
+				pins = "gpio166", "gpio108";
 				function = "gpio";
 			};
 			config {
-				pins = "gpio88", "gpio89", "gpio90";
-				drive-strength = <2>;
-				bias-pull-down;
-			};
-		};
-	};
-
-	qupv3_se8_spi_cs0 {
-		spi_tdmb_active: spi_tdmb_active {
-			mux {
-				pins = "gpio91";
-				function = "qup8";
-			};
-			config {
-				pins = "gpio91";
-				drive-strength = <6>;
-				bias-disable;
-			};
-		};
-		spi_tdmb_sleep: spi_tdmb_sleep {
-			mux {
-				pins = "gpio91";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio91";
-				drive-strength = <2>;
-				output-low;
-				bias-pull-down;
-			};
-		};
-	};
-
-	pmx_tdmb_int {
-		tdmb_int_active: tdmb_int_active {
-			mux {
-				pins = "gpio108";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio108";
-				drive-strength = <2>;
-				input-enable;
-				bias-pull-up;
-			};
-		};
-		tdmb_int_suspend: tdmb_int_suspend {
-			mux {
-				pins = "gpio108";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio108";
-				drive-strength = <2>;
-				bias-pull-down;
-			};
-		};
-
-	};
-
-	pmx_tdmb_en {
-		tdmb_en_active: tdmb_en_active {
-			mux {
-				pins = "gpio166";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio166";
+				pins = "gpio166", "gpio108";
 				drive-strength = <4>;
 				output-low;
 				bias-disable;
 			};
 		};
 
-		tdmb_en_suspend: tdmb_en_suspend {
+		isdbt_en_suspend: isdbt_en_suspend {
 			mux {
-				pins = "gpio166";
+				pins = "gpio166", "gpio108";
 				function = "gpio";
 			};
 			config {
-				pins = "gpio166";
+				pins = "gpio166", "gpio108";
 				drive-strength = <2>;
 				bias-pull-down;
 			};
@@ -120,35 +42,8 @@
 
 	};
 
-	pmx_tdmb_ant {
-		tdmb_ant_active: tdmb_ant_active {
-			mux {
-				pins = "gpio163";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio163";
-				drive-strength = <2>;
-				output-low;
-				bias-disable;
-			};
-		};
-
-		tdmb_ant_suspend: tdmb_ant_suspend {
-			mux {
-				pins = "gpio163";
-				function = "gpio";
-			};
-			config {
-				pins = "gpio163";
-				drive-strength = <2>;
-				bias-pull-down;
-			};
-		};
-	};
-
-	pmx_tdmb_lna {
-		tdmb_lna_active: tdmb_lna_active {
+	pmx_isdbt_lna {
+		isdbt_lna_active: isdbt_lna_active {
 			mux {
 				pins = "gpio164";
 				function = "gpio";
@@ -161,7 +56,7 @@
 			};
 		};
 
-		tdmb_lna_suspend: tdmb_lna_suspend {
+		isdbt_lna_suspend: isdbt_lna_suspend {
 			mux {
 				pins = "gpio164";
 				function = "gpio";
@@ -174,8 +69,8 @@
 		};
 	};
 
-	pmx_tdmb_ldo_en {
-		tdmb_ldo_en_active: tdmb_ldo_en_active {
+	pmx_isdbt_ldo_en {
+		isdbt_ldo_en_active: isdbt_ldo_en_active {
 			mux {
 				pins = "gpio11";
 				function = "gpio";
@@ -188,7 +83,7 @@
 			};
 		};
 
-		tdmb_ldo_en_suspend: tdmb_ldo_en_suspend {
+		isdbt_ldo_en_suspend: isdbt_ldo_en_suspend {
 			mux {
 				pins = "gpio11";
 				function = "gpio";

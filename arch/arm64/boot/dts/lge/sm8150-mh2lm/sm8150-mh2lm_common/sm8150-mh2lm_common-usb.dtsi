@@ -33,7 +33,15 @@
 };
 
 &usb1 {
-	extcon = <&extcon_usb1>;
+	//extcon = <&extcon_usb1>;
+	status = "okay";
+	extcon = <&lge_usb_ds2>;
+	dpdm-supply = <&usb2_phy1>;
+	dwc3@a800000 {
+		maximum-speed = "high-speed";
+		dr_mode = "otg";
+		usbpd = <&pm8150b_pdphy>;
+	};
 };
 
 &pm8150b_pdphy {
@@ -91,8 +99,18 @@
 };
 
 &usb2_phy0 {
-	qcom,hsusb-phy-tune = <0x61 0x43 0x2e 0x03>;
-	qcom,hsusb-phy-tune-host = <0x61 0x43 0x2e 0x03>;
+	qcom,hsusb-phy-tune = <0x91 0xFA 0x2e 0x03>;
+	qcom,hsusb-phy-tune-host = <0x48 0xF0 0x2e 0x03>;
+};
+
+&usb2_phy1 {
+	status = "okay";
+	qcom,hsusb-phy-tune = <0x48 0xF8 0x2e 0x03>;
+	qcom,hsusb-phy-tune-host = <0x48 0xF0 0x2e 0x03>;
+};
+
+&usb_qmp_phy {
+	status = "okay";
 };
 
 /*
@@ -146,5 +164,15 @@
 		compatible = "lge,usb_debugger";
 
 		lge,uart-sbu-sel-gpio = <&tlmm 35 0>;
+	};
+};
+
+/*
+ * LGE USB DS2 driver
+ */
+&vendor {
+	lge_usb_ds2: lge_usb_ds2 {
+		compatible = "lge,usb_ds2";
+		lge,dd-sw-sel-gpio = <&tlmm 67 0>;
 	};
 };

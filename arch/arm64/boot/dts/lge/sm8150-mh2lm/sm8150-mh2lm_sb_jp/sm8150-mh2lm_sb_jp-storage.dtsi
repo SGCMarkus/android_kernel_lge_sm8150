@@ -13,3 +13,14 @@
 
 #include "../sm8150-mh2lm_common/sm8150-mh2lm_common-storage.dtsi"
 
+&firmware {
+	android {
+		compatible = "android,firmware";
+		fstab {
+			compatible = "android,fstab";
+			OP {
+				status = "disabled";
+			};
+		};
+	};
+};

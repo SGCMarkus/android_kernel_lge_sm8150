@@ -29,7 +29,6 @@
 		asoc-codec-names = "msm-stub-codec.1",
 				"msm-ext-disp-audio-codec-rx",
 				"cs35l41-codec.0-0040",	"cs35l41-codec.0-0041";
-		lge,msm-mbhc-extn-cable = <1>;
 	};
 };
 
@@ -42,7 +41,22 @@
         };
 };
 
+/* FM Radio */
+/* lge,fmradio-lna-enable-gpio = DMB_FM_LNA_EN gpio (PON line on LNA circuit) */
+/* lna-supply = VCC line on LNA circuit */
+/* lge,fmradio-rf-ctrl-gpio = DMB_FM_SPDT (VCTL line on SPDT circuit) */
+/* spdt-supply = VDD line on SPDT circuit */
+
 &snd_934x {
-	lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
-	lna-supply = <&pm8150_l16>;
+        lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
+        lna-supply = <&pm8150_l16>;
+        lge,fmradio-rf-ctrl-gpio = <&tlmm 163 0x00>;
+        spdt-supply = <&pm8150_l16>;
+};
+
+/* add gpio to control switch for Headset detect line */
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	es9218-codec@48{
+		dac,switch-gpio = <&tlmm 25 0x0>;
+	};
 };

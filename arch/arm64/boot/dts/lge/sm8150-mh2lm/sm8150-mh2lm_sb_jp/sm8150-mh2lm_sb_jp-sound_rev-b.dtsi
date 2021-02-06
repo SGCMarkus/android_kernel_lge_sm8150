@@ -46,3 +46,10 @@
 	lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
 	lna-supply = <&pm8150_l16>;
 };
+
+/* add gpio to control switch for Headset detect line */
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	es9218-codec@48{
+		dac,switch-gpio = <&tlmm 25 0x0>;
+	};
+};

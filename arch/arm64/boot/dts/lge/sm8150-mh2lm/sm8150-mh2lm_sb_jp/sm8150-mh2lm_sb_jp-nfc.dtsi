@@ -15,25 +15,25 @@
 
 
 &qupv3_se9_i2c { /* QUP_9 (NFC) */
-	qcom,clk-freq-out = <1000000>;
-	status = "ok";
-	nq@28 {
-		status = "disabled";
-	};
-
-	pn547@28 {
-		compatible = "nxp,pn547";
-		reg = <0x28>;
-		status = "ok";
-		nxp,gpio_sda = <&tlmm 39 0x00>;
-		nxp,gpio_scl = <&tlmm 40 0x00>;
-		nxp,gpio_ven = <&tlmm 41 0x00>;
-		nxp,gpio_mode = <&tlmm 113 0x00>;
-		nxp,gpio_irq = <&tlmm 47 0x00>;
-		nxp,i2c-pull-up = <1>;
-		qcom,clk-src = "BBCLK2";
-		interrupt-parent = <&tlmm>;
-		interrupts = <47 0>;
-		interrupt-names = "nfc_irq";
-	};
+        qcom,clk-freq-out = <400000>;
+        status = "ok";
+        nq@28 {
+                status = "disabled";
+        };
+        cxd22xx-i2c@28 {
+                compatible = "sony,cxd22xx-i2c";
+                reg = <0x28>;
+                status = "ok";
+                sony,gpio_sda = <&tlmm 39 0x00>;
+                sony,gpio_scl = <&tlmm 40 0x00>;
+                sony,gpio_irq = <&tlmm 47 0x00>;
+                sony,gpio_hvdd = <&tlmm 93 0x00>;
+                sony,gpio_xrst = <&tlmm 94 0x00>;
+                sony,gpio_mode = <&tlmm 41 0x00>;
+                sony,i2c-pull-up = <1>;
+                qcom,clk-src = "BBCLK2";
+                interrupt-parent = <&tlmm>;
+                interrupts = <47 0>;
+                interrupt-names = "nfc_irq";
+        };
 };

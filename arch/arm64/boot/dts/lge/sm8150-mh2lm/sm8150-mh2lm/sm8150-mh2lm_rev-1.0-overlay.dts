@@ -15,10 +15,10 @@
 /plugin/;
 
 #include "sm8150-mh2lm.dtsi"
-#include "sm8150-mh2lm-sound.dtsi"
+#include "sm8150-mh2lm-sound_rev-b.dtsi"
 #include "sm8150-mh2lm-fingerprint.dtsi"
 #include "sm8150-mh2lm-sar-atmf04.dtsi"
-#include "../sm8150-camera/sm8150-mh2lm-camera.dtsi"
+#include "../sm8150-camera/sm8150-mh2lm-camera_rev-1.0.dtsi"
 
 / {
 	model = "LG Electronics, mh2lm, rev_1.0";

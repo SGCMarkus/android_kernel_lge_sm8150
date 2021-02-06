@@ -53,6 +53,17 @@
 	};
 };
 
+// override sec app memory region for OIF
+&soc {
+	qcom_seecom: qseecom@87900000 {
+		reg = <0x87900000 0x2C00000>;
+	};
+
+    qcom_smcinvoke: smcinvoke@87900000 {
+		reg = <0x87900000 0x2C00000>;
+    };
+};
+
 &reserved_memory {
 		ramoops_mem: ramoops_region@b0000000 {
 			compatible = "removed-dma-pool";

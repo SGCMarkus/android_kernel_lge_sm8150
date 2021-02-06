@@ -106,6 +106,7 @@
 		qcom,msm-mbhc-hphl-swh = <1>;
 		qcom,msm-mbhc-gnd-swh = <0>;
 		qcom,msm-mbhc-moist-cfg = <0>, <0>, <1>;
+		lge,msm-mbhc-extn-cable = <0>;
 		qcom,hph-en0-gpio = <&tavil_hph_en0>;
 		qcom,hph-en1-gpio = <&tavil_hph_en1>;
 		qcom,tavil-mclk-clk-freq = <9600000>;
@@ -212,7 +213,7 @@
 		qcom,cdc-vddpx-1-current = <10000>;
 
 		cdc-vdd-3v3-supply = <&pm8150l_bob>;
-		qcom,cdc-vdd-3v3-voltage = <3300000 3300000>;
+		qcom,cdc-vdd-3v3-voltage = <3300000 4000000>;
 		qcom,cdc-vdd-3v3-current = <16800>;
 
 		qcom,cdc-static-supplies = "cdc-vdd-buck",
@@ -222,9 +223,9 @@
 					   "cdc-vddpx-1",
 					   "cdc-vdd-3v3";
 
-		qcom,cdc-micbias1-mv = <1800>;
+		qcom,cdc-micbias1-mv = <2700>;
 		qcom,cdc-micbias2-mv = <2100>;
-		qcom,cdc-micbias3-mv = <1800>;
+		qcom,cdc-micbias3-mv = <2700>;
 		qcom,cdc-micbias4-mv = <1800>;
 
 		qcom,cdc-mclk-clk-rate = <9600000>;

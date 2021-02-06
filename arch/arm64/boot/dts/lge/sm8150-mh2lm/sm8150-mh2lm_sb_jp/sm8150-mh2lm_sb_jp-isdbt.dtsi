@@ -1,0 +1,107 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+	qupv3_se1_i2c: i2c@884000 {
+		compatible = "qcom,i2c-geni";
+		reg = <0x884000 0x4000>;
+		interrupts = <GIC_SPI 602 0>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clock-names = "se-clk", "m-ahb", "s-ahb";
+		clocks = <&clock_gcc GCC_QUPV3_WRAP0_S1_CLK>,
+			<&clock_gcc GCC_QUPV3_WRAP_0_M_AHB_CLK>,
+			<&clock_gcc GCC_QUPV3_WRAP_0_S_AHB_CLK>;
+
+		dmas = <&gpi_dma0 0 1 3 64 0>, <&gpi_dma0 1 1 3 64 0>;
+		dma-names = "tx", "rx";
+
+		pinctrl-names = "default", "sleep";
+		pinctrl-0 = <&qupv3_se1_i2c_active>;
+		pinctrl-1 = <&qupv3_se1_i2c_sleep>;
+		qcom,wrapper-core = <&qupv3_0>;
+
+		qcom,clk-freq-out = <400000>;
+
+		status = "ok";
+		
+	/* [Modified] Ref. kernel/msm-4.14/arch/arm64/boot/dts/qcom/sm8150-qupv3.dtsi */
+
+	// [Fixed] Must contain "i2c_active" and "i2c_sleep" if pinctrl is to be used. Keep the same names.
+	/* [Fixed] List of phandles, each pointing at a pin configuration node within a pin controller.
+	  	The list of names to assign states, List entry 0 defines the name for integer state ID 0... */
+	
+		isdbt: isdbt@58 {
+			compatible = "lge, isdbt"; // [Fixed] Should be "lge, isdbt".
+			reg = <0x58>;
+
+		/* [GPIO Information]
+		*  1) en-gpio       (ISDBT_EN)                        : GPIO #166
+		*  2) reset-gpio    (ISDBT_RESET)                     : GPIO #108
+		*  3) lna-gc-gpio   (ISDBT_GAIN_CTRL)                 : N/A
+		*  4) lna-en-gpio   (ISDBT_LNA_EN)                    : GPIO #164
+		*  5) ldo-en-gpio   (ISDBT_LDO_EN)                    : GPIO #11
+		*/
+
+			/* [Fixed] Specifies maximum SPI clock frequency of ISDBT chipset(38.4 MHz). (ref. FC8080 datasheet) */
+			//spi-max-frequency = <40000000>;
+
+			/* [Fixed] The list of names to assign states, List entry 0,1,2... define the name for integer state ID 0,1,2...
+				- isdbt_pin_active : set to pinctrl-0 list (set to active)
+				- isdbt_pin_sleep : set to pinctrl-1 list (set to sleep) 	*/
+			pinctrl-names = "isdbt_pin_active", "isdbt_pin_sleep";
+
+			/* [Modified] The pin cofig lists can be for control pin.
+				- pinctrl-0 : active state
+				- pinctrl-1 : active sleep(suspend)
+				The pin config lists shall be defined in the "(model)-pinctrl.dtsi" file
+				The control pins lists are interrupt(isdbt_int), enable(isdbt_en),
+					FM/DMB antenna swtiching(isdbt_ant), LNA gain control & enable(isdbt_lna), LDO enable(isdbt_lna_en)
+				Additional items may vary depending on model schematic. */
+			pinctrl-0 = <&isdbt_en_active>, <&isdbt_lna_active>, <&isdbt_ldo_en_active>;
+			pinctrl-1 = <&isdbt_en_suspend>, <&isdbt_lna_suspend>, <&isdbt_ldo_en_suspend>;
+
+			/* [Modified] first is parents's node, second # is gpio #, third flag keep it 0. */
+			en-gpio = <&tlmm 166 0>;
+			reset-gpio = <&tlmm 108 0>;
+			//lna-gc-gpio = <&tlmm ?? 0>;
+			lna-en-gpio = <&tlmm 164 0>;
+			ldo-en-gpio = <&tlmm 11 0>;
+
+		/* [CLK Information] */
+		/* [Modified] when use pmic clk buffer, change use-xtal to 0 and set xtal-freq(ISDBT Chipset Core clk), interface-freq(SPI interface clk) inter value in kHz. */
+			use-xtal = <0>;
+			xtal-freq = <19200>;
+			//interface-freq = <19200>;
+
+		/* [Modified] when using clock buffer, you should check which clock buffer used for isdbt device */
+			clock-names = "isdbt_xo";
+			clocks = <&clock_rpmh RPMH_LN_BB_CLK3>;
+
+		/* [Power Supply Description Information]
+		*  1) ISDBT LDO      (pm8150_s4A)                    : V1.8, always power, power on/off control not need
+		*  2) LNA LDO        (pm8150_s4A)                    : V1.8, always power, power on/off control not need
+		*/
+
+		/* [Modified] when use ldo for LDO_IN, change ctrl-dmb-ldo to 1, and isdbt-ldo-supply set the appropriate chipset & power function such as <&pm8953_l10>
+					If no use case, change ctrl-dmb-ldo to 0, and isdbt-ldo-supply set such as <&chipset#_l??>*/
+			ctrl-isdbt-ldo = <0>;
+			//isdbt-ldo-supply = <&chipset#_l??>
+
+		/* [Modified] when use ldo for LNA(U1800), change ctrl-lna-ldo to 1, and lna-ldo-supply set the appropriate chipset & power function such as <&pm8953_l10>
+					If no use case, change ctrl-lna-ldo to 0, and lna-ldo-supply set such as <&chipset#_l??>*/
+			ctrl-lna-ldo = <0>;
+			//lna-ldo-supply = <&chipset#_l??>;
+		};
+	};
+};

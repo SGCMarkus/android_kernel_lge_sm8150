@@ -164,18 +164,18 @@
 		};
 	};
 
-	smart_cover_gpio {
-		 smartcover_gpio_default: smartcover_gpio_default {
-			pins = "gpio121";
+	ds2_smart_cover_gpio {
+		 ds2_smartcover_gpio_default: ds2_smartcover_gpio_default {
+			pins = "gpio3";
 			function = "normal";
 			input-enable;
 			bias-pull-up;
 			power-source = <0>;
 			};
 	};
-	cover_display_back_gpio {
-		 cover_display_back_gpio_default: cover_display_back_gpio_default {
-			pins = "gpio3";
+	ds2_cover_display_back_gpio {
+		 ds2_cover_display_back_gpio_default: ds2_cover_display_back_gpio_default {
+			pins = "gpio121";
 			function = "normal";
 			input-enable;
 			bias-pull-up;
@@ -263,6 +263,32 @@
 		};
 		mux {
 			status = "disabled";
+		};
+	};
+
+	sde_dp_aux_active:sde_dp_aux_active {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-disable = <0>;
+			driver-strength = <8>;
+		};
+	};
+
+	sde_dp_aux_suspend:sde_dp_aux_suspend {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-pull-down;
+			driver-strength = <8>;
 		};
 	};
 };

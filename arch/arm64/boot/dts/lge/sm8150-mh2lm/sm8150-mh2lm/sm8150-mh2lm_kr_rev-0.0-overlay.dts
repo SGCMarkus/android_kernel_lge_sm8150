@@ -19,7 +19,7 @@
 #include "sm8150-mh2lm-sound_kr.dtsi"
 #include "sm8150-mh2lm-fingerprint.dtsi"
 #include "sm8150-mh2lm-tdmb.dtsi"
-#include "../sm8150-camera/sm8150-mh2lm-camera.dtsi"
+#include "../sm8150-camera/sm8150-mh2lm-camera_rev-0.0.dtsi"
 
 / {
 	model = "LG Electronics, mh2lm_kr, rev_0.0";

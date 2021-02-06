@@ -11,13 +11,11 @@
  * GNU General Public License for more details.
  */
 
-#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-pm.dtsi"
-
-&qupv3_se0_i2c {
-	idtp9222-charger@61 {
-		// FOD parameters
-		idt,fod-bpp    = [A5 28 88 2E 98 19 A3 03 A3 FB A8 E8];
-		idt,fod-epp    = [FF FF 88 44 86 4B 96 19 97 0A 9C E7];
+/* This sensor is used only for domestic(kr) models. */
+&thermal_zones {
+	sub6-vts {
+		polling-delay-passive = <0>;
+		polling-delay = <0>;
+		thermal-governor = "user_space";
 	};
 };
-

@@ -18,19 +18,19 @@
 		label = "gpio_keys";
 		status = "okay";
 		pinctrl_names = "default";
-		pinctrl-0 = <&smartcover_gpio_default &cover_display_back_gpio_default>;
-		smart_cover {
-			label = "smart_cover";
-			gpios = <&tlmm 121 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&ds2_smartcover_gpio_default &ds2_cover_display_back_gpio_default>;
+		ds2_smart_cover {
+			label = "ds2_smart_cover";
+			gpios = <&tlmm 3 GPIO_ACTIVE_LOW>;
 			linux,input-type = <5>;
 			linux,code = <222>;
 			gpio-key,wakeup;
 			debounce-interval = <15>;
 			linux,can-disable;
 		};
-		cover_display_back {
-			label = "cover_display_back";
-			gpios = <&tlmm 3 GPIO_ACTIVE_LOW>;
+		ds2_cover_display_back {
+			label = "ds2_cover_display_back";
+			gpios = <&tlmm 121 GPIO_ACTIVE_LOW>;
 			linux,input-type = <5>;
 			linux,code = <222>;
 			gpio-key,wakeup;
@@ -41,16 +41,13 @@
 };
 
 &sde_dp {
-	pinctrl-names = "mdss_dp_active", "mdss_dp_sleep", "default";
-	pinctrl-0 = <&sde_dp_usbplug_cc_active>;
-	pinctrl-1 = <&sde_dp_usbplug_cc_suspend>;
+	lge,dp-use;
+	pinctrl-names = "mdss_dp_active", "mdss_dp_sleep";
+	pinctrl-0 = <&sde_dp_aux_active &sde_dp_usbplug_cc_active>;
+	pinctrl-1 = <&sde_dp_aux_suspend &sde_dp_usbplug_cc_suspend>;
 
 	qcom,aux-cfg1-settings = [24 23 13 1d];
-	qcom,aux-cfg3-settings = [2c 60];
-	lge,dp-use;
-	qcom,aux-en-gpio = <0x0>;	/* Disabled unused dp gpio */
-	qcom,aux-sel-gpio = <0x0>;	/* Disabled unused dp gpio */
-	qcom,dp-hpd-gpio = <&tlmm 114 0>;
-	lge,dp-gpio-debounce-interval = <0>;
-	usb-phy = <&usb2_phy0>, <&usb_qmp_dp_phy>; /* USB3 clock check after DD disconnection */
+
+	qcom,aux-en-gpio = <&tlmm 42 0>;
+	qcom,aux-sel-gpio = <&tlmm 148 0>;
 };

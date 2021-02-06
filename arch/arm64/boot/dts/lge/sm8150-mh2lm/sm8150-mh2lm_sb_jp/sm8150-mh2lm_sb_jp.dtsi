@@ -31,3 +31,4 @@
 #include "sm8150-mh2lm_sb_jp-storage.dtsi"
 #include "sm8150-mh2lm_sb_jp-pkm.dtsi"
 #include "sm8150-mh2lm_sb_jp-flicker.dtsi"
+#include "sm8150-mh2lm_sb_jp-isdbt.dtsi"

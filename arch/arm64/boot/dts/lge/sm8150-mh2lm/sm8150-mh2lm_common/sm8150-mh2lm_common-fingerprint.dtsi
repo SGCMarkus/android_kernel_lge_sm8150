@@ -7,7 +7,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
 /{
@@ -48,29 +48,35 @@
 	};
 };
 &soc{
-	/* L7C pm8150l_l7 */
-	rpmh-regulator-ldoc7 {
-		regulator-pm8150l-l7 {
-			regulator-min-microvolt = <2856000>;
-			regulator-max-microvolt = <3300000>;
-			qcom,init-voltage = <3000000>;
-			regulator-always-on;
-		};
-	};
-};
-&soc{
 	fingerprint@0 {
+		compatible = "egistec,et713";
+
+        
+        egistec,gpio_irq = <&tlmm 118 0x00>;
+        egistec,gpio_rst = <&tlmm 116 0x00>;
+        vcc_spi-supply = <&fingerprint_sensor_vdd>;
+		pinctrl-names = "et713_reset_reset",
+						"et713_reset_active",
+						"et713_irq_active";
+		pinctrl-0 = <&et713_reset_reset>;
+		pinctrl-1 = <&et713_reset_active>;
+		pinctrl-2 = <&et713_irq_active>;
+
 		status = "ok";
-    		compatible = "goodix,fingerprint";
+	};
 
-		interrupt-parent = <&tlmm>;
-		interrupts = <118>;
-
-		goodix,gpio_irq = <&tlmm 118 0x00>;
-		goodix,gpio_reset = <&tlmm 116 0x00>;
-		goodix,gpio_cs  = <&tlmm 101 0x00>;
-		goodix,vddio-supply = <&pm8150l_l7>;
-		gf,vddio-uV = <3000000>;
+	fingerprint_sensor_vdd: gpio-regulator@f {
+		compatible = "regulator-fixed";
+		reg = <0x0f 0x00>;
+		regulator-name = "fingerprint_sensor_vdd";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-enable-ramp-delay = <135>; // TBD
+		enable-active-high;
+		gpio = <&tlmm 21 0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&fingerprint_sensor_ldo_gpio>;
+		vin-supply = <&pm8150l_bob>;
 	};
 
 	qcom,qbt1000 {
@@ -83,3 +89,57 @@
 		qcom,finger-detect-gpio = <&pm8150_gpios 1 0>;
 	};
 };
+
+&tlmm {
+	et713_reset_reset: et713_reset_reset {
+		mux {
+			pins = "gpio116";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio116";
+			drive-strength = <2>;
+			bias-disable;
+			output-low;
+		};
+	};
+
+	et713_reset_active: et713_reset_active {
+		mux {
+			pins = "gpio116";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio116";
+			drive-strength = <2>;
+			bias-disable;
+			output-high;
+		};
+	};
+
+	et713_irq_active: et713_irq_active {
+		mux {
+			pins = "gpio118";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio118";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
+	};
+
+	fingerprint_sensor_ldo_gpio: fingerprint_sensor_ldo_gpio { // et713_ldo_high
+		mux {
+			pins = "gpio21";
+			function = "gpio";
+		};
+		config {
+			pins = "gpio21";
+			drive-strength = <2>;
+			bias-disable;
+			output-high;
+		};
+	};
+};
+

@@ -12,7 +12,7 @@
  */
 #include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound.dtsi"
 #include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound-es9218.dtsi"
-#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound-tfa9872.dtsi"
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-sound-cs35l41.dtsi"
 
 &audio_apr {
 	sound-tavil {
@@ -26,10 +26,10 @@
 		pinctrl-5 = <&tert_tdm_active &tert_tdm_dout_active>;
 		pinctrl-6 = <&fm_lna_default>;
 
-		asoc-codec = <&stub_codec>,  <&ext_disp_audio_codec>, <&tfa98xx_spk1> ,<&tfa98xx_spk2>;
+		asoc-codec = <&stub_codec>, <&ext_disp_audio_codec>, <&cs35l41_l>, <&cs35l41_r>;
 		asoc-codec-names = "msm-stub-codec.1",
 				"msm-ext-disp-audio-codec-rx",
-				"tfa98xx-codec.0-0034",	"tfa98xx-codec.0-0035";
+				"cs35l41-codec.0-0040",	"cs35l41-codec.0-0041";
 	};
 };
 
