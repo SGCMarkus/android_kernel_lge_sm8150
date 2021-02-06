@@ -460,6 +460,26 @@ enum lge_sku_carrier_type lge_get_sku_carrier(void)
 }
 EXPORT_SYMBOL(lge_get_sku_carrier);
 
+static int lge_capsesnor_support;
+int lge_get_capsensor(void)
+{
+	return lge_capsesnor_support;
+}
+EXPORT_SYMBOL(lge_get_capsensor);
+
+static int __init board_lge_capsensor_support_setup(char *s)
+{
+        if (!strcmp(s, "1"))
+                lge_capsesnor_support = 1;
+        else
+                lge_capsesnor_support = 0;
+
+        pr_info("lge_capsesnor_support : %d\n",lge_capsesnor_support );
+
+        return 1;
+}
+__setup("androidboot.vendor.lge.capsensor=", board_lge_capsensor_support_setup);
+
 /* For LAOP NTCode Operator Support */
 static enum lge_laop_operator_type lge_ntcode_op = OP_INVALID;
 int __init lge_ntcode_op_init(char *s)

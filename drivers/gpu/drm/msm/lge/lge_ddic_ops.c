@@ -10,6 +10,7 @@ extern struct lge_ddic_ops sw43410_ops;
 extern struct lge_ddic_ops rm69299_ops;
 extern struct lge_ddic_ops rm69299c_ops;
 extern struct lge_ddic_ops rm692A9_ops;
+extern struct lge_ddic_ops r66456_ops;
 
 struct lge_ddic_match {
 	char compatible[15];
@@ -23,6 +24,8 @@ static struct lge_ddic_match supported_ddic_list[] = {
 	{"rm69299b", &rm69299_ops}, /* type B : rm69299+tovisDD */
 	{"rm69299c", &rm69299c_ops}, /* type C : rm69299+tovisMD */
 	{"rm692A9", &rm692A9_ops}, /* type C : rm692A9+tovisMD */
+	{"r66456", &r66456_ops}, /* r566456+tianmaMD */
+	{"r66456a", &r66456_ops}, /* r566456+tianmaMD, D-CUT(DV2) */
 };
 
 extern char* get_ddic_name(void);
@@ -347,6 +350,18 @@ char *lge_ddic_cmd_set_prop_map[LGE_DDIC_DSI_CMD_SET_MAX] = {
 	"lge,sharpness-lut",
 	"lge,trueview-lut",
 	"lge,ddic-dsi-br-ctrl-ext-command",
+	"lge,mdss-dsi-fp-lhbm-command",
+	"lge,mdss-dsi-fp-lhbm-br-lvl-command",
+	"lge,lhbm-lut",
+	"lge,mdss-dsi-tc-perf-command",
+	"lge,rgb-lut",
+	"lge,ace-lut",
+	"lge,mdss-dsi-fp-lhbm-ready-command",
+	"lge,mdss-dsi-fp-lhbm-exit-command",
+	"lge,mdss-dsi-fp-lhbm-aod-command",
+	"lge,mdss-dsi-fp-lhbm-exit-post-command",
+	"lge,mdss-dsi-fp-lhbm-irc-command",
+	"lge,mdss-dsi-fp-norm-irc-command",
 };
 
 char *lge_ddic_cmd_set_state_map[LGE_DDIC_DSI_CMD_SET_MAX] = {
@@ -401,6 +416,38 @@ char *lge_ddic_cmd_set_state_map[LGE_DDIC_DSI_CMD_SET_MAX] = {
 	"lge,sharpness-lut-state",
 	"lge,trueview-lut-state",
 	"lge,ddic-dsi-br-ctrl-ext-command-state",
+	"lge,mdss-dsi-fp-lhbm-command-state",
+	"lge,mdss-dsi-fp-lhbm-br-lvl-command-state",
+	"lge,lhbm-lut-state",
+	"lge,mdss-dsi-tc-perf-command-state",
+	"lge,rgb-lut-state",
+	"lge,ace-lut-state",
+	"lge,mdss-dsi-fp-lhbm-ready-command-state",
+	"lge,mdss-dsi-fp-lhbm-exit-command-state",
+	"lge,mdss-dsi-fp-lhbm-aod-command-state",
+	"lge,mdss-dsi-fp-lhbm-exit-post-command-state",
+	"lge,mdss-dsi-fp-lhbm-irc-command-state",
+	"lge,mdss-dsi-fp-norm-irc-command-state",
+};
+
+char *lge_ddic_cm_lut_cmd_set_prop_map[LGE_CM_LUT_TYPE_MAX] = {
+	"lge,cm-lut-screen-mode-set",
+	"lge,cm-lut-saturation",
+	"lge,cm-lut-sharpness",
+	"lge,cm-lut-rgb",
+	"lge,cm-lut-ace",
+	"lge,cm-lut-trueview",
+	"lge,cm-lut-rgb-hue",
+};
+
+char *lge_ddic_cm_lut_cmd_set_count_map[LGE_CM_LUT_TYPE_MAX] = {
+	"lge,cm-lut-screen-mode-set-cnt",
+	"lge,cm-lut-saturation-cnt",
+	"lge,cm-lut-sharpness-cnt",
+	"lge,cm-lut-rgb-cnt",
+	"lge,cm-lut-ace-cnt",
+	"lge,cm-lut-trueview-cnt",
+	"lge,cm-lut-rgb-hue-cnt",
 };
 
 /* lge_ddic_dsi_panel_tx_cmd_set for LGE DSI CMD SETS*/
@@ -596,7 +643,7 @@ int get_payload_cnt(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set_type type
 
 	cmd_set = &(panel->lge.lge_cmd_sets[type]);
 	if (cmd_set->count == 0) {
-		pr_err("cmd set is not defined\n");
+		pr_debug("cmd set is not defined\n");
 		goto exit;
 	}
 
@@ -613,3 +660,153 @@ int get_payload_cnt(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set_type type
 exit:
 	return payload_count;
 }
+
+int lge_ddic_dsi_panel_parse_cm_lut_cmd_sets_sub(struct lge_cm_lut_list_set *cmd,
+					enum lge_cm_lut_type type,
+					struct device_node *of_node)
+{
+	int rc = 0;
+	u32 length = 0;
+	u32 packet_size = 0;
+	const char *data = NULL;
+	u8 *payload = NULL;
+	int i = 0, j = 0;
+
+	rc = of_property_read_u32(of_node, lge_ddic_cm_lut_cmd_set_count_map[type], &packet_size);
+
+	if (rc) {
+		pr_err("Unable to read packet_size of %s, rc:%d\n", lge_ddic_cm_lut_cmd_set_count_map[type], rc);
+		return rc;
+	}
+
+	data = of_get_property(of_node, lge_ddic_cm_lut_cmd_set_prop_map[type], &length);
+
+	if (!data) {
+		pr_err("Unable to get property: %s\n", lge_ddic_cm_lut_cmd_set_prop_map[type]);
+		rc = -EINVAL;
+		return rc;
+	}
+
+	cmd->count = length/packet_size;
+
+	cmd->cmds = kzalloc(cmd->count * sizeof(struct lge_lut_command), GFP_KERNEL);
+	if (!cmd->cmds) {
+		pr_err("Unable to allocate lut_command set\n");
+		rc = -EINVAL;
+		return rc;
+	}
+
+	for (i = 0; i < cmd->count; i++) {
+		payload = kzalloc(packet_size, GFP_KERNEL);
+
+		if (!payload) {
+			pr_err("Unable to allocate palyload packet_size:%d\n", packet_size);
+			rc = -EINVAL;
+			goto error_free_payloads;
+		}
+
+		for (j = 0; j < packet_size; j++) {
+			payload[j] = data[packet_size*i + j];
+		}
+
+		cmd->cmds[i].buf = payload;
+		cmd->cmds[i].size = packet_size;
+    }
+
+	return rc;
+
+error_free_payloads:
+	for (i = i-1; i >= 0; i--) {
+		if (cmd->cmds[i].buf) {
+			kfree(cmd->cmds[i].buf);
+		}
+	}
+	kfree(cmd->cmds);
+	return rc;
+}
+
+int lge_ddic_dsi_panel_parse_cm_lut_cmd_sets(struct dsi_panel *panel,
+	struct device_node *of_node)
+{
+	int rc = 0;
+	struct lge_cm_lut_list_set *set;
+	u32 i;
+
+	for(i = 0; i < LGE_CM_LUT_TYPE_MAX; i++) {
+		set = &panel->lge.cm_lut_sets[i];
+		set->type = i;
+
+		rc = lge_ddic_dsi_panel_parse_cm_lut_cmd_sets_sub(set, i, of_node);
+		if(rc)
+			pr_err("parse set %d is failed or not defined\n", i);
+	}
+	return rc;
+}
+
+char* get_cm_lut_payload_addr(struct dsi_panel *panel, enum lge_cm_lut_type type, int position)
+{
+	struct lge_cm_lut_list_set *cmd_set = NULL;
+	struct lge_lut_command *cmd = NULL;
+	char *payload = NULL;
+
+	if (type >= LGE_CM_LUT_TYPE_MAX) {
+		pr_err("out of range\n");
+		goto exit;
+	}
+
+	cmd_set = &(panel->lge.cm_lut_sets[type]);
+	if (cmd_set->count == 0) {
+		pr_err("cmd set is not defined\n");
+		goto exit;
+	}
+
+	cmd = &(panel->lge.cm_lut_sets[type].cmds[position]);
+	if (!cmd) {
+		pr_err("empty cmd\n");
+		goto exit;
+	}
+
+	payload = (char *)cmd->buf;
+
+	if (!payload) {
+		pr_err("empty payload\n");
+		goto exit;
+	}
+
+	pr_debug("find payload\n");
+
+exit:
+	return payload;
+}
+
+int get_cm_lut_payload_cnt(struct dsi_panel *panel, enum lge_cm_lut_type type, int position)
+{
+	struct lge_cm_lut_list_set *cmd_set = NULL;
+	struct lge_lut_command *cmd = NULL;
+	int payload_count = 0;
+
+	if (type >= LGE_CM_LUT_TYPE_MAX) {
+		pr_err("out of range\n");
+		goto exit;
+	}
+
+	cmd_set = &(panel->lge.cm_lut_sets[type]);
+	if (cmd_set->count == 0) {
+		pr_info("cmd set is not defined\n");
+		goto exit;
+	}
+
+	cmd = &(panel->lge.cm_lut_sets[type].cmds[position]);
+	if (!cmd) {
+		pr_err("empty cmd\n");
+		goto exit;
+	}
+
+	payload_count = cmd->size;
+
+	pr_debug("find payload count:%d\n", payload_count);
+
+exit:
+	return payload_count;
+}
+

@@ -35,3 +35,6 @@ obj-$(CONFIG_USB_REDRIVER_NB7VPQ904M)	+= ssusb-redriver-nb7vpq904m.o
 obj-$(CONFIG_USB_QCOM_DIAG_BRIDGE)      += diag_bridge.o
 obj-$(CONFIG_LGE_USB_SBU_SWITCH)	+= lge_sbu_switch.o
 obj-$(CONFIG_LGE_USB_DEBUGGER)		+= lge_usb_debugger.o
+
+obj-$(CONFIG_LGE_DUAL_SCREEN)		+= lge_ds2.o
+ccflags-y				+= -I$(srctree)/drivers/usb/pd

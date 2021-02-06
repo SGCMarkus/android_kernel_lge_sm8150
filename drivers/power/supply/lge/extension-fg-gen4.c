@@ -658,7 +658,7 @@ static void fginfo_snapshot_update(struct power_supply *psy)
 #define PROPERTY_BYPASS_REASON_NOENTRY	ENOENT
 #define PROPERTY_BYPASS_REASON_ONEMORE	EAGAIN
 
-static int wa_backup_bms_property[POWER_SUPPLY_PROP_BATTERY_TYPE];
+static int wa_backup_bms_property[POWER_SUPPLY_PROP_CYCLE_COUNTS + 1];
 
 static enum power_supply_property extension_bms_appended [] = {
 	POWER_SUPPLY_PROP_UPDATE_NOW,
@@ -679,12 +679,18 @@ extension_bms_get_property_pre(struct power_supply *psy,
 	switch (prop) {
 	case POWER_SUPPLY_PROP_RESISTANCE:
 	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
+	case POWER_SUPPLY_PROP_VOLTAGE_AVG:
 	case POWER_SUPPLY_PROP_CHARGE_NOW_RAW:
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
 	case POWER_SUPPLY_PROP_CHARGE_COUNTER_SHADOW:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 	case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
 	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG:
+	case POWER_SUPPLY_PROP_CC_SOC:
+	case POWER_SUPPLY_PROP_CURRENT_AVG:
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+	case POWER_SUPPLY_PROP_POWER_NOW:
+	case POWER_SUPPLY_PROP_POWER_AVG:
 		if (irq && !irq->depth) {
 			val->intval = wa_backup_bms_property[prop];
 			pr_info("[W/A] BBP) SOC_UPDATE_IRQ enabled! (==Reading blocked!) "
@@ -743,7 +749,28 @@ static int
 extension_bms_get_property_post(struct power_supply *psy,
 	enum power_supply_property prop, union power_supply_propval *val, int rc)
 {
-	wa_backup_bms_property[prop] = val->intval;
+	switch (prop) {
+	case POWER_SUPPLY_PROP_RESISTANCE:
+	case POWER_SUPPLY_PROP_VOLTAGE_OCV:
+	case POWER_SUPPLY_PROP_VOLTAGE_AVG:
+	case POWER_SUPPLY_PROP_CHARGE_NOW_RAW:
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER:
+	case POWER_SUPPLY_PROP_CHARGE_COUNTER_SHADOW:
+	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
+	case POWER_SUPPLY_PROP_TIME_TO_FULL_AVG:
+	case POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG:
+	case POWER_SUPPLY_PROP_CC_SOC:
+	case POWER_SUPPLY_PROP_CURRENT_AVG:
+	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
+	case POWER_SUPPLY_PROP_POWER_NOW:
+	case POWER_SUPPLY_PROP_POWER_AVG:
+		wa_backup_bms_property[prop] = val->intval;
+		break;
+
+	default:
+		break;
+	}
+
 	return rc;
 }
 

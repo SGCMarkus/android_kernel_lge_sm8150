@@ -465,7 +465,7 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 	struct common_header      *cmm_hdr = NULL;
 	struct cam_control        *ioctl_ctrl = NULL;
 	struct cam_packet         *csl_packet = NULL;
-	struct cam_config_dev_cmd config;
+	struct cam_config_dev_cmd config = {0,};
 	struct i2c_data_settings  *i2c_data = NULL;
 	struct i2c_settings_array *i2c_reg_settings = NULL;
 	struct cam_cmd_buf_desc   *cmd_desc = NULL;
@@ -671,11 +671,13 @@ int32_t cam_actuator_i2c_pkt_parse(struct cam_actuator_ctrl_t *a_ctrl,
 		act_i2c_write(a_ctrl, 0x8C, 0xE9, CAMERA_SENSOR_I2C_TYPE_BYTE);
 		/*LGE_CHANGE_E, Enable Lens Temp. Correction Function, 2018-08-17, hongs.lee@lge.com */
 #else
-		rc = cam_actuator_apply_settings(a_ctrl,
-			&a_ctrl->i2c_data.init_settings);
-		if (rc < 0) {
-			CAM_ERR(CAM_ACTUATOR, "Cannot apply Init settings");
-			return rc;
+		if (a_ctrl->soc_info.index == 3) {
+			rc = cam_actuator_apply_settings(a_ctrl,
+				&a_ctrl->i2c_data.init_settings);
+			if (rc < 0) {
+				CAM_ERR(CAM_ACTUATOR, "Cannot apply Init settings");
+				return rc;
+			}
 		}
 #endif
 /*LGE_CHANGE_E, Enable Lens Temp. Correction Function, 2018-08-17, hongs.lee@lge.com */

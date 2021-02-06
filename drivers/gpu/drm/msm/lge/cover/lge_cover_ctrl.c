@@ -7,11 +7,16 @@
 #include <linux/err.h>
 #include <linux/extcon.h>
 #include <asm/atomic.h>
+#include <linux/hall_ic.h>
 #include "lge_cover_ctrl.h"
 #include "lge_cover_ctrl_ops.h"
 #include <linux/lge_cover_display.h>
-
+#ifdef CONFIG_LGE_COVER_DISPLAY
 extern void hallic_handle_5v_boost_gpios(int state);
+extern int cover_led_status;
+extern bool is_dd_connected(void);
+#endif
+#ifdef CONFIG_LATTICE_ICE40
 extern struct ice40 *global_ice40;
 extern int ice40_mcu_reg_write(struct ice40 *ice40, uint addr, uint val);
 extern int ice40_mcu_reg_write_multi(struct ice40 *ice40, uint addr, u8 *val);
@@ -19,11 +24,16 @@ extern int ice40_master_reg_write(struct ice40 *ice40, uint addr, uint val);
 extern int ice40_master_reg_read(struct ice40 *ice40, uint addr, uint *val);
 extern int ice40_enable(struct ice40 *ice40);
 extern int ice40_disable(struct ice40 *ice40);
+extern void ice40_set_lreset(int value);
+extern int ice40_get_lreset(void);
+#endif
 extern struct lge_dp_display* get_lge_dp(void);
-extern int cover_led_status;
 extern bool is_dp_connected(void);
-extern void call_disconnect_uevent(void);
-extern bool is_dd_connected(void);
+extern int lge_get_dual_display_support(void);
+#ifdef CONFIG_LGE_DUAL_SCREEN
+extern bool is_ds2_connected(void);
+static DEFINE_MUTEX(cd_state_lock);
+#endif
 
 struct cover_ctrl_data {
 	bool initialized;
@@ -33,12 +43,6 @@ struct cover_ctrl_data {
 	ktime_t last_recovery_time[5];
 };
 static struct cover_ctrl_data cdisplay_data;
-
-static const unsigned int dd_extcon_cable[] = {
-	EXTCON_DISP_DP,
-	EXTCON_DISP_DD,
-	EXTCON_NONE,
-};
 
 struct dp_hpd *dd_hpd_get(struct device *dev, struct dp_hpd_cb *cb)
 {
@@ -79,6 +83,7 @@ bool dd_get_force_disconnection(void)
 }
 EXPORT_SYMBOL(dd_get_force_disconnection);
 
+#if defined(CONFIG_LGE_COVER_DISPLAY)
 int lge_cover_extcon_register(struct platform_device *pdev, struct dp_display *display, int id)
 {
 	int ret = 0;
@@ -102,14 +107,50 @@ int lge_cover_extcon_register(struct platform_device *pdev, struct dp_display *d
 	pr_info ("%s : done\n", __func__);
 	return ret;
 }
+#elif defined(CONFIG_LGE_DUAL_SCREEN)
+int lge_cover_extcon_register(struct platform_device *pdev, struct lge_dp_display *lge_dp, int id)
+{
+	int ret = 0;
+	struct platform_device *sdev = pdev;
 
+	if(!sdev) {
+		pr_err("%s : DS SDEV NULL register failed\n", __func__);
+		return -EINVAL;
+	}
+
+	lge_dp->dd_extcon_sdev[id] = devm_extcon_dev_allocate (&sdev->dev, dd_extcon_cable);
+
+	if (IS_ERR(lge_dp->dd_extcon_sdev[id]))
+	    return PTR_ERR(lge_dp->dd_extcon_sdev[id]);
+
+	ret = devm_extcon_dev_register(&sdev->dev, lge_dp->dd_extcon_sdev[id]);
+	if (ret) {
+		pr_err("%s : DS extcon register failed\n", __func__);
+		return ret;
+	}
+	pr_info ("%s : done\n", __func__);
+	return ret;
+}
+#endif
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 void dd_gpio_selection(int dd_hpd, int flip)
 {
 	int ret;
+#ifdef CONFIG_LATTICE_ICE40
 	uint data;
+#endif
 
 	ret = gpio_get_value(67);
 	pr_info("[before enable] gpio 67 value %d\n", ret);
+
+#ifdef CONFIG_LATTICE_ICE40
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	if (!ice40_get_lreset()) {
+		pr_info("Set lreset to high before control\n");
+		ice40_set_lreset(1);
+	}
+#endif
 
 	ice40_enable(global_ice40);
 	ret = ice40_master_reg_read(global_ice40, 0x00, &data);
@@ -117,7 +158,10 @@ void dd_gpio_selection(int dd_hpd, int flip)
 	if (dd_hpd) {
 		pr_info("Set to connect DD\n");
 		ice40_master_reg_write(global_ice40, 0x00, (data&0xFE));
-		gpio_set_value(35, 1);
+		if (lge_get_dual_display_support()) {
+			pr_info("[DD] set gpio 35 for DS1\n");
+			gpio_set_value(35, 1);
+		}
 		gpio_direction_output(67, 1);
 	} else {
 		pr_info("Set to connect USB_DP, flip:%d\n", flip);
@@ -125,21 +169,26 @@ void dd_gpio_selection(int dd_hpd, int flip)
 			ice40_master_reg_write(global_ice40, 0x00, (data&0xFD) | 0x01);
 		else
 			ice40_master_reg_write(global_ice40, 0x00, data|0x03);
-		gpio_set_value(35, 0);
+		if (lge_get_dual_display_support()) {
+			pr_info("[DD] set gpio 35 for DS1\n");
+			gpio_set_value(35, 0);
+		}
 		gpio_direction_output(67, 0);
 	}
-
+#endif
 	ret = gpio_get_value(67);
 	pr_info("[after enable] gpio 67 value %d\n", ret);
 
 	return;
 }
+#endif
 
+#ifdef CONFIG_LATTICE_ICE40
 void dd_lattice_disable()
 {
 	ice40_disable(global_ice40);
 }
-
+#endif
 bool is_dd_button_enabled(void)
 {
 	struct lge_dp_display *lge_dp = get_lge_dp();
@@ -151,6 +200,7 @@ bool is_dd_button_enabled(void)
 }
 EXPORT_SYMBOL(is_dd_button_enabled);
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
 static void change_led_status(struct lge_dp_display *lge_dp, int status)
 {
 	pr_info("status=%d\n", status);
@@ -178,7 +228,9 @@ static void change_led_status(struct lge_dp_display *lge_dp, int status)
 
 	return;
 }
+#endif
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
 static int update_led_status(struct lge_dp_display *lge_dp, int status)
 {
 	int button = 0;
@@ -221,6 +273,7 @@ exit:
 	mutex_unlock(&lge_dp->cover_lock);
 	return 0;
 }
+#endif
 
 static ssize_t cover_button_get(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -232,6 +285,7 @@ static ssize_t cover_button_get(struct device *dev,
 	return sprintf(buf, "%d %d\n", lge_dp->dd_button_state, lge_dp->skip_uevent);
 }
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
 static ssize_t cover_led_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -261,6 +315,7 @@ static ssize_t cover_led_set(struct device *dev,
 	return ret;
 }
 static DEVICE_ATTR(cover_led, S_IWUSR | S_IWGRP, NULL, cover_led_set);
+#endif
 
 static ssize_t cover_button_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
@@ -274,36 +329,41 @@ static ssize_t cover_button_set(struct device *dev,
 	sscanf(buf, "%d %d", &onoff, &remove);
 	pr_info("%d %d\n", onoff, remove);
 
-	if (is_dp_connected()) {
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+	if (is_dp_connected() && !is_ds2_connected()) {
 		pr_info("%s : USBDP connecetd skip button set\n", __func__);
 		return ret;
 	}
+#endif
 
 	if ((!lge_dp->dd_button_state) && (!onoff) && remove) {
 		pr_info("%s : Framework request to remove display contents \n", __func__);
 		set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_OFF);
 	}
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
 	if (onoff && lge_dp->led_status) {
 		update_led_status(lge_dp, 0);
 		usleep_range(2000, 2100);
 	}
+#endif
 
 	lge_dp->dd_button_state = onoff;
 	lge_dp->skip_uevent = !remove;
-
+#ifdef CONFIG_LGE_COVER_DISPLAY
 	hallic_handle_5v_boost_gpios(!!onoff);
 
 	if (!onoff) {
 		if (update_led_status(lge_dp, -1) < 0) {
 			pr_err("failed to update status\n");
+			}
 		}
-	}
-
+#endif
 	return ret;
 }
 static DEVICE_ATTR(cover_button, S_IRUGO | S_IWUSR | S_IWGRP, cover_button_get, cover_button_set);
 
+#if defined(CONFIG_LGE_COVER_DISPLAY)
 static ssize_t cover_max_duty_set(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t size)
 {
@@ -322,10 +382,12 @@ static ssize_t cover_max_duty_set(struct device *dev,
 	else
 		pr_info("DD set max duty\n");
 
+#ifdef CONFIG_LATTICE_ICE40
 	if (ice40_mcu_reg_write(global_ice40, ICE40_DUTY_MAX, input) < 0) {
 		pr_err("unable to set DD duty max\n");
 		return -EINVAL;
 	}
+#endif
 
 	return ret;
 }
@@ -349,10 +411,12 @@ static ssize_t cover_panel_onoff_set(struct device *dev,
 	else
 		pr_info("DD Panel On\n");
 
+#ifdef CONFIG_LATTICE_ICE40
 	if (ice40_mcu_reg_write(global_ice40, ICE40_PANEL_ONOFF, input) < 0) {
 		pr_err("unable to set DD panel onoff\n");
 		return -EINVAL;
 	}
+#endif
 
 	return ret;
 }
@@ -376,20 +440,24 @@ static ssize_t cover_brightness_debug_set(struct device *dev,
 	tx_buf[1] = (u8)(input & 0xFF);
 	pr_info("DD debug brightness: %d, 0x%x%x\n", input, tx_buf[0], tx_buf[1]);
 
+#ifdef CONFIG_LATTICE_ICE40
 	if (ice40_mcu_reg_write_multi(global_ice40, ICE40_BRIGHTNESS_DEBUG, tx_buf) < 0) {
 		pr_err("unable to set DD brightness debug\n");
 		return -EINVAL;
 	}
+#endif
 
 	return ret;
 }
 static DEVICE_ATTR(cover_brightness_debug, S_IWUSR | S_IWGRP, NULL, cover_brightness_debug_set);
+#endif
 
 int lge_cover_ctrl_create_sysfs(struct device *panel_sysfs_dev)
 {
 	int rc = 0;
 	if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_cover_button)) < 0)
 		pr_err("add cover_button set node fail!");
+#if defined(CONFIG_LGE_COVER_DISPLAY)
 	if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_cover_led)) < 0)
 		pr_err("add cover_button set node fail!");
 	if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_cover_max_duty)) < 0)
@@ -398,6 +466,7 @@ int lge_cover_ctrl_create_sysfs(struct device *panel_sysfs_dev)
 		pr_err("add cover_panel_onoff set node fail!");
 	if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_cover_brightness_debug)) < 0)
 		pr_err("add cover_brightness_debug set node fail!");
+#endif
 	return rc;
 }
 
@@ -470,12 +539,16 @@ static int lge_cover_ctrl_set_recovery_state(enum recovery_state state)
 		break;
 	case RECOVERY_LTFAIL_BEGIN:
 	case RECOVERY_MCU_BEGIN:
+#ifdef CONFIG_LGE_COVER_DISPLAY
 		hallic_handle_5v_boost_gpios(0);
+#endif
 		c_data->recovery_state = ++state;
 		break;
 	case RECOVERY_LTFAIL_DONE:
 	case RECOVERY_MCU_DONE:
+#ifdef CONFIG_LGE_COVER_DISPLAY
 		hallic_handle_5v_boost_gpios(1);
+#endif
 		c_data->recovery_state = RECOVERY_NONE;
 		break;
 	case RECOVERY_POWERDROP_DONE:
@@ -634,6 +707,7 @@ static bool has_layer(enum cover_display_state state)
 
 extern void send_hpd_event(void);
 
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 int set_cover_display_state(enum cover_display_state state)
 {
 	enum cover_display_state current_state = get_cover_display_state();
@@ -671,6 +745,52 @@ int set_cover_display_state(enum cover_display_state state)
 	cd_state = state;
 	return 0;
 }
+#elif IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+int set_cover_display_state(enum cover_display_state state)
+{
+	enum cover_display_state current_state;
+
+	mutex_lock(&cd_state_lock);
+	current_state = get_cover_display_state();
+
+	if (!can_change_cover_display_state(current_state, state)) {
+		pr_err("ignore cover display state change: %s -> %s by %pS\n", to_string(current_state), to_string(state), __builtin_return_address(0));
+		mutex_unlock(&cd_state_lock);
+		return -1;
+	}
+
+	switch(state) {
+	case COVER_DISPLAY_STATE_DISCONNECTED:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_CHECKING:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_ERROR:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_OFF:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_ON:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_SUSPEND:
+		break;
+	case COVER_DISPLAY_STATE_CONNECTED_POWERDROP:
+		break;
+	default:
+		pr_err("undefined state: %d\n", state);
+		mutex_unlock(&cd_state_lock);
+		return -1;
+	}
+	if (cd_state == COVER_DISPLAY_STATE_CONNECTED_SUSPEND && !has_layer(state)) {
+		send_hpd_event();
+		pr_info("send hpd event\n");
+	}
+
+	pr_info("cover display state changed: %s -> %s by %pS\n", to_string(cd_state), to_string(state), __builtin_return_address(0));
+	cd_state = state;
+	mutex_unlock(&cd_state_lock);
+
+	return 0;
+}
+#endif
 
 void set_dd_skip_uevent(int skip)
 {

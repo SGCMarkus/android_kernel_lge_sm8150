@@ -8,6 +8,10 @@
 
 #define DEFAULT_HBM_MODE 0x03;
 
+#define FP_LHBM_OFF 0
+#define FP_LHBM_ON 1
+#define FP_LHBM_DEFAULT_BR_LVL	4095
+
 enum lge_blmap_type {
 	LGE_BLMAP_DEFAULT = 0,
 	LGE_BLMAP_VE,
@@ -19,5 +23,19 @@ enum lge_blmap_type {
 };
 
 char *lge_get_blmapname(enum lge_blmap_type type);
+
+enum fp_lhbm_state {
+	LGE_FP_LHBM_OFF = 0,
+	LGE_FP_LHBM_ON,
+	LGE_FP_LHBM_READY,
+	LGE_FP_LHBM_EXIT,
+	LGE_FP_LHBM_SM_OFF = 10,
+	LGE_FP_LHBM_SM_ON,
+	LGE_FP_LHBM_FORCED_OFF = 20,
+	LGE_FP_LHBM_FORCED_ON,
+	LGE_FP_LHBM_FORCED_READY,
+	LGE_FP_LHBM_FORCED_EXIT,
+	LGE_FP_LHBM_STATE_MAX,
+};
 
 #endif // _LGE_BACKLIGHT_DEF_H_

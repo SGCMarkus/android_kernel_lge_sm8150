@@ -71,6 +71,14 @@ struct pd_phy_params {
 	u8		frame_filter_val;
 };
 
+#ifdef CONFIG_LGE_USB
+struct pd_phy_emul_params {
+	int		(*signal_cb)(const void *emul, enum pd_sig_type sig);
+	int		(*msg_rx_cb)(const void *emul, enum pd_sop_type sop,
+					u8 *buf, size_t len);
+};
+#endif
+
 #if IS_ENABLED(CONFIG_QPNP_USB_PDPHY)
 int pd_phy_open(struct pd_phy_params *params);
 int pd_phy_signal(enum pd_sig_type sig);
@@ -79,6 +87,10 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len,
 int pd_phy_update_roles(enum data_role dr, enum power_role pr);
 #ifdef CONFIG_LGE_USB
 int pd_phy_update_frame_filter(u8 frame_filter_val);
+int pd_phy_register_emul(const void *emul, struct pd_phy_emul_params *params);
+int pd_phy_emul_signal(const void *emul, enum pd_sig_type sig);
+int pd_phy_emul_write(const void *emul, u16 hdr, const u8 *data,
+		size_t data_len, enum pd_sop_type sop);
 #endif
 void pd_phy_close(void);
 #else
@@ -104,8 +116,25 @@ static inline int pd_phy_update_roles(enum data_role dr, enum power_role pr)
 }
 
 #ifdef CONFIG_LGE_USB
-int pd_phy_update_frame_filter(u8 frame_filter_val)
+static inline int pd_phy_update_frame_filter(u8 frame_filter_val)
 {
+	return -ENODEV;
+}
+
+static inline int pd_phy_register_emul(const void *emul,
+		struct pd_phy_emul_params)
+{
+	return -ENODEV;
+}
+
+static inline int pd_phy_emul_signal(const void *emul, enum pd_sig_type sig)
+{
+	return -ENODEV;
+}
+
+static inline int pd_phy_emul_write(const void *emul, u16 hdr, const u8 *data,
+		size_t data_len, enum pd_sop_type sop)
+
 	return -ENODEV;
 }
 #endif

@@ -179,11 +179,16 @@ struct __extcon_info {
 		.id = EXTCON_DISP_HMD,
 		.name = "HMD",
 	},
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 	[EXTCON_DISP_DD] = {
 		.type = EXTCON_TYPE_DISP | EXTCON_TYPE_USB,
 		.id = EXTCON_DISP_DD,
 		.name = "DualDisplay",
+	},
+	[EXTCON_DISP_DS2] = {
+		.type = EXTCON_TYPE_DISP | EXTCON_TYPE_USB,
+		.id = EXTCON_DISP_DS2,
+		.name = "DS2",
 	},
 #endif
 

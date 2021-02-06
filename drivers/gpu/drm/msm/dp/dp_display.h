@@ -19,12 +19,14 @@
 #include <drm/drmP.h>
 #include <drm/msm_drm.h>
 #include "dp_panel.h"
+
 #if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 #include <linux/usb/usbpd.h>
 #include <linux/hall_ic.h>
 #include <linux/extcon.h>
 #define EXT_DD_MAX_COUNT 2
 #endif
+
 #ifdef CONFIG_LGE_DISPLAY_COMMON
 #include "../lge/dp/lge_dp_def.h"
 #endif
@@ -145,9 +147,11 @@ int dp_display_get_num_of_displays(void);
 int dp_display_get_displays(void **displays, int count);
 int dp_display_get_num_of_streams(void);
 #ifdef CONFIG_LGE_COVER_DISPLAY
+bool is_dd_connected(void);
 extern void hallic_register_svid_handler(struct usbpd_svid_handler *hdlr);
 #endif
 #ifdef CONFIG_LGE_DISPLAY_COMMON
+int dp_display_external_block(struct lge_dp_display *lge_dp, int block);
 int dp_display_send_id_event(struct lge_dp_display *lge_dp);
 #endif
 #endif /* _DP_DISPLAY_H_ */

@@ -5,7 +5,6 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <video/mipi_display.h>
-#include <linux/kallsyms.h>
 #include <linux/lge_panel_notify.h>
 #include <soc/qcom/lge/board_lge.h>
 
@@ -62,10 +61,12 @@ extern int lge_ddic_dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 				enum lge_ddic_dsi_cmd_set_type type);
 extern int lge_brightness_create_sysfs(struct dsi_panel *panel,
 		struct class *class_panel);
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY) | IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
 extern void lge_cover_create_sysfs(struct dsi_panel *panel);
 #endif /* CONFIG_LGE_COVER_DISPLAY */
 extern int lge_ambient_set_interface_data(struct dsi_panel *panel);
+extern int lge_ddic_dsi_panel_parse_cm_lut_cmd_sets(struct dsi_panel *panel,
+				struct device_node *of_node);
 
 #if IS_ENABLED(CONFIG_LGE_DISPLAY_DIMMING_BOOT_SUPPORT)
 /*---------------------------------------------------------------------------*/
@@ -111,6 +112,7 @@ static void lge_set_blank_called(void)
 static int lge_dsi_panel_mode_set(struct dsi_panel *panel)
 {
 	bool reg_backup_cond = false;
+	int tc_perf_status = 0;
 
 	if (!panel) {
 		pr_err("invalid params\n");
@@ -130,6 +132,14 @@ static int lge_dsi_panel_mode_set(struct dsi_panel *panel)
 		panel->lge.is_sent_bc_dim_set = true;
 	} else {
 		pr_warn("skip ddic mode set on booting or not supported!\n");
+	}
+
+	if(panel->lge.use_tc_perf) {
+		tc_perf_status = panel->lge.tc_perf;
+		if (tc_perf_status && panel->lge.ddic_ops &&
+				panel->lge.ddic_ops->lge_set_tc_perf) {
+			panel->lge.ddic_ops->lge_set_tc_perf(panel, tc_perf_status);
+		}
 	}
 
 	return 0;
@@ -421,6 +431,16 @@ static int dsi_panel_send_lp_cmds(struct dsi_panel *panel,
 
 	if (!panel)
 		return -EINVAL;
+
+	if ((panel->lge.use_fp_lhbm) && (panel->lge.ddic_ops) &&
+			(panel->lge.ddic_ops->lge_set_fp_lhbm) &&
+			((cmd_type == LGE_DDIC_DSI_SET_LP2) ||
+			(cmd_type == LGE_DDIC_DSI_SET_NOLP)) &&
+			((panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_SM_ON) ||
+			(panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_ON) ||
+			(panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_FORCED_ON) ||
+			(panel->lge.old_panel_fp_mode == LGE_FP_LHBM_READY)))
+		panel->lge.ddic_ops->lge_set_fp_lhbm(panel, LGE_FP_LHBM_FORCED_EXIT);
 
 	switch (cmd_type) {
 	case LGE_DDIC_DSI_SET_LP1:
@@ -1269,19 +1289,15 @@ void lge_mdss_panel_dead_work(struct work_struct *work)
 
 void lge_mdss_report_panel_dead(void)
 {
-	unsigned int **addr;
 	struct dsi_display *display = NULL;
 	struct sde_connector *conn = NULL;
 
-	addr = (unsigned int **)kallsyms_lookup_name("primary_display");
+	display = primary_display;
 
-	if (addr) {
-		display = (struct dsi_display *)*addr;
-	} else {
-		pr_err("primary_display not founded\n");
+	if (!display) {
+		pr_err("display is null.\n");
 		return;
 	}
-
 	if (!display->panel) {
 		pr_err("panel is null.\n");
 		return;
@@ -1468,7 +1484,8 @@ static void lge_dsi_panel_create_sysfs(struct dsi_panel *panel)
 		}
 	}
 	if (panel->lge.use_irc_ctrl || panel->lge.use_ace_ctrl ||
-			panel->lge.use_dynamic_brightness || panel->lge.use_fp_lhbm)
+			panel->lge.use_dynamic_brightness || panel->lge.use_fp_lhbm ||
+			panel->lge.use_tc_perf)
 		lge_brightness_create_sysfs(panel, class_panel);
 	if (panel->lge.use_ambient)
 		lge_ambient_create_sysfs(panel, class_panel);
@@ -1488,7 +1505,7 @@ static void lge_dsi_panel_create_sysfs(struct dsi_panel *panel)
 		}
 	}
 
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY) | IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
 	lge_cover_create_sysfs(panel);
 #endif /* CONFIG_LGE_COVER_DISPLAY */
 }
@@ -1813,8 +1830,44 @@ static int lge_dsi_panel_parse_dt(struct dsi_panel *panel, struct device_node *o
 	pr_info("use_br_ctrl_ext=%d\n", panel->lge.use_br_ctrl_ext);
 
 	panel->lge.use_fp_lhbm = of_property_read_bool(of_node, "lge,use-fp-lhbm");
+	if(panel->lge.use_fp_lhbm) {
+		panel->lge.fp_lhbm_br_lvl = FP_LHBM_DEFAULT_BR_LVL;
+		panel->lge.need_fp_lhbm_set = false;
+		panel->lge.is_fp_hbm_mode = of_property_read_bool(of_node, "lge,is-fp-hbm-mode");
+		if (panel->lge.is_fp_hbm_mode) {
+			rc = of_property_read_u32(of_node, "lge,fp-hbm-mode-backlight-level", &tmp);
+			if (rc) {
+				panel->lge.fp_hbm_mode_backlight_lvl = 0xFFF;
+				pr_err("fail to get fp_hbm_mode_backlight_level. set %d\n", panel->lge.fp_hbm_mode_backlight_lvl);
+			} else {
+				panel->lge.fp_hbm_mode_backlight_lvl = tmp;
+				pr_info("fp_hbm_mode_backlight_level = %d\n", panel->lge.fp_hbm_mode_backlight_lvl);
+			}
+		}
+	}
 	pr_info("use_fp_lhbm=%d\n", panel->lge.use_fp_lhbm);
 
+	panel->lge.use_damping_mode = of_property_read_bool(of_node, "lge,use-damping-mode");
+	pr_info("use_damping_mode=%d\n", panel->lge.use_damping_mode);
+
+	panel->lge.use_tc_perf = of_property_read_bool(of_node, "lge,use-tc-perf");
+	pr_info("use_tc_perf=%d\n", panel->lge.use_tc_perf);
+
+	panel->lge.use_cm_lut = of_property_read_bool(of_node, "lge,use-color-manager-lut");
+	pr_info("use color mananger lut supported=%d\n", panel->lge.use_cm_lut);
+
+	if (panel->lge.use_cm_lut) {
+		panel->lge.cm_lut_cnt = of_property_count_strings(of_node, "lge,cm-lut-screen-mode-set-name");
+		if (panel->lge.cm_lut_cnt) {
+			panel->lge.cm_lut_name_list = kzalloc(panel->lge.cm_lut_cnt * 8, GFP_KERNEL);
+			if (!panel->lge.cm_lut_name_list) {
+				pr_err("Unable to cm_lut_name_list alloc fail\n");
+			} else {
+				of_property_read_string_array(of_node, "lge,cm-lut-screen-mode-set-name", panel->lge.cm_lut_name_list, panel->lge.cm_lut_cnt);
+			}
+		}
+		lge_ddic_dsi_panel_parse_cm_lut_cmd_sets(panel, of_node);
+	}
 	return rc;
 }
 

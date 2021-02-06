@@ -522,6 +522,13 @@ void mmc_cleanup_queue(struct mmc_queue *mq)
 	/* Then terminate our worker thread */
 	kthread_stop(mq->thread);
 
+#ifdef CONFIG_LGE_BDI_STRICTLIMIT_DIRTY
+	if (mq->card && mmc_card_sd(mq->card)) {
+		bdi_set_min_ratio(mq->queue->backing_dev_info, 0);
+		bdi_set_max_ratio(mq->queue->backing_dev_info, 100);
+	}
+#endif
+
 	/* Empty the queue */
 	spin_lock_irqsave(q->queue_lock, flags);
 	q->queuedata = NULL;

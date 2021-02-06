@@ -774,6 +774,43 @@ static ssize_t true_view_set(struct device *dev,
 }
 static DEVICE_ATTR(true_view, S_IRUGO | S_IWUSR | S_IWGRP, true_view_get, true_view_set);
 
+static ssize_t damping_mode_get(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct dsi_panel *panel;
+
+	panel = dev_get_drvdata(dev);
+	if (panel == NULL) {
+		pr_err("Invalid input\n");
+		return -EINVAL;
+	}
+
+	return sprintf(buf, "%d\n", panel->lge.damping_hdr);
+}
+static ssize_t damping_mode_set(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
+	struct dsi_panel *panel;
+	int enable;
+
+	panel = dev_get_drvdata(dev);
+	if (panel == NULL) {
+		pr_err("Invalid input\n");
+		return -EINVAL;
+	}
+
+	sscanf(buf, "%d", &enable);
+
+	if (panel->lge.ddic_ops && panel->lge.ddic_ops->lge_damping_mode_set)
+		panel->lge.ddic_ops->lge_damping_mode_set(panel, enable);
+	else
+		pr_info("Not support\n");
+
+	return ret;
+}
+static DEVICE_ATTR(damping_mode, S_IRUGO | S_IWUSR | S_IWGRP, damping_mode_get, damping_mode_set);
+
 int lge_color_manager_create_sysfs(struct dsi_panel *panel, struct device *panel_sysfs_dev)
 {
 	int rc = 0;
@@ -812,6 +849,11 @@ int lge_color_manager_create_sysfs(struct dsi_panel *panel, struct device *panel
 	if (panel->lge.true_view_supported) {
 		if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_true_view)) < 0)
 			pr_err("add true_view node fail!\n");
+	}
+
+	if (panel->lge.use_damping_mode) {
+		if ((rc = device_create_file(panel_sysfs_dev, &dev_attr_damping_mode)) < 0)
+			pr_err("add damping_mode node fail!\n");
 	}
 
 	return rc;

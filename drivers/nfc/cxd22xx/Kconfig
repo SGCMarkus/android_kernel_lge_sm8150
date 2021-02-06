@@ -1,0 +1,44 @@
+#
+# Near Field Communication (NFC) devices
+#
+
+config NFC_CXD22XX
+        tristate "CXD22XX NFC driver"
+        depends on I2C
+        select CRC_CCITT
+        default n
+        ---help---
+          Say yes if you want Sony cxd22xx Near Field Communication driver.
+          This is for i2c connected version. If unsure, say N here.
+
+          To compile this driver as a module, choose m here. The module will
+          be called cxd22xx-i2c.
+
+config NFC_CXD22XX_VEN
+        bool "CXD224X NFC VEN"
+        depends on NFC_CXD22XX
+        default n
+        ---help---
+          Say yes if you want to use cxd22xx NFC VEN(enable voltage) control.
+          If unsure, say N here.
+
+config NFC_CXD22XX_RST
+        bool "CXD22XX NFC RST"
+        depends on NFC_CXD22XX
+        default y
+        ---help---
+          Say yes if you want to use cxd22xx NFC RST(external XRST pin) control.
+
+config NFC_CXD22XX_PM
+        bool "CXD22XX PM"
+        depends on NFC_CXD22XX && PM_SLEEP
+        default n
+        ---help---
+          Say yes if you want to enable cxd22xx suspend/resume function.
+
+config NFC_CXD22XX_SERVICE_MODE
+    tristate "CXD22XX NFC Service Mode"
+    depends on NFC_CXD22XX
+    default n
+    ---help---
+      Say yes if you want to use cxd224x NFC Service Mode control.

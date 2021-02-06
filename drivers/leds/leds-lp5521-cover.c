@@ -1630,7 +1630,7 @@ int lp5521_cover_connect(void)
 	u8 buf = 0;
 	struct lp5521_led_pattern ptn = { };
 
-	if (!chip->pdata) {
+	if (!chip) {
 		LP5521_ERR_MSG("[%s] null pointer check!\n", __func__);
 		goto fail;
 	}
@@ -1824,6 +1824,7 @@ static int lp5521_remove(struct i2c_client *client)
 		chip->pdata->release_resources();
 
 	devm_kfree(&client->dev, chip);
+	chip = NULL;
 
 	LP5521_INFO_MSG("[%s] complete\n", __func__);
 
@@ -1847,7 +1848,7 @@ static void lp5521_shutdown(struct i2c_client *client)
 		chip->pdata->release_resources();
 
 	devm_kfree(&client->dev, chip);
-	chip->pdata = NULL;
+	chip = NULL;
 	LP5521_INFO_MSG("[%s] complete\n", __func__);
 }
 

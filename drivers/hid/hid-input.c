@@ -36,6 +36,11 @@
 
 #define unk	KEY_UNKNOWN
 
+#ifdef CONFIG_LGE_DUAL_SCREEN
+#define DS_HID_VID	0x1004
+#define DS_HID_PID	0x637a
+#endif
+
 static const unsigned char hid_keyboard[256] = {
 	  0,  0,  0,  0, 30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38,
 	 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44,  2,  3,
@@ -1320,7 +1325,12 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct 
 		input_event(input, EV_MSC, MSC_SCAN, usage->hid);
 
 	input_event(input, usage->type, usage->code, value);
-	pr_info("[Input_HID] Key[%d] %s\n", usage->code, value ? "Pressed" : "Released" );
+#ifdef CONFIG_LGE_DUAL_SCREEN
+	if (input->id.product == DS_HID_PID &&
+			input->id.vendor == DS_HID_VID &&
+			usage->type == EV_KEY)
+		pr_info("[Input_HID] Key[%d] %s\n", usage->code, value ? "Pressed" : "Released" );
+#endif
 
 	if ((field->flags & HID_MAIN_ITEM_RELATIVE) &&
 	    usage->type == EV_KEY && value) {

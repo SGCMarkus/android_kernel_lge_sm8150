@@ -5735,10 +5735,22 @@ static int ufshcd_complete_dev_init(struct ufs_hba *hba)
 		goto out;
 	}
 
+#ifdef CONFIG_MACH_LGE
+    /* SS UFS needs 1.5sec to clear query_flag */
+	dev_err(hba->dev, "%s ufshcd_query_flag start\n", __func__);
+
+	/* poll for max. 1500 iterations for fDeviceInit flag to clear */
+	for (i = 0; i < 1500 && !err && flag_res; i++) {
+		err = ufshcd_query_flag_retry(hba, UPIU_QUERY_OPCODE_READ_FLAG,
+			QUERY_FLAG_IDN_FDEVICEINIT, &flag_res);
+		usleep_range(1000, 1000); // 1ms sleep
+	}
+#else
 	/* poll for max. 1000 iterations for fDeviceInit flag to clear */
 	for (i = 0; i < 1000 && !err && flag_res; i++)
 		err = ufshcd_query_flag_retry(hba, UPIU_QUERY_OPCODE_READ_FLAG,
 			QUERY_FLAG_IDN_FDEVICEINIT, &flag_res);
+#endif
 
 	if (err)
 		dev_err(hba->dev,

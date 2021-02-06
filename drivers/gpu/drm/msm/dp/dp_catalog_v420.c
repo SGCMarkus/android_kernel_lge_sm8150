@@ -16,6 +16,10 @@
 
 #include "dp_catalog.h"
 #include "dp_reg.h"
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+#include <linux/lge_ds2.h>
+#include <soc/qcom/lge/board_lge.h>
+#endif
 
 #define dp_catalog_get_priv_v420(x) ({ \
 	struct dp_catalog *dp_catalog; \
@@ -237,6 +241,10 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	struct dp_catalog_private_v420 *catalog;
 	struct dp_io_data *io_data;
 	u8 value0, value1;
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	enum hw_subrev_no hw_sub_revid = lge_get_board_subrev_no();
+	u8 value2;
+#endif
 
 	if (!ctrl || !((v_level < MAX_VOLTAGE_LEVELS)
 		&& (p_level < MAX_PRE_EMP_LEVELS))) {
@@ -251,6 +259,16 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	value0 = vm_voltage_swing[v_level][p_level];
 	value1 = vm_pre_emphasis[v_level][p_level];
 
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1)) {
+		value0 = 0x10; // 557.5 mV
+		value1 = 0x0B; // 2.6 db
+		value2 = 0x00; // 0.0 db
+	}
+	pr_err("[drm-dp] value0 0x%0x, value1 0x%0x, value2 0x%0x, subrevid:%d\n",
+			value0, value1, value2, hw_sub_revid);
+#endif
+
 	/* program default setting first */
 	io_data = catalog->io->dp_ln_tx0;
 	dp_write(catalog->exe_mode, io_data, TXn_TX_DRV_LVL_V420, 0x2A);
@@ -263,6 +281,9 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	/* Enable MUX to use Cursor values from these registers */
 	value0 |= BIT(5);
 	value1 |= BIT(5);
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	value2 |= BIT(5);
+#endif
 
 	/* Configure host and panel only if both values are allowed */
 	if (value0 != 0xFF && value1 != 0xFF) {
@@ -271,13 +292,22 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 				value0);
 		dp_write(catalog->exe_mode, io_data, TXn_TX_EMP_POST1_LVL,
 				value1);
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+		if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1))
+			dp_write(catalog->exe_mode, io_data, 0x108,
+					value2);
+#endif
 
 		io_data = catalog->io->dp_ln_tx1;
 		dp_write(catalog->exe_mode, io_data, TXn_TX_DRV_LVL_V420,
 				value0);
 		dp_write(catalog->exe_mode, io_data, TXn_TX_EMP_POST1_LVL,
 				value1);
-
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+		if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1))
+			dp_write(catalog->exe_mode, io_data, 0x108,
+					value2);
+#endif
 		pr_debug("hw: vx_value=0x%x px_value=0x%x\n",
 			value0, value1);
 	} else {

@@ -8,12 +8,12 @@
 #include "cam_debug_util.h"
 #include "lgit_onsemi_actuator_utils.h"
 
-#ifndef CONFIG_MACH_SM8150_BETA
-#define REG_ADDR_SOC_0 0x84
-#define REG_ADDR_SOC_3 0x84
-#else
+#if defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
 #define REG_ADDR_SOC_0 0xF01A
 #define REG_ADDR_SOC_3 0x3
+#else
+#define REG_ADDR_SOC_0 0x84
+#define REG_ADDR_SOC_3 0x84
 #endif
 
 extern struct class* get_camera_class(void);

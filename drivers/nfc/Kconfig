@@ -71,6 +71,7 @@ config NFC_PORT100
 #source "drivers/nfc/s3fwrn5/Kconfig"
 #source "drivers/nfc/st95hf/Kconfig"
 source "drivers/nfc/pn553/Kconfig"
+source "drivers/nfc/cxd22xx/Kconfig"
 
 config NFC_NQ
         tristate "QTI NCI based NFC Controller Driver for NQx"

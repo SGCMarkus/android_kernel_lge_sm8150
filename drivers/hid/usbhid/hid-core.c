@@ -36,6 +36,7 @@
 #include <linux/hiddev.h>
 #include <linux/hid-debug.h>
 #include <linux/hidraw.h>
+#include <linux/input/lge_touch_notify.h>
 #include "usbhid.h"
 
 /*
@@ -43,6 +44,60 @@
  */
 
 #define DRIVER_DESC "USB HID core driver"
+
+#define LGE_HID_TOUCH_NAME		"LGE_DS2"
+
+int dualscreen_connected;
+
+static struct bus_type hid_touch_uevent_subsys = {
+	.name = LGE_HID_TOUCH_NAME,
+	.dev_name = LGE_HID_TOUCH_NAME,
+};
+
+static struct device device_hid_touch_uevent = {
+	.id    = 0,
+	.bus   = &hid_touch_uevent_subsys,
+};
+
+static int  hid_touch_uevent_init(void)
+{
+	int ret = 0;
+
+	HID_TOUCH_TRACE();
+
+	/* Create the "/sys/devices/system/LGE_DS2" directory */
+	ret = subsys_system_register(&hid_touch_uevent_subsys, NULL);
+	if (ret < 0)
+		TOUCH_E(", bus is not registered, ret : %d\n", ret);
+	ret = device_register(&device_hid_touch_uevent);
+	if (ret < 0)
+		TOUCH_E(", device is not registered, ret : %d\n", ret);
+
+	return ret;
+}
+
+char *hid_touch_uevent_str[HID_TOUCH_EVENT_SIZE+1][2] = {
+	{NULL, NULL},
+	{"TOUCH_GESTURE_WAKEUP=WAKEUP", NULL},
+};
+
+static void uevent_init_work_func(struct work_struct *work)
+{
+	/*Touch Gesture - Knock On*/
+	kobject_uevent_env(&device_hid_touch_uevent.kobj,
+				KOBJ_CHANGE, hid_touch_uevent_str[1]);
+}
+
+void hid_touch_send_uevent(struct hid_device *hid, int type)
+{
+	if ((hid->uevent_wq != NULL) ||
+			(&hid->uevent_work != NULL) ) {
+		TOUCH_I("[usbhid][%s] %s\n", __func__, hid_touch_uevent_str[type][0]);
+		queue_work(hid->uevent_wq, &hid->uevent_work);
+	} else {
+		TOUCH_E("work queue is NULL!\n");
+	}
+}
 
 /*
  * Module parameters.
@@ -1211,6 +1266,15 @@ static void usbhid_stop(struct hid_device *hid)
 		usbhid->intf->needs_remote_wakeup = 0;
 	}
 
+	if (hid->product == 0x637a) {
+		TOUCH_I("[%s] remove 'uevent_wq'\n", __func__);
+		dualscreen_connected = 0;
+		touch_notifier_call_chain(NOTIFY_DUALSCREEN_STATE, &dualscreen_connected);
+		cancel_work_sync(&hid->uevent_work);
+		flush_workqueue(hid->uevent_wq);
+		destroy_workqueue(hid->uevent_wq);
+	}
+
 	mutex_lock(&usbhid->mutex);
 
 	clear_bit(HID_STARTED, &usbhid->iofl);
@@ -1396,6 +1460,21 @@ static int usbhid_probe(struct usb_interface *intf, const struct usb_device_id *
 	setup_timer(&usbhid->io_retry, hid_retry_timeout, (unsigned long) hid);
 	spin_lock_init(&usbhid->lock);
 	mutex_init(&usbhid->mutex);
+
+	if (hid->product != 0x637a) {
+		TOUCH_I("HID Product ID : %04x\n", hid->product);
+	} else {
+		TOUCH_I("Attach LGE Dualscreen 2 !!! [%s]\n", hid->name);
+		/* Create hid touch gesture wake-up uevent queue */
+		dualscreen_connected = 1;
+		touch_notifier_call_chain(NOTIFY_DUALSCREEN_STATE, &dualscreen_connected);
+		hid->uevent_wq = create_singlethread_workqueue("uevent_wq");
+		if (!hid->uevent_wq) {
+			TOUCH_E(", failed to create uevent workqueue\n");
+			return -ENOMEM;
+		}
+		INIT_WORK(&hid->uevent_work, uevent_init_work_func);
+	}
 
 	ret = hid_add_device(hid);
 	if (ret) {
@@ -1662,6 +1741,10 @@ static int __init hid_init(void)
 {
 	int retval = -ENOMEM;
 
+	retval = hid_touch_uevent_init();
+	if (retval)
+		goto usbhid_quirks_init_fail;
+
 	retval = usbhid_quirks_init(quirks_param);
 	if (retval)
 		goto usbhid_quirks_init_fail;
@@ -1681,6 +1764,7 @@ static void __exit hid_exit(void)
 {
 	usb_deregister(&hid_driver);
 	usbhid_quirks_exit();
+	device_unregister(&device_hid_touch_uevent);
 }
 
 module_init(hid_init);

@@ -6,7 +6,6 @@
 #include "sde_connector.h"
 #include "sde_encoder.h"
 #include <linux/backlight.h>
-#include <linux/kallsyms.h>
 #include <linux/leds.h>
 #include "dsi_drm.h"
 #include "dsi_display.h"
@@ -25,6 +24,11 @@
 extern bool is_dd_connected(void);
 extern bool is_dd_button_enabled(void);
 extern int lge_backlight_device_update_status(struct backlight_device *bd);
+#endif
+
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+#include "../ds2/lge_backlight_ds2.h"
+extern bool is_ds2_connected(void);
 #endif
 
 extern int lge_ddic_dsi_panel_tx_cmd_set(struct dsi_panel *panel,
@@ -251,6 +255,10 @@ int lge_backlight_device_update_status(struct backlight_device *bd)
 	if (panel->lge.br_offset != 0 && is_dd_button_enabled()) {
 		brightness = br_to_offset_br(panel, brightness, blmap->size - 1, BR_MD);
 	}
+#elif IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	if (panel->lge.br_offset != 0 && is_ds2_connected()) {
+		brightness = br_to_offset_br_ds2(panel, brightness, blmap->size - 1, BR_MD);
+	}
 #endif
 
 	if (blmap) {
@@ -386,7 +394,6 @@ static ssize_t irc_brighter_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	ssize_t ret = strnlen(buf, PAGE_SIZE);
-	unsigned int **addr;
 	struct dsi_panel *panel;
 	struct dsi_display *display;
 	int input;
@@ -411,13 +418,7 @@ static ssize_t irc_brighter_store(struct device *dev,
 	}
 	mutex_unlock(&panel->panel_lock);
 
-	addr = (unsigned int **)kallsyms_lookup_name("primary_display");
-	if (addr) {
-		display = (struct dsi_display *)*addr;
-	} else {
-		pr_err("main_display not founded.\n");
-		return -EINVAL;
-	}
+	display = primary_display;
 
 	if (!display) {
 		pr_err("display is null\n");
@@ -491,7 +492,6 @@ static ssize_t brightness_table_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	ssize_t ret = strnlen(buf, PAGE_SIZE);
-	unsigned int **addr;
 	struct dsi_panel *panel;
 	struct dsi_display *display;
 	int input;
@@ -513,13 +513,7 @@ static ssize_t brightness_table_store(struct device *dev,
 	}
 	mutex_unlock(&panel->panel_lock);
 
-	addr = (unsigned int **)kallsyms_lookup_name("primary_display");
-	if (addr) {
-		display = (struct dsi_display *)*addr;
-	} else {
-		pr_err("main_display not founded.\n");
-		return -EINVAL;
-	}
+	display = primary_display;
 
 	if (!display) {
 		pr_err("display is null\n");
@@ -564,7 +558,82 @@ static ssize_t fp_lhbm_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	ssize_t ret = strnlen(buf, PAGE_SIZE);
-	unsigned int **addr;
+	struct dsi_panel *panel;
+	struct dsi_display *display;
+	int input;
+
+	panel = dev_get_drvdata(dev);
+	if (!panel) {
+		pr_err("panel is NULL\n");
+		return -EINVAL;
+	}
+
+	sscanf(buf, "%d", &input);
+	pr_info("input data %d\n", input);
+
+	mutex_lock(&panel->panel_lock);
+
+	panel->lge.fp_lhbm_mode = input;
+
+	if(!dsi_panel_initialized(panel)) {
+		pr_err("panel not yet initialized..\n");
+		panel->lge.need_fp_lhbm_set = true;
+		mutex_unlock(&panel->panel_lock);
+		return -EINVAL;
+	}
+
+	if (panel->lge.lp_state == LGE_PANEL_OFF) {
+		pr_err("panel is not ready!\n");
+		panel->lge.need_fp_lhbm_set = true;
+		mutex_unlock(&panel->panel_lock);
+		return -EINVAL;
+	}
+	mutex_unlock(&panel->panel_lock);
+
+	display = primary_display;
+
+	if (!display) {
+		pr_err("display is null\n");
+		return -EINVAL;
+	}
+
+	if (display->is_cont_splash_enabled) {
+		pr_err("cont_splash enabled\n");
+		return -EINVAL;
+	}
+
+	mutex_lock(&display->display_lock);
+	if (panel->lge.ddic_ops && panel->lge.ddic_ops->lge_set_fp_lhbm)
+		panel->lge.ddic_ops->lge_set_fp_lhbm(panel, panel->lge.fp_lhbm_mode);
+	mutex_unlock(&display->display_lock);
+
+	return ret;
+}
+static DEVICE_ATTR(fp_lhbm, S_IRUGO | S_IWUSR | S_IWGRP, fp_lhbm_show, fp_lhbm_store);
+
+static ssize_t fp_lhbm_br_lvl_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_panel *panel;
+	int ret = 0;
+
+	panel = dev_get_drvdata(dev);
+	if (!panel) {
+		pr_err("panel is NULL\n");
+		return ret;
+	}
+
+	mutex_lock(&panel->panel_lock);
+	ret = panel->lge.fp_lhbm_br_lvl;
+	mutex_unlock(&panel->panel_lock);
+
+	return sprintf(buf, "%d\n", ret);
+}
+
+static ssize_t fp_lhbm_br_lvl_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
 	struct dsi_panel *panel;
 	struct dsi_display *display;
 	int input;
@@ -586,13 +655,7 @@ static ssize_t fp_lhbm_store(struct device *dev,
 	}
 	mutex_unlock(&panel->panel_lock);
 
-	addr = (unsigned int **)kallsyms_lookup_name("primary_display");
-	if (addr) {
-		display = (struct dsi_display *)*addr;
-	} else {
-		pr_err("main_display not founded.\n");
-		return -EINVAL;
-	}
+	display = primary_display;
 
 	if (!display) {
 		pr_err("display is null\n");
@@ -604,18 +667,99 @@ static ssize_t fp_lhbm_store(struct device *dev,
 		return -EINVAL;
 	}
 
-	mutex_lock(&panel->panel_lock);
-	panel->lge.fp_lhbm_mode = input;
-	mutex_unlock(&panel->panel_lock);
+	if (panel->lge.ddic_ops && panel->lge.ddic_ops->lge_set_fp_lhbm_br_lvl)
+		panel->lge.ddic_ops->lge_set_fp_lhbm_br_lvl(panel, input);
 
-	/* Not yet implemented */
-	pr_info("Test log Status : %d \n", panel->lge.fp_lhbm_mode);
-	/* Not yet implemented */
 	return ret;
 }
-static DEVICE_ATTR(fp_lhbm, S_IRUGO | S_IWUSR | S_IWGRP, fp_lhbm_show, fp_lhbm_store);
+static DEVICE_ATTR(fp_lhbm_br_lvl, S_IRUGO | S_IWUSR | S_IWGRP, fp_lhbm_br_lvl_show, fp_lhbm_br_lvl_store);
 
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+static ssize_t is_fp_hbm_mode_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_panel *panel;
+	int ret = 0;
+
+	panel = dev_get_drvdata(dev);
+	if (!panel) {
+		pr_err("panel is NULL\n");
+		return ret;
+	}
+
+	mutex_lock(&panel->panel_lock);
+	ret = panel->lge.is_fp_hbm_mode;
+	mutex_unlock(&panel->panel_lock);
+
+	return sprintf(buf, "%d\n", ret);
+}
+static DEVICE_ATTR(is_fp_hbm_mode, S_IRUGO, is_fp_hbm_mode_show, NULL);
+
+static ssize_t tc_perf_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct dsi_panel *panel;
+	int ret = 0;
+
+	panel = dev_get_drvdata(dev);
+	if (!panel) {
+		pr_err("panel is NULL\n");
+		return ret;
+	}
+
+	mutex_lock(&panel->panel_lock);
+	ret = panel->lge.tc_perf;
+	mutex_unlock(&panel->panel_lock);
+
+	return sprintf(buf, "%d\n", ret);
+}
+
+static ssize_t tc_perf_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
+	struct dsi_panel *panel;
+	struct dsi_display *display;
+	int input;
+
+	panel = dev_get_drvdata(dev);
+	if (!panel) {
+		pr_err("panel is NULL\n");
+		return -EINVAL;
+	}
+
+	sscanf(buf, "%d", &input);
+	pr_info("input data %d\n", input);
+
+	mutex_lock(&panel->panel_lock);
+	if(!dsi_panel_initialized(panel)) {
+		pr_err("panel not yet initialized..\n");
+		mutex_unlock(&panel->panel_lock);
+		return -EINVAL;
+	}
+	mutex_unlock(&panel->panel_lock);
+
+	display = primary_display;
+
+	if (!display) {
+		pr_err("display is null\n");
+		return -EINVAL;
+	}
+
+	if (display->is_cont_splash_enabled) {
+		pr_err("cont_splash enabled\n");
+		return -EINVAL;
+	}
+
+	panel->lge.tc_perf = input;
+
+	if (panel->lge.ddic_ops && panel->lge.ddic_ops->lge_set_tc_perf)
+		panel->lge.ddic_ops->lge_set_tc_perf(panel, input);
+
+	return ret;
+}
+static DEVICE_ATTR(tc_perf, S_IRUGO | S_IWUSR | S_IWGRP, tc_perf_show, tc_perf_store);
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY) || IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
 static ssize_t br_offset_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -647,8 +791,13 @@ static ssize_t br_offset_store(struct device *dev,
 
 	sscanf(buf, "%d", &data);
 
-	if (is_dd_connected() && is_dd_button_enabled())
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (is_dd_connected() && is_dd_button_enabled()) {
+#elif IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	if (is_ds2_connected()) {
+#endif
 		validate = true;
+	}
 
 	if (validate && (data == BR_OFFSET_BYPASS)) {
 		panel->lge.br_offset_bypass = true;
@@ -663,7 +812,9 @@ static ssize_t br_offset_store(struct device *dev,
 		if (panel->lge.br_offset_bypass)
 			panel->lge.br_offset_bypass = false;
 		panel->lge.br_offset_update = true;
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 		lge_backlight_cover_device_update_status(panel->lge.bl_cover_device);
+#endif
 		panel->lge.br_offset_update = false;
 	}
 
@@ -701,8 +852,21 @@ int lge_brightness_create_sysfs(struct dsi_panel *panel,
 				if ((rc = device_create_file(brightness_sysfs_dev,
 								&dev_attr_fp_lhbm)) < 0)
 					pr_err("add fp_lhbm set node fail!");
+				if ((rc = device_create_file(brightness_sysfs_dev,
+								&dev_attr_fp_lhbm_br_lvl)) < 0)
+					pr_err("add fp_lhbm_lvl set node fail!");
+				if (panel->lge.is_fp_hbm_mode) {
+					if ((rc = device_create_file(brightness_sysfs_dev,
+									&dev_attr_is_fp_hbm_mode)) < 0)
+						pr_err("add is_fp_hbm_mode node fail!");
+                                }
 			}
-#ifdef CONFIG_LGE_COVER_DISPLAY
+			if (panel->lge.use_tc_perf) {
+				if ((rc = device_create_file(brightness_sysfs_dev,
+								&dev_attr_tc_perf)) < 0)
+					pr_err("add tc_perf set node fail!");
+			}
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 			if ((rc = device_create_file(brightness_sysfs_dev,
 							&dev_attr_br_offset)) < 0)
 				pr_err("add br_offset node fail!");

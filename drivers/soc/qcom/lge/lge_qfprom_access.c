@@ -235,7 +235,7 @@ static ssize_t qfprom_deviceid_show(struct device *dev, struct device_attribute 
 
   temp = kmalloc(DEVICE_ID_INPUT_SIZE, GFP_KERNEL);
   if (temp == NULL)
-    goto err_mem;
+    return -ENOMEM;
   memset(temp, 0x00, DEVICE_ID_INPUT_SIZE);
   memset(device_id_hash, 0x00, sizeof(device_id_hash));
   memset(device_id_char, 0x00, sizeof(device_id_char));
@@ -293,7 +293,6 @@ static ssize_t qfprom_deviceid_show(struct device *dev, struct device_attribute 
   }
   return sprintf(buf, "%s\n", device_id_char);
 
-err_mem:
   kfree(temp);
 
 hash_err:

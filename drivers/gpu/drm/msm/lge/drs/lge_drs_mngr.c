@@ -1,6 +1,5 @@
 
 #define pr_fmt(fmt)	"[Display][lge-drs:%s:%d] " fmt, __func__, __LINE__
-#include <linux/kallsyms.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include "lge_drs_mngr.h"
@@ -287,14 +286,14 @@ int lge_drs_mngr_begin(struct dsi_panel *panel)
 
 static int lge_drs_mngr_get_main_display(struct lge_drs_mngr *drs_mngr)
 {
-	unsigned int **addr;
+	struct dsi_display *display = NULL;
 
 	if (!drs_mngr)
 		return -EINVAL;
 
-	addr = (unsigned int **)kallsyms_lookup_name("primary_display");
-	if (addr) {
-		drs_mngr->main_display = (struct dsi_display *)*addr;
+	display = primary_display;
+	if (display) {
+		drs_mngr->main_display = display;
 	} else {
 		pr_err("%s not found\n", "main_display");
 		return -EAGAIN;
@@ -479,7 +478,6 @@ static ssize_t freeze_state_hal_store(struct device *dev,
 {
 	ssize_t ret = strnlen(buf, PAGE_SIZE);
 	int rc, enable;
-	enum lge_drs_request new_state = DRS_REQUEST_MAX;
 
 	sscanf(buf, "%d", &enable);
 
@@ -487,12 +485,9 @@ static ssize_t freeze_state_hal_store(struct device *dev,
 	if (rc < 0) {
 		pr_warn("WARNING: fail to freeze, rc=%d\n", rc);
 	} else {
-		if (enable)
-			new_state = DRS_FREEZE;
-		else
-			new_state = DRS_UNFREEZE;
-
-		lge_drs_mngr_set_freeze_state(new_state);
+		if(enable > DRS_REQUEST_MAX)
+			enable = DRS_REQUEST_MAX;
+		lge_drs_mngr_set_freeze_state(enable);
 	}
 
 	return ret;

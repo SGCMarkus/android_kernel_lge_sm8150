@@ -16,13 +16,19 @@
 #include <linux/spinlock.h>
 #include <asm/arch_timer.h>
 
-#define LAST_UPDATE "19-06-24, OIS LC898123F40 0x070e0102"
+#ifdef CONFIG_MACH_SM8150_MH2LM
+#define LAST_UPDATE "19-07-24, OIS LC898123F40"
+#else
+#define LAST_UPDATE "19-07-24, OIS LC898123F40 0x070e0102"
+#endif
 
 #define LIMIT_STATUS_POLLING    (15)
 #define LIMIT_OIS_ON_RETRY      (5)
 #define OIS_READ_STATUS_ADDR    (0xF100)
 #define FW_VER                  (0x070e0102)
-#define HALL_LIMIT              (314)
+#define HALL_LIMIT              (1149)
+#define E2P_SID                 (0xA0)
+#define E2P_MAP_VER             (0xEEF)
 
 #define PROPERTY_VALUE_MAX      (92)
 
@@ -320,21 +326,26 @@ extern int parse_ois_userdata(
 
 int32_t sunny_imx363_init_set_onsemi_ois(struct cam_ois_ctrl_t *o_ctrl)
 {
-	int32_t rc = OIS_SUCCESS;
-	uint32_t m_fw_ver = 0;
-	uint32_t m_act_ver = 0;
-	uint8_t gyro_gain_x[2];
-	uint8_t gyro_gain_y[2];
+	int32_t		rc = OIS_SUCCESS;
+	uint32_t	fw_ver = 0;
+	uint32_t	act_ver = 0;
+	uint16_t	map_ver = 0;
+	uint8_t		gyro_gain_x[2];
+	uint8_t		gyro_gain_y[2];
 	local_cam_ois_t = o_ctrl;
 
-	RamRead32A(0x8000, &m_fw_ver);
-	RamRead32A(0x8004, &m_act_ver);
+	RamRead32A(0x8000, &fw_ver);
+	RamRead32A(0x8004, &act_ver);
+	rc = ois_i2c_e2p_read(E2P_MAP_VER, &map_ver, CAMERA_SENSOR_I2C_TYPE_BYTE);
+	if (rc < 0) {
+		CAM_ERR(CAM_OIS, "OIS_E2P_ERROR rc 0x%x", rc);
+	}
 
-	CAM_ERR(CAM_OIS, "Enter, %s, M_FW_VER 0x%x V_VER 0x%x", LAST_UPDATE, m_fw_ver, m_act_ver);
+	CAM_ERR(CAM_OIS, "Enter, %s, FW_VER 0x%x V_VER 0x%x MAP_VER 0x%x", LAST_UPDATE, fw_ver, act_ver, map_ver);
 
 	if (o_ctrl->is_ois_aat) {
 #ifdef CONFIG_MACH_SM8150_BETA
-		if (FW_VER != m_fw_ver){
+		if (FW_VER != fw_ver){
 			CAM_ERR(CAM_OIS, "OIS F/W update start");
 			rc = F40_FlashDownload(0x01, 0x00, 0x01);
 			if (rc) {
@@ -697,6 +708,28 @@ int32_t RamWrite32A(uint32_t RamAddr, uint32_t RamData)
 		&(local_cam_ois_t->io_master_info),
 		&i2c_reg_setting);
 	kfree(i2c_reg_setting.reg_setting);
+	return ret;
+}
+
+int32_t ois_i2c_e2p_read(uint32_t e2p_addr, uint16_t *e2p_data, enum camera_sensor_i2c_type data_type)
+{
+	int32_t ret = 0;
+	uint32_t data = 0;
+	uint16_t temp_sid = 0;
+
+	temp_sid = local_cam_ois_t->io_master_info.cci_client->sid;
+	local_cam_ois_t->io_master_info.cci_client->sid = E2P_SID >> 1;
+
+	ret = camera_io_dev_read(
+		&(local_cam_ois_t->io_master_info),
+		e2p_addr,
+		&data,
+		CAMERA_SENSOR_I2C_TYPE_WORD,
+		data_type);
+
+	local_cam_ois_t->io_master_info.cci_client->sid = temp_sid;
+	*e2p_data = (uint16_t)data;
+
 	return ret;
 }
 

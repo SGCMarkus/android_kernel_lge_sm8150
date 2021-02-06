@@ -411,6 +411,27 @@ static struct mtp_dev *_mtp_dev;
 static int request_cancel_count;
 #endif
 
+#ifdef CONFIG_LGE_USB_GADGET
+static inline const char *code_to_string(unsigned int code)
+{
+	switch (code) {
+	case MTP_SEND_FILE:
+		return "MTP_SEND_FILE";
+	case MTP_RECEIVE_FILE:
+		return "MTP_RECEIVE_FILE";
+	case MTP_SEND_EVENT:
+		return "MTP_SEND_EVENT";
+	case MTP_SEND_FILE_WITH_HEADER:
+		return "MTP_SEND_FILE_WITH_HEADER";
+	case MTP_RECEIVE_CANCEL_EVENT:
+		return "MTP_RECEIVE_CANCEL_EVENT";
+	default:
+		break;
+	}
+	return "UNKNOWN_CODE";
+}
+#endif
+
 static inline struct mtp_dev *func_to_mtp(struct usb_function *f)
 {
 #ifdef CONFIG_LGE_USB_GADGET_MULTI_CONFIG
@@ -682,6 +703,10 @@ static ssize_t mtp_read(struct file *fp, char __user *buf,
 	ssize_t r = count, xfer, len;
 	int ret = 0;
 
+#ifdef CONFIG_LGE_USB_GADGET
+	if (!cdev)
+		return -ENODEV;
+#endif
 	mtp_log("(%zu) state:%d\n", count, dev->state);
 
 	/* we will block until we're online */

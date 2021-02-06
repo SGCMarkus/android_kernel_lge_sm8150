@@ -22,6 +22,7 @@
 /* for I2C communication */
 int32_t RamWrite32A(uint32_t RamAddr, uint32_t RamData);
 int32_t RamRead32A(uint32_t RamAddr, uint32_t *ReadData);
+int32_t ois_i2c_e2p_read(uint32_t e2p_addr, uint16_t *e2p_data, enum camera_sensor_i2c_type data_type);
 
 /* for I2C Multi Translation : Burst Mode*/
 int32_t CntWrt(uint8_t *data, uint16_t num_byte);

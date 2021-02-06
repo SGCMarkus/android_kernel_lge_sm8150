@@ -672,6 +672,9 @@ static int dp_audio_notify(struct dp_audio_private *audio, u32 state)
 	if (atomic_read(&audio->acked))
 		goto end;
 
+if (state == EXT_DISPLAY_CABLE_DISCONNECT && !audio->engine_on)
+		goto end;
+
 	if (state == EXT_DISPLAY_CABLE_CONNECT)
 		goto end;
 

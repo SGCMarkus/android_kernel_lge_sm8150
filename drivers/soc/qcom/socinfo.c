@@ -51,6 +51,10 @@
 #define SMEM_IMAGE_VERSION_OEM_OFFSET 95
 #define SMEM_IMAGE_VERSION_PARTITION_APPS 10
 
+#if defined(CONFIG_MACH_SM8150_MH2LM) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+extern bool is_ddic_name(char *ddic_name);
+#endif
+
 static DECLARE_RWSEM(current_image_rwsem);
 enum {
 	HW_PLATFORM_UNKNOWN = 0,
@@ -1218,6 +1222,27 @@ msm_get_hw_rev(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%-.32s\n",
 			lge_get_board_revision());
 }
+
+#if defined(CONFIG_MACH_SM8150_MH2LM) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+static ssize_t
+msm_get_panel_rev(struct device *dev,
+		struct device_attribute *attr,
+		char *buf)
+{
+	char* d_cut_panel = "d_cut";
+	char* others      = "others";
+
+	pr_err("panel_rev called'\n");
+
+	if(is_ddic_name("r66456a") || is_ddic_name("dsi_sim_cmd")){
+		pr_err("panel_rev: d-cut\n");
+		return snprintf(buf, PAGE_SIZE, "%-.32s\n", d_cut_panel);
+	} else {
+		pr_err("panel_rev: others\n");
+		return snprintf(buf, PAGE_SIZE, "%-.32s\n", others);
+	}
+}
+#endif
 #endif
 
 static struct device_attribute msm_soc_attr_raw_version =
@@ -1333,6 +1358,11 @@ static struct device_attribute images =
 #ifdef CONFIG_MACH_LGE
 static struct device_attribute msm_soc_attr_hw_rev =
 	__ATTR(hw_rev, S_IRUGO, msm_get_hw_rev, NULL);
+
+#if defined(CONFIG_MACH_SM8150_MH2LM) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+static struct device_attribute msm_soc_attr_panel_rev =
+	__ATTR(panel_rev, S_IRUGO, msm_get_panel_rev, NULL);
+#endif
 #endif
 
 static void * __init setup_dummy_socinfo(void)
@@ -1540,6 +1570,10 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 #ifdef CONFIG_MACH_LGE
 		device_create_file(msm_soc_device,
 					&msm_soc_attr_hw_rev);
+#if defined(CONFIG_MACH_SM8150_MH2LM) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+		device_create_file(msm_soc_device,
+					&msm_soc_attr_panel_rev);
+#endif
 #endif
 		break;
 	default:

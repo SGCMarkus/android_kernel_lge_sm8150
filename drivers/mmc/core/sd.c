@@ -1593,9 +1593,9 @@ int mmc_attach_sd(struct mmc_host *host)
 	}
 #else
 	err = mmc_sd_init_card(host, rocr, NULL);
+#endif
 	if (err)
 		goto err;
-#endif
 
 	mmc_release_host(host);
 	err = mmc_add_card(host->card);

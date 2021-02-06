@@ -19,6 +19,7 @@
 #obj-$(CONFIG_NFC_S3FWRN5)	+= s3fwrn5/
 #obj-$(CONFIG_NFC_ST95HF)	+= st95hf/
 obj-$(CONFIG_LGE_NFC_PN553)	+= pn553/
+obj-$(CONFIG_NFC_CXD22XX)       += cxd22xx/
 ccflags-$(CONFIG_NFC_DEBUG) := -DDEBUG
 obj-$(CONFIG_NFC_NQ)		+= nq-nci.o
 obj-$(CONFIG_NTAG_NQ)		+= nq-ntag.o

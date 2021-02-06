@@ -428,6 +428,14 @@ static void wa_charging_for_unknown_cable_main(struct work_struct *unused) {
 	}
 
 	if (apsd_done && !delayed_work_pending(&wa_charging_without_cc_dwork)) {
+		rc = smblib_write(chg, USBIN_ADAPTER_ALLOW_CFG_REG,
+				USBIN_ADAPTER_ALLOW_5V);
+		if (rc < 0) {
+			pr_wa("Couldn't write 0x%02x to"
+					" USBIN_ADAPTER_ALLOW_CFG_REG rc=%d\n",
+					USBIN_ADAPTER_ALLOW_CFG_REG, rc);
+			goto out_charging_for_unknown;
+		}
 		vbus_valid = !power_supply_get_property(chg->usb_psy,
 				POWER_SUPPLY_PROP_PRESENT, &val)
 				? !!val.intval : false;

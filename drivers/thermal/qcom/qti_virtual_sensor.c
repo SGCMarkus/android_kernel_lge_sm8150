@@ -263,28 +263,41 @@ static const struct virtual_sensor_data lge_virtual_sensors[] = {
 		.logic = VIRT_WEIGHTED_AVG,
 	},
 #elif defined(CONFIG_MACH_SM8150_MH2LM)
-	/* 0.19*xo + 0.52*skin + 7.56 */
+	/* 0.185*xo + 0.575*skin + 6.15 */
 	{
-		.virt_zone_name = "vts-virt-therm",
+		.virt_zone_name = "ap-vts",
 		.num_sensors = 2,
 		.sensor_names = {"xo-therm", "skin-therm"},
 		.coefficient_ct = 2,
-		.coefficients = {19, 52},
-		.avg_offset = 756000,
-		.avg_denominator = 100,
+		.coefficients = {185, 575},
+		.avg_offset = 6150000,
+		.avg_denominator = 1000,
 		.logic = VIRT_WEIGHTED_AVG,
 	},
+	/* 0.371*skin + 0.366*pm8150b_tz + 6.84 */
+	{
+		.virt_zone_name = "chg-vts",
+		.num_sensors = 2,
+		.sensor_names = {"skin-therm", "pm8150b_tz"},
+		.coefficient_ct = 2,
+		.coefficients = {371, 366},
+		.avg_offset = 6840000,
+		.avg_denominator = 1000,
+		.logic = VIRT_WEIGHTED_AVG,
+	},{
+		.virt_zone_name = "vts-virt-therm",
+		.num_sensors = 2,
+		.sensor_names = {"ap-vts",
+				"chg-vts"},
+		.logic = VIRT_MAXIMUM,
+	},
 #if defined(CONFIG_MACH_SM8150_MH2LM_5G)
-	/* 0.19*xo + 0.52*skin + 7.56 */
 	{
 		.virt_zone_name = "sub6-vts",
 		.num_sensors = 2,
-		.sensor_names = {"xo-therm", "skin-therm"},
-		.coefficient_ct = 2,
-		.coefficients = {19, 52},
-		.avg_offset = 756000,
-		.avg_denominator = 100,
-		.logic = VIRT_WEIGHTED_AVG,
+		.sensor_names = {"ap-vts",
+				"chg-vts"},
+		.logic = VIRT_MAXIMUM,
 	},
 #endif
 #else

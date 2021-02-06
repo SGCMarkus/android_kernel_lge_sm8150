@@ -33,10 +33,22 @@
 #define PM_BOB_UP_MODE  1
 
 // Default BOB Setting
+#if defined(CONFIG_MACH_SM8150_BETA)
 #define BOB_UP_MIN_VOLT 3450000
 #define BOB_UP_MAX_VOLT 4000000
 #define BOB_DEF_MIN_VOLT 3312000
 #define BOB_DEF_MAX_VOLT 4000000
+#elif defined(CONFIG_MACH_SM8150_MH2LM)
+#define BOB_UP_MIN_VOLT 3920000
+#define BOB_UP_MAX_VOLT 4000000
+#define BOB_DEF_MIN_VOLT 3312000
+#define BOB_DEF_MAX_VOLT 4000000
+#else
+#define BOB_UP_MIN_VOLT 3312000
+#define BOB_UP_MAX_VOLT 4000000
+#define BOB_DEF_MIN_VOLT 3312000
+#define BOB_DEF_MAX_VOLT 4000000
+#endif
 
 struct lrmc_dev {
 	struct device *dev;

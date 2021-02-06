@@ -122,12 +122,49 @@ static ssize_t lge_dp_hpd_show(struct device *dev,
 }
 static DEVICE_ATTR(dp_hpd, S_IRUGO, lge_dp_hpd_show, NULL);
 
+static ssize_t lge_dp_external_block(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct lge_dp_display *lge_dp = NULL;
+	int rc = 0;
+	int block = -1;
+
+	lge_dp = get_lge_dp();
+	if (!lge_dp) {
+		pr_err("lge_dp is nullptr\n");
+		return -EINVAL;
+	}
+
+	rc = kstrtoint(buf, 2, &block);
+	if (rc) {
+		pr_err("kstrtoint failed, ret=%d\n", rc);
+		return rc;
+	}
+	block = !!block;
+
+	if (lge_dp->block_state == block) {
+		pr_warn("reqeust duplicated request\n");
+		return -EINVAL;
+	}
+
+	rc = dp_display_external_block(lge_dp, block);
+	if (rc < 0) {
+		pr_err("invalid request\n");
+		return -EINVAL;
+	} else {
+		pr_info("External Block [%s]\n", ((lge_dp->block_state == 1) ? "ON" : "OFF"));
+	}
+
+	return count;
+}
+static DEVICE_ATTR(external_block, S_IWUSR | S_IWGRP, NULL, lge_dp_external_block);
+
 void lge_dp_set_id(unsigned int id)
 {
 	struct lge_dp_display *lge_dp = NULL;
 
 	lge_dp = get_lge_dp();
-	if (!lge_dp) {
+	if (IS_ERR_OR_NULL(lge_dp)) {
 		pr_err("lge_dp is nullptr\n");
 		return;
 	}
@@ -159,6 +196,8 @@ static void lge_dp_create_sysfs(struct dp_display *dp_display)
 				} else {
 					if ((device_create_file(dp_sysfs_dev, &dev_attr_dp_hpd)) < 0)
 						pr_err("add dp_hpd node failed!\n");
+					if ((device_create_file(dp_sysfs_dev, &dev_attr_external_block)) < 0)
+						pr_err("add external_block node failed!\n");
 				}
 			}
 		}

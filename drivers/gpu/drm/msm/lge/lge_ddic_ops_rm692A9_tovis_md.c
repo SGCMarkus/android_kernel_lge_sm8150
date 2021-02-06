@@ -1,8 +1,11 @@
 #define pr_fmt(fmt)	"[Display][rm692A9-ops:%s:%d] " fmt, __func__, __LINE__
 
 #include "dsi_panel.h"
+#include "dsi_display.h"
+#include "sde_connector.h"
 #include "lge_ddic_ops_helper.h"
 #include "cm/lge_color_manager.h"
+#include "brightness/lge_brightness_def.h"
 
 #define DDIC_REG_DEBUG 0
 
@@ -12,12 +15,13 @@
 #define SHARPNESS_DEFAULT 0x00
 #define MOVE_WP_DEFAULT 0x08
 #define CM_SATURATION_INDEX 0
-#define CM_HUE_INDEX 20
-#define CM_RED_INDEX 21
-#define CM_GREEN_INDEX 27
-#define CM_BLUE_INDEX 33
+#define CM_RED_INDEX 22
+#define CM_GREEN_INDEX 28
+#define CM_BLUE_INDEX 34
 #define SATURATION_DEFAULT 0x0B
-#define TRUEVIEW_STEP 42
+
+#define FP_LHBM_DDIC_ON				0x01
+#define FP_LHBM_DDIC_OFF			0x00
 
 #define WORDS_TO_BYTE_ARRAY(w1, w2, b) do {\
 		b[0] = WORD_UPPER_BYTE(w1);\
@@ -32,22 +36,11 @@ extern int lge_backlight_device_update_status(struct backlight_device *bd);
 extern char* get_payload_addr(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set_type type, int position);
 extern int get_payload_cnt(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set_type type, int position);
 
-struct rm692A9_iq_data {
-	char mode[8];
-};
-
-static struct rm692A9_iq_data rm692A9_color_space_value[7] = {
-	{"def"},
-	{"cin"},
-	{"pho"},
-	{"web"},
-	{"spo"},
-	{"gam"},
-	{"exp"},
-};
+extern int get_cm_lut_payload_cnt(struct dsi_panel *panel, enum lge_cm_lut_type type, int position);
+extern char* get_cm_lut_payload_addr(struct dsi_panel *panel, enum lge_cm_lut_type type, int position);
 
 const struct drs_res_info rm692A9_res[1] = {
-	{"fhd", 0, 1080, 2248},
+	{"fhd", 0, 1080, 2340},
 };
 
 static void dump_cm_dummy_reg_value(struct dsi_panel *panel)
@@ -56,7 +49,7 @@ static void dump_cm_dummy_reg_value(struct dsi_panel *panel)
 	char *payload = NULL;
 	int length = 0;
 
-	length = get_payload_cnt(panel, LGE_DDIC_DSI_DISP_CM_SET, 0);
+	length = get_cm_lut_payload_cnt(panel, LGE_CM_LUT_COLOR_MODE_SET, 0);
 	pr_info("CM-DEBUG] =========================\n");
 	for (i = 0; i < length; i++) {
 		payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_COMMAND_DUMMY, i);
@@ -201,7 +194,6 @@ void lge_check_vert_line_restore_rm692A9(struct dsi_panel *panel)
 
 static void lge_display_control_store_rm692A9(struct dsi_panel *panel, bool send_cmd)
 {
-	char *bc_payload = NULL;
 	char *cm_payload = NULL;
 	char *sharpness_payload = NULL;
 	char *sharpness_level_payload = NULL;
@@ -216,35 +208,30 @@ static void lge_display_control_store_rm692A9(struct dsi_panel *panel, bool send
 
 	mutex_lock(&panel->panel_lock);
 
-	bc_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_1, 1);
-	sharpness_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_1, 2);
+	sharpness_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_1, 1);
 	sharpness_level_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_1, 4);
-	fixed_wp_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_1, 6);
+	fixed_wp_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_2, 2);
 	cm_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CTRL_COMMAND_2, 1);
 	saturation_payload = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_COMMAND_DUMMY, 1);
 
-	if (!bc_payload || !cm_payload || !sharpness_payload || !sharpness_level_payload || !fixed_wp_payload || !saturation_payload) {
+	if (!cm_payload || !sharpness_payload || !sharpness_level_payload || !fixed_wp_payload || !saturation_payload) {
 		pr_err("LGE_DDIC_DSI_DISP_CTRL_COMMAND is NULL\n");
 		mutex_unlock(&panel->panel_lock);
 		return;
 	}
 
-	/* BC DIM EN */
-	bc_payload[1] &= HBM_BC_DIMMING_DEFAULT;
-	bc_payload[1] |= panel->lge.bc_dim_en << 3;
-
 	/* CM_SEL & CE_SEL */
 	/* To Do */
 	cm_payload[1] &= CM_DEFAULT;
 	if (panel->lge.color_manager_status)
-		cm_payload[1] = 0x13;
+		cm_payload[1] = 0x10;
 
 	/* HDR_ON & ASE_ON */
 	sharpness_payload[1] &= SHARPNESS_DEFAULT;
 	sharpness_level_payload[1] &= SHARPNESS_DEFAULT;
 	if (panel->lge.sharpness_status && !panel->lge.hdr_mode) {
 		sharpness_payload[1] = 0x0F;
-		src = get_payload_addr(panel, LGE_DDIC_DSI_DISP_SHA_LUT, panel->lge.sc_sha_step);
+		src = get_cm_lut_payload_addr(panel, LGE_CM_LUT_SHARPNESS, panel->lge.sc_sha_step);
 		if (src == NULL) {
 			pr_err("get sat lut failed! set to default\n");
 		} else {
@@ -266,8 +253,8 @@ static void lge_display_control_store_rm692A9(struct dsi_panel *panel, bool send
 
 	/* DGGMA_ON */
 	/* To Do */
-	pr_info("ctrl-command-1 [BC]0x%02x [SH]0x%02x [SL]0x%02x [WP]0x%02x [CM]0x%02x\n",
-			bc_payload[1], sharpness_payload[1], sharpness_level_payload[1],
+	pr_info("ctrl-command-1 [SH]0x%02x [SL]0x%02x [WP]0x%02x [CM]0x%02x\n",
+			sharpness_payload[1], sharpness_level_payload[1],
 			fixed_wp_payload[1], cm_payload[1]);
 
 	if (send_cmd) {
@@ -414,8 +401,8 @@ static int update_color_table(struct dsi_panel *panel, int idx)
 	char *src = NULL;
 	int cmd_idx = 0;
 
-	cmd_idx = get_payload_cnt(panel, LGE_DDIC_DSI_DISP_CM_SET, idx);
-	src = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_SET, idx);
+	cmd_idx = get_cm_lut_payload_cnt(panel, LGE_CM_LUT_COLOR_MODE_SET, idx);
+	src = get_cm_lut_payload_addr(panel, LGE_CM_LUT_COLOR_MODE_SET, idx);
 	if (src == NULL) {
 		pr_err("get cm set failed\n");
 		return -EINVAL;
@@ -436,12 +423,15 @@ static int update_color_table(struct dsi_panel *panel, int idx)
 static void color_space_mapper(struct dsi_panel *panel, char *mode)
 {
 	int i = 0;
-	int max_mode = sizeof(rm692A9_color_space_value)/sizeof(struct rm692A9_iq_data);
 
+	if (!panel->lge.cm_lut_cnt) {
+		pr_err("fail to update color mode table beacause cm_lut_cnt is 0.\n");
+		return;
+	}
 	panel->lge.color_manager_status = 0x01;
 
-	for (i = 0; i < max_mode; i++) {
-		if(!strncmp(mode, rm692A9_color_space_value[i].mode, 3)) {
+	for (i = 0; i < panel->lge.cm_lut_cnt; i++) {
+		if(!strncmp(mode, panel->lge.cm_lut_name_list[i], 3)) {
 			if(update_color_table(panel, i) < 0) {
 				pr_err("failed to update color mode table\n");
 				return;
@@ -515,14 +505,14 @@ static void custom_rgb_mapper(struct dsi_panel *panel, int cm_step, int rs, int 
 	else
 		sc_hue_step = panel->lge.sc_hue_step;
 
-	cmd_idx = get_payload_cnt(panel, LGE_DDIC_DSI_DISP_RGB_HUE_LUT, cm_step + 5*sc_hue_step);
-	src = get_payload_addr(panel, LGE_DDIC_DSI_DISP_RGB_HUE_LUT, cm_step + 5*sc_hue_step);
+	cmd_idx = get_cm_lut_payload_cnt(panel, LGE_CM_LUT_RGB_HUE, cm_step + 5*sc_hue_step);
+	src = get_cm_lut_payload_addr(panel, LGE_CM_LUT_RGB_HUE, cm_step + 5*sc_hue_step);
 	if (src == NULL) {
 		pr_err("get rgb set failed\n");
 		return;
 	}
 	for (i = 0; i < cmd_idx; i++) {
-		dst = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_COMMAND_DUMMY, CM_HUE_INDEX + i);
+		dst = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_COMMAND_DUMMY, CM_RED_INDEX + i);
 		if (!dst) {
 			pr_err("dummy dst is null\n");
 			return;
@@ -550,8 +540,8 @@ static void screen_tune_mapper(struct dsi_panel *panel, int hue_step, int sat_st
 	panel->lge.color_manager_status = 0x01;
 
 	/* Saturation Control */
-	cmd_idx = get_payload_cnt(panel, LGE_DDIC_DSI_DISP_SAT_LUT, sat_step);
-	src = get_payload_addr(panel, LGE_DDIC_DSI_DISP_SAT_LUT, sat_step);
+	cmd_idx = get_cm_lut_payload_cnt(panel, LGE_CM_LUT_SATURATION, sat_step);
+	src = get_cm_lut_payload_addr(panel, LGE_CM_LUT_SATURATION, sat_step);
 	if (src == NULL) {
 		pr_err("get sat lut failed\n");
 		return;
@@ -565,70 +555,6 @@ static void screen_tune_mapper(struct dsi_panel *panel, int hue_step, int sat_st
 	custom_rgb_mapper(panel,
 		panel->lge.cm_preset_step, panel->lge.cm_red_step,
 		panel->lge.cm_green_step, panel->lge.cm_blue_step);
-}
-
-static void true_view_mapper(struct dsi_panel *panel, int idx)
-{
-	int i = 0;
-	char *dst = NULL;
-	char *src = NULL;
-	int cmd_idx = 0;
-
-	if (panel == NULL) {
-		pr_err("null ptr\n");
-		return;
-	}
-
-	if (idx > (TRUEVIEW_STEP - 1)){
-		pr_err("invalid idx:%d\n",idx);
-		return;
-	}
-
-	panel->lge.color_manager_status = 0x01;
-
-	/* Trueview Control */
-	cmd_idx = get_payload_cnt(panel, LGE_DDIC_DSI_DISP_TRUEVIEW_LUT, idx);
-	src = get_payload_addr(panel, LGE_DDIC_DSI_DISP_TRUEVIEW_LUT, idx);
-	if (src == NULL) {
-		pr_err("get trueview lut failed\n");
-		return;
-	}
-	for (i = 0; i < cmd_idx; i++) {
-		dst = get_payload_addr(panel, LGE_DDIC_DSI_DISP_CM_COMMAND_DUMMY, CM_HUE_INDEX + i);
-		*(++dst) = src[i];
-	}
-}
-
-static void lge_set_true_view_rm692A9(struct dsi_panel *panel, bool send_cmd)
-{
-	pr_info("true_view:%d\n", panel->lge.true_view_mode);
-
-	mutex_lock(&panel->panel_lock);
-	if (panel->lge.hdr_mode) {
-		mutex_unlock(&panel->panel_lock);
-		pr_info("skip true view set on HDR play\n");
-		return;
-	}
-	if (panel->lge.true_view_mode > 0){
-		switch (panel->lge.screen_mode) {
-			case screen_mode_cinema:
-			case screen_mode_photos:
-			case screen_mode_web:
-				true_view_mapper(panel, panel->lge.true_view_mode + 15 + 5*(panel->lge.screen_mode-1));
-				break;
-			default:
-				true_view_mapper(panel, panel->lge.true_view_mode);
-				break;
-		}
-		panel->lge.move_wp = 0x01;
-	} else {
-		mutex_unlock(&panel->panel_lock);
-		panel->lge.ddic_ops->lge_set_screen_mode(panel, true);
-		return;
-	}
-	mutex_unlock(&panel->panel_lock);
-
-	lge_display_control_store_rm692A9(panel, true);
 }
 
 static void lge_set_screen_mode_rm692A9(struct dsi_panel *panel, bool send_cmd)
@@ -646,22 +572,16 @@ static void lge_set_screen_mode_rm692A9(struct dsi_panel *panel, bool send_cmd)
 		panel->lge.sharpness_status = 0x00;
 		color_space_mapper(panel, "def");
 
-		if (panel->lge.true_view_mode > 0) {
-			mutex_unlock(&panel->panel_lock);
-			lge_set_true_view_rm692A9(panel, send_cmd);
-			goto skip_store;
+		if (panel->lge.cm_preset_step == 2 &&
+			!(panel->lge.cm_red_step | panel->lge.cm_green_step | panel->lge.cm_blue_step)) {
+			panel->lge.move_wp = 0x00;
 		} else {
-		    if (panel->lge.cm_preset_step == 2 &&
-			    !(panel->lge.cm_red_step | panel->lge.cm_green_step | panel->lge.cm_blue_step)) {
-			    panel->lge.move_wp = 0x00;
-		    } else {
-		        panel->lge.move_wp = 0x01;
-		    }
-
-		    custom_rgb_mapper(panel,
-				  panel->lge.cm_preset_step, panel->lge.cm_red_step,
-				  panel->lge.cm_green_step, panel->lge.cm_blue_step);
+			panel->lge.move_wp = 0x01;
 		}
+
+		custom_rgb_mapper(panel,
+			panel->lge.cm_preset_step, panel->lge.cm_red_step,
+			panel->lge.cm_green_step, panel->lge.cm_blue_step);
 		break;
 	case screen_mode_sports:
 		color_space_mapper(panel, "spo");
@@ -715,7 +635,6 @@ static void lge_set_screen_mode_rm692A9(struct dsi_panel *panel, bool send_cmd)
 	mutex_unlock(&panel->panel_lock);
 
 	lge_display_control_store_rm692A9(panel, send_cmd);
-skip_store:
     return;
 }
 
@@ -790,6 +709,236 @@ static void lge_set_video_enhancement_rm692A9(struct dsi_panel *panel, int input
 	lge_backlight_device_update_status(panel->bl_config.raw_bd);
 }
 
+static void lge_set_fp_lhbm_rm692A9(struct dsi_panel *panel, int input)
+{
+	char *payload = NULL;
+	bool fp_aod_ctrl = false;
+	static int prev_brightness = -1;
+	struct sde_connector *c_conn;
+	struct backlight_device *bd;
+	struct backlight_device *bd_ex;
+	struct dsi_display *display;
+
+	if (panel == NULL || panel->host == NULL)
+		return;
+
+	if (panel->lge.is_fp_hbm_mode) {
+		bd = panel->bl_config.raw_bd;
+		if (bd == NULL) {
+			pr_err("backlight device is null.\n");
+			return;
+		}
+
+		bd_ex = panel->lge.bl_ex_device;
+		if (bd_ex == NULL) {
+			pr_err("ex-backlight device is null.\n");
+			return;
+		}
+
+		c_conn = bl_get_data(bd);
+		display = container_of(panel->host, struct dsi_display, host);
+
+		mutex_lock(&bd->ops_lock);
+		mutex_lock(&panel->panel_lock);
+		fp_aod_ctrl = lge_dsi_panel_is_power_on_lp(panel);
+
+		if (((input == panel->lge.old_fp_lhbm_mode) || (input == panel->lge.old_panel_fp_mode)) &&
+				(LGE_FP_LHBM_SM_ON != panel->lge.old_fp_lhbm_mode)) {
+			mutex_unlock(&panel->panel_lock);
+			mutex_unlock(&bd->ops_lock);
+			pr_info("requested same state=%d lhbm:%d panel:%d\n", input, panel->lge.old_fp_lhbm_mode, panel->lge.old_panel_fp_mode);
+			return;
+		}
+
+		switch (input) {
+		case LGE_FP_LHBM_SM_ON:
+			if(fp_aod_ctrl) {
+				prev_brightness = bd_ex->props.brightness;
+				panel->lge.allow_bl_update_ex = false;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_SET_NOLP);
+			} else {
+				prev_brightness = bd->props.brightness;
+				panel->lge.allow_bl_update = false;
+			}
+			dsi_display_set_backlight(&c_conn->base, display, panel->lge.fp_hbm_mode_backlight_lvl);
+
+			payload[1] = FP_LHBM_DDIC_ON;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			break;
+		case LGE_FP_LHBM_SM_OFF:
+			payload[1] = FP_LHBM_DDIC_OFF;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+
+			if (panel->lge.bl_lvl_unset != -1)
+				prev_brightness = panel->lge.bl_lvl_unset;
+
+			if(fp_aod_ctrl) {
+				if (panel->lge.bl_ex_lvl_unset != -1)
+					prev_brightness = panel->lge.bl_ex_lvl_unset;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_SET_LP2);
+			} else {
+				if (panel->lge.bl_lvl_unset != -1)
+					prev_brightness = panel->lge.bl_lvl_unset;
+			}
+
+			dsi_display_set_backlight(&c_conn->base, display, prev_brightness);
+
+			if(fp_aod_ctrl)
+				panel->lge.allow_bl_update_ex = true;
+			else
+				panel->lge.allow_bl_update = true;
+			break;
+		case LGE_FP_LHBM_READY:
+			if(fp_aod_ctrl) {
+				prev_brightness = bd_ex->props.brightness;
+				panel->lge.allow_bl_update_ex = false;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_SET_NOLP);
+			} else {
+				prev_brightness = bd->props.brightness;
+				panel->lge.allow_bl_update = false;
+			}
+			dsi_display_set_backlight(&c_conn->base, display, panel->lge.fp_hbm_mode_backlight_lvl);
+			break;
+		case LGE_FP_LHBM_ON:
+			payload[1] = FP_LHBM_DDIC_ON;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			break;
+		case LGE_FP_LHBM_OFF:
+			payload[1] = FP_LHBM_DDIC_OFF;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			break;
+		case LGE_FP_LHBM_EXIT:
+		default:
+			if ((panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_ON) ||
+				(panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_SM_ON)) {
+
+				payload[1] = FP_LHBM_DDIC_OFF;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			}
+
+			if (panel->lge.bl_lvl_unset != -1)
+				prev_brightness = panel->lge.bl_lvl_unset;
+
+			if(fp_aod_ctrl) {
+				if (panel->lge.bl_ex_lvl_unset != -1)
+					prev_brightness = panel->lge.bl_ex_lvl_unset;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_SET_LP2);
+			} else {
+				if (panel->lge.bl_lvl_unset != -1)
+					prev_brightness = panel->lge.bl_lvl_unset;
+			}
+			dsi_display_set_backlight(&c_conn->base, display, prev_brightness);
+			break;
+		}
+		panel->lge.old_panel_fp_mode = input;
+		mutex_unlock(&panel->panel_lock);
+		mutex_unlock(&bd->ops_lock);
+	} else {
+		mutex_lock(&panel->panel_lock);
+
+		if (((input == panel->lge.old_fp_lhbm_mode) || (input == panel->lge.old_panel_fp_mode)) &&
+				(LGE_FP_LHBM_SM_ON != panel->lge.old_fp_lhbm_mode) &&
+				(LGE_FP_LHBM_FORCED_ON != panel->lge.old_fp_lhbm_mode)) {
+			mutex_unlock(&panel->panel_lock);
+			pr_info("requested same state=%d lhbm:%d panel:%d\n", input, panel->lge.old_fp_lhbm_mode, panel->lge.old_panel_fp_mode);
+			return;
+		}
+
+		payload = get_payload_addr(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND, 1);
+
+		if (!payload) {
+			pr_err("cmd null\n");
+			mutex_unlock(&panel->panel_lock);
+			return;
+		}
+
+		switch (input) {
+		case LGE_FP_LHBM_FORCED_ON:
+			payload[1] = FP_LHBM_DDIC_ON;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_FORCED_ON;
+			panel->lge.forced_lhbm = true;
+			break;
+		case LGE_FP_LHBM_FORCED_OFF:
+			payload[1] = FP_LHBM_DDIC_OFF;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_FORCED_OFF;
+			panel->lge.forced_lhbm = false;
+			break;
+		case LGE_FP_LHBM_SM_ON:
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_READY);
+			payload[1] = FP_LHBM_DDIC_ON;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_SM_ON;
+			break;
+		case LGE_FP_LHBM_SM_OFF:
+			payload[1] = FP_LHBM_DDIC_OFF;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_EXIT);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_SM_OFF;
+			panel->lge.forced_lhbm = false;
+			break;
+		case LGE_FP_LHBM_ON:
+			if (panel->lge.old_panel_fp_mode != LGE_FP_LHBM_READY) {
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_READY);
+				panel->lge.old_panel_fp_mode = LGE_FP_LHBM_READY;
+			}
+			payload[1] = FP_LHBM_DDIC_ON;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_ON;
+			break;
+		case LGE_FP_LHBM_READY:
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_READY);
+			panel->lge.old_panel_fp_mode = LGE_FP_LHBM_READY;
+			break;
+		case LGE_FP_LHBM_OFF:
+			payload[1] = FP_LHBM_DDIC_OFF;
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+			panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_OFF;
+			panel->lge.forced_lhbm = false;
+			break;
+		case LGE_FP_LHBM_EXIT:
+			panel->lge.forced_lhbm = false;
+		case LGE_FP_LHBM_FORCED_EXIT:
+		default:
+			if ((panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_ON) ||
+				(panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_SM_ON) ||
+				(panel->lge.old_fp_lhbm_mode == LGE_FP_LHBM_FORCED_ON)) {
+				payload[1] = FP_LHBM_DDIC_OFF;
+				lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_COMMAND);
+				panel->lge.old_fp_lhbm_mode = LGE_FP_LHBM_OFF;
+			}
+
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_EXIT);
+
+			lge_ddic_dsi_panel_tx_cmd_set(panel, LGE_DDIC_DSI_FP_LHBM_EXIT_POST);
+			panel->lge.old_panel_fp_mode = LGE_FP_LHBM_EXIT;
+			break;
+		}
+		mutex_unlock(&panel->panel_lock);
+	}
+
+	pr_info("set lhbm mode : set to %d, %d\n", panel->lge.old_fp_lhbm_mode, panel->lge.old_panel_fp_mode);
+
+	return;
+}
+
+static void lge_set_fp_lhbm_br_lvl_rm692A9(struct dsi_panel *panel, int input)
+{
+	int req_br_lvl = FP_LHBM_DEFAULT_BR_LVL;
+
+	if (input > req_br_lvl)
+		pr_info("keep current level \n");
+	else
+		req_br_lvl = input;
+
+	panel->lge.fp_lhbm_br_lvl = req_br_lvl;
+
+	pr_info("fp lhbm bl level changed to %d \n", req_br_lvl);
+
+	return;
+}
+
 struct lge_ddic_ops rm692A9_ops = {
 	.store_aod_area = store_aod_area,
 	.prepare_aod_cmds = prepare_aod_cmds_rm692A9,
@@ -808,8 +957,10 @@ struct lge_ddic_ops rm692A9_ops = {
 	.lge_set_screen_tune = lge_set_screen_tune_rm692A9,
 	.lge_set_screen_mode = lge_set_screen_mode_rm692A9,
 	.sharpness_set = sharpness_set_rm692A9,
-	.lge_set_true_view_mode = lge_set_true_view_rm692A9,
+	.lge_set_true_view_mode = NULL,
 	.lge_set_video_enhancement = lge_set_video_enhancement_rm692A9,
+	.lge_set_fp_lhbm = lge_set_fp_lhbm_rm692A9,
+	.lge_set_fp_lhbm_br_lvl = lge_set_fp_lhbm_br_lvl_rm692A9,
 	/* drs not supported */
 	.get_current_res = NULL,
 	.get_support_res = NULL,

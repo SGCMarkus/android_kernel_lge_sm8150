@@ -82,7 +82,7 @@ static const struct of_device_id dsi_display_dt_match[] = {
 };
 
 #if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
-static struct dsi_display *primary_display;
+struct dsi_display *primary_display;
 
 extern int lge_dsi_panel_drv_post_init(struct dsi_panel *panel);
 extern struct lge_blmap* lge_get_blmap(struct dsi_panel *panel, enum lge_blmap_type type);
@@ -1207,6 +1207,17 @@ struct sde_connector *c_conn;
 
 #if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
 	mutex_unlock(&display->display_lock);
+
+	if ((display->panel->lge.use_fp_lhbm) && (display->panel->lge.ddic_ops) &&
+			(display->panel->lge.ddic_ops->lge_set_fp_lhbm)) {
+		if (display->panel->lge.forced_lhbm == true) {
+			display->panel->lge.ddic_ops->lge_set_fp_lhbm(display->panel, LGE_FP_LHBM_FORCED_ON);
+		} else if (display->panel->lge.need_fp_lhbm_set) {
+			display->panel->lge.ddic_ops->lge_set_fp_lhbm(display->panel,
+			display->panel->lge.fp_lhbm_mode);
+			display->panel->lge.need_fp_lhbm_set = false;
+		}
+	}
 
 	if ((display->panel->lge.use_dim_ctrl) &&
 			(power_mode != SDE_MODE_DPMS_ON)) {

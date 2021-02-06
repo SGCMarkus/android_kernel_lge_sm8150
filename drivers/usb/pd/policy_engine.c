@@ -502,6 +502,9 @@ struct usbpd {
 	struct device		dev;
 	struct workqueue_struct	*wq;
 	struct work_struct	sm_work;
+#ifdef CONFIG_LGE_USB
+	struct work_struct	stop_periph_work;
+#endif
 	struct work_struct	start_periph_work;
 	struct hrtimer		timer;
 	bool			sm_queued;
@@ -566,6 +569,7 @@ struct usbpd {
 	bool			in_suspend;
 	bool			is_unsupported_typec_mode;
 	bool			is_control;
+	bool			is_vpd;
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
 	bool			is_moisture_detected;
 	bool			is_floating_cable;
@@ -602,6 +606,10 @@ struct usbpd {
 	struct list_head	svid_handlers;
 	ktime_t			svdm_start_time;
 	bool			vdm_in_suspend;
+#ifdef CONFIG_LGE_USB
+	u16			discovered_vid;
+	u16			discovered_pid;
+#endif
 
 	struct list_head	instance;
 
@@ -768,7 +776,7 @@ static inline void start_usb_peripheral(struct usbpd *pd)
 #endif
 
 #ifdef CONFIG_LGE_USB_FACTORY
-#if defined(CONFIG_MACH_SM8150_ALPHA)
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_MH2LM)
 	switch (pd->typec_mode) {
 	case POWER_SUPPLY_TYPEC_SINK_DEBUG_ACCESSORY:
 	case POWER_SUPPLY_TYPEC_SOURCE_DEBUG_ACCESSORY_DEFAULT:
@@ -790,6 +798,11 @@ static inline void start_usb_peripheral(struct usbpd *pd)
 	extcon_set_property(pd->extcon, EXTCON_USB,
 			EXTCON_PROP_USB_TYPEC_POLARITY, val);
 
+#ifdef CONFIG_LGE_USB
+	if (pd->is_vpd)
+		val.intval = 0;
+	else
+#endif
 	val.intval = 1;
 	extcon_set_property(pd->extcon, EXTCON_USB, EXTCON_PROP_USB_SS, val);
 
@@ -800,12 +813,31 @@ static inline void start_usb_peripheral(struct usbpd *pd)
 	extcon_set_state_sync(pd->extcon, EXTCON_USB, 1);
 }
 
+#ifdef CONFIG_LGE_USB
+static void stop_usb_peripheral_work(struct work_struct *w)
+{
+	struct usbpd *pd = container_of(w, struct usbpd, stop_periph_work);
+	stop_usb_peripheral(pd);
+}
+#endif
+
 static void start_usb_peripheral_work(struct work_struct *w)
 {
 	struct usbpd *pd = container_of(w, struct usbpd, start_periph_work);
 
+#ifdef CONFIG_LGE_USB
+	if (!pd->is_vpd) {
+		pd->current_state = PE_SNK_STARTUP;
+		pd->current_pr = PR_SINK;
+		if (pd->current_dr == DR_DFP) {
+			usbpd_info(&pd->dev, "%s: current_dr is still in DFP. turn off usb host\n", __func__);
+			stop_usb_host(pd);
+		}
+	}
+#else
 	pd->current_state = PE_SNK_STARTUP;
 	pd->current_pr = PR_SINK;
+#endif
 	pd->current_dr = DR_UFP;
 	start_usb_peripheral(pd);
 	dual_role_instance_changed(pd->dual_role);
@@ -1739,6 +1771,10 @@ static void reset_vdm_state(struct usbpd *pd)
 	pd->vdm_tx_retry = NULL;
 	kfree(pd->discovered_svids);
 	pd->discovered_svids = NULL;
+#ifdef CONFIG_LGE_USB
+	pd->discovered_vid = 0x0;
+	pd->discovered_pid = 0x0;
+#endif
 	pd->num_svids = 0;
 	kfree(pd->vdm_tx);
 	pd->vdm_tx = NULL;
@@ -2096,6 +2132,10 @@ static void usbpd_set_state(struct usbpd *pd, enum usbpd_state next_state)
 			if (!ret) {
 				usbpd_dbg(&pd->dev, "type:%d\n", val.intval);
 #ifdef CONFIG_LGE_USB
+				if (val.intval == POWER_SUPPLY_TYPE_UNKNOWN) {
+					kick_sm(pd, 200);
+					return;
+				}
 				if (usb_compliance_mode ||
 					val.intval == POWER_SUPPLY_TYPE_USB ||
 					val.intval == POWER_SUPPLY_TYPE_USB_CDP)
@@ -2459,6 +2499,15 @@ static void handle_vdm_rx(struct usbpd *pd, struct rx_msg *rx_msg)
 	if (handler && handler->svdm_received) {
 		handler->svdm_received(handler, cmd, cmd_type, vdos, num_vdos);
 
+		switch (cmd) {
+		case DP_USBPD_VDM_CONFIGURE:
+			if (!handler->discovered)
+				handler->discovered = true;
+			break;
+		default:
+			break;
+		}
+
 		/* handle any previously queued TX */
 		if (pd->vdm_tx && !pd->sm_queued)
 			kick_sm(pd, 0);
@@ -2521,6 +2570,18 @@ static void handle_vdm_rx(struct usbpd *pd, struct rx_msg *rx_msg)
 			lge_dp_set_id(vdos[2]);
 #endif
 
+#ifdef CONFIG_LGE_USB
+			if ((num_vdos == 1) && ID_HDR_PRODUCT_TYPE(vdos[0]) > 6) {
+				usbpd_err(&pd->dev, "unhandled product type:%d\n",
+						ID_HDR_PRODUCT_TYPE(vdos[0]));
+				break;
+			}
+#endif
+
+#ifdef CONFIG_LGE_USB
+			pd->discovered_vid = vdos[0] & 0xffff;
+#endif
+
 			if (ID_HDR_PRODUCT_TYPE(vdos[0]) ==
 					ID_HDR_PRODUCT_VPD) {
 				usbpd_dbg(&pd->dev, "VPD detected turn off vbus\n");
@@ -2533,13 +2594,39 @@ static void handle_vdm_rx(struct usbpd *pd, struct rx_msg *rx_msg)
 					else
 						pd->vbus_enabled = false;
 				}
-			}
-
 #ifdef CONFIG_LGE_USB
-			if (num_vdos && ID_HDR_PRODUCT_TYPE(vdos[0]) > 5) {
-				usbpd_err(&pd->dev, "unhandled product type:%d\n",
-						ID_HDR_PRODUCT_TYPE(vdos[0]));
-				break;
+				/* VPD Charge Through Support */
+				{
+					union power_supply_propval val;
+					val.intval = POWER_SUPPLY_PD_INACTIVE;
+					power_supply_set_property(pd->usb_psy,
+							POWER_SUPPLY_PROP_PD_ACTIVE,
+							&val);
+
+					pd->is_vpd = true;
+					if (!pd->peer_usb_comm)
+						pd->current_dr = DR_UFP;
+					dual_role_instance_changed(pd->dual_role);
+				}
+#ifdef CONFIG_LGE_DUAL_SCREEN
+				if (pd->discovered_vid == 0x1004 && num_vdos >= 3) {
+					pd->discovered_pid = (vdos[2] >> 16) & 0xffff;
+					usbpd_info(&pd->dev, "Discovered VID:0x%04x PID:0x%04x\n",
+						   pd->discovered_vid,
+						   pd->discovered_pid);
+				}
+#endif
+#endif
+			}
+#ifdef CONFIG_LGE_USB
+			else if (ID_HDR_PRODUCT_TYPE(vdos[0]) ==
+					ID_HDR_PRODUCT_AMA) {
+				if (num_vdos >= 3) {
+					pd->discovered_pid = (vdos[2] >> 16) & 0xffff;
+					usbpd_info(&pd->dev, "Discovered VID:0x%04x PID:0x%04x\n",
+						   pd->discovered_vid,
+						   pd->discovered_pid);
+				}
 			}
 #endif
 
@@ -2986,6 +3073,17 @@ static int enable_vbus(struct usbpd *pd)
 	int ret;
 
 #ifdef CONFIG_LGE_USB
+	ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_PD_ACTIVE, &val);
+	if (ret) {
+		usbpd_err(&pd->dev, "Unable to read PD_ACTIVE: %d\n",
+			  ret);
+		return ret;
+	}
+
+	if (val.intval == POWER_SUPPLY_PD_VPD_ACTIVE)
+		return 0;
+
 	if (!pd->in_pr_swap)
 		goto enable_reg;
 #endif
@@ -3025,6 +3123,9 @@ enable_reg:
 		pd->vbus_enabled = true;
 
 #ifdef CONFIG_LGE_USB
+	if (ret)
+		return ret;
+
 	if (!pd->in_pr_swap)
 		return ret;
 #endif
@@ -3110,7 +3211,8 @@ static void usbpd_sm(struct work_struct *w)
 #endif
 
 #ifdef CONFIG_LGE_USB
-		if (pd->current_state != PE_FORCED_PRS)
+		if (!(pd->current_state == PE_FORCED_PRS &&
+		      pd->forced_pr != POWER_SUPPLY_TYPEC_PR_NONE))
 			pd->in_pr_swap = false;
 #else
 		pd->in_pr_swap = false;
@@ -3129,6 +3231,7 @@ static void usbpd_sm(struct work_struct *w)
 #ifdef CONFIG_LGE_USB
 		pd->rdo = 0;
 		pd->in_suspend = false;
+		pd->is_vpd = false;
 #endif
 
 		power_supply_set_property(pd->usb_psy,
@@ -3202,6 +3305,10 @@ static void usbpd_sm(struct work_struct *w)
 #endif
 		if (pd->current_state == PE_FORCED_PRS) {
 			switch (pd->forced_pr) {
+			case POWER_SUPPLY_TYPEC_PR_NONE:
+				pd->forced_pr = POWER_SUPPLY_TYPEC_PR_NONE;
+				pd->current_state = PE_UNKNOWN;
+				break;
 			case POWER_SUPPLY_TYPEC_PR_SINK:
 				pd->current_pr = PR_SRC;
 				kick_sm(pd, FORCED_PR_SWAP_TIME);
@@ -3561,6 +3668,9 @@ static void usbpd_sm(struct work_struct *w)
 			regulator_disable(pd->vbus);
 		pd->vbus_enabled = false;
 
+#ifdef CONFIG_LGE_USB
+		if (!pd->is_vpd)
+#endif
 		if (pd->current_dr != DR_DFP) {
 			extcon_set_state_sync(pd->extcon, EXTCON_USB, 0);
 			pd->current_dr = DR_DFP;
@@ -4152,8 +4262,16 @@ static void usbpd_sm(struct work_struct *w)
 		break;
 
 	default:
+#ifdef CONFIG_LGE_USB
+		usbpd_err(&pd->dev, "Unhandled state %s, typec mode:%s pr:%d dr:%d\n",
+				usbpd_state_strings[pd->current_state],
+				typec_mode_strings[pd->typec_mode],
+				pd->current_pr,
+				pd->current_dr);
+#else
 		usbpd_err(&pd->dev, "Unhandled state %s\n",
 				usbpd_state_strings[pd->current_state]);
+#endif
 		break;
 	}
 
@@ -4207,6 +4325,9 @@ static int psy_changed(struct notifier_block *nb, unsigned long evt, void *ptr)
 	enum power_supply_typec_mode typec_mode;
 	union extcon_property_value eval;
 	int ret;
+#ifdef CONFIG_LGE_USB
+	int pd_vpd_active;
+#endif
 
 	if (ptr != pd->usb_psy || evt != PSY_EVENT_PROP_CHANGED)
 		return 0;
@@ -4326,6 +4447,17 @@ skip_moisture_detection:
 	}
 
 	pd->psy_type = val.intval;
+
+	ret = power_supply_get_property(pd->usb_psy,
+			POWER_SUPPLY_PROP_PD_ACTIVE, &val);
+	if (ret) {
+		usbpd_err(&pd->dev, "Unable to read PD_ACTIVE: %d\n",
+			  ret);
+		return ret;
+	}
+
+	pd_vpd_active = (val.intval == POWER_SUPPLY_PD_VPD_ACTIVE) ? 1 : 0;
+	usbpd_dbg(&pd->dev, "vpd_active:%d vpd:%d\n", pd_vpd_active, pd->is_vpd);
 #endif
 
 	/*
@@ -4387,7 +4519,27 @@ skip_moisture_detection:
 		switch (pd->typec_mode) {
 		case POWER_SUPPLY_TYPEC_SINK:
 		case POWER_SUPPLY_TYPEC_SINK_POWERED_CABLE:
+			if (pd_vpd_active) {
+				if (pd->current_pr == PR_SRC)
+					return 0;
+
+				usbpd_info(&pd->dev, "VPD: Forcing set to source mode\n");
+
+				if (pd->current_dr == DR_UFP)
+					queue_work(pd->wq, &pd->stop_periph_work);
+
+				pd->current_pr = PR_SRC;
+				pd->current_state = PE_UNKNOWN;
+				kick_sm(pd, 0);
+				return 0;
+			}
+
 			if (!pd->vbus_present) {
+				if (pd->is_vpd) {
+					queue_work(pd->wq, &pd->stop_periph_work);
+					return 0;
+				}
+
 				/* Unexpected if not in PR swap; need to force
 				 * disconnect from sink. so we can turn off PD
 				 * PHY etc.
@@ -4440,7 +4592,7 @@ skip_moisture_detection:
 					  typec_mode, pd->psy_type);
 				queue_work(pd->wq, &pd->start_periph_work);
 
-				if (pd->current_pr == PR_SINK)
+				if (pd->current_pr == PR_SINK || pd->is_vpd)
 					return 0;
 
 				pd->current_pr = PR_SINK;
@@ -4539,6 +4691,18 @@ skip_moisture_detection:
 	case POWER_SUPPLY_TYPEC_SINK_POWERED_CABLE:
 	case POWER_SUPPLY_TYPEC_SINK:
 #ifdef CONFIG_LGE_USB
+		if (pd_vpd_active) {
+			usbpd_info(&pd->dev, "Type-C Sink%s VPD connected\n",
+				   typec_mode == POWER_SUPPLY_TYPEC_SINK ?
+				   "" : " (powered)");
+
+			if (pd->current_pr == PR_SRC)
+				return 0;
+
+			pd->current_pr = PR_SRC;
+			break;
+		}
+
 		if (pd->vbus_present) {
 			usbpd_info(&pd->dev, "Type-C Sink%s connected with VBUS\n",
 				   typec_mode == POWER_SUPPLY_TYPEC_SINK ?
@@ -4694,6 +4858,8 @@ static int usbpd_dr_get_property(struct dual_role_phy_instance *dual_role,
 #endif
 		if (pd->current_state == PE_FORCED_PRS)
 			*val = DUAL_ROLE_PROP_PR_NONE;
+		else if (pd->is_vpd)
+			*val = DUAL_ROLE_PROP_PR_SNK;
 		else
 #endif
 		if (pd->current_pr == PR_SRC)
@@ -4902,11 +5068,14 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 		enum dual_role_property prop, const unsigned int *val)
 {
 	struct usbpd *pd = dual_role_get_drvdata(dual_role);
+#ifndef CONFIG_LGE_USB
 	union power_supply_propval value;
 	int wait_count = 5;
+#endif
 	bool do_swap = false;
 #ifdef CONFIG_LGE_USB
 	union power_supply_propval propval = {0};
+	int ret;
 #endif
 
 	if (!pd)
@@ -4915,6 +5084,14 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 	switch (prop) {
 	case DUAL_ROLE_PROP_MODE:
 		usbpd_dbg(&pd->dev, "Setting mode to %d\n", *val);
+
+#ifdef CONFIG_LGE_DUAL_SCREEN
+		if (pd->discovered_vid == 0x1004 &&
+		    pd->discovered_pid == 0x637a) {
+			usbpd_err(&pd->dev, "DS2 does not support changing mode\n");
+			return -ENOTSUPP;
+		}
+#endif
 
 #ifdef CONFIG_LGE_USB
 		if (pd->is_control) {
@@ -4983,7 +5160,6 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 		while (pd->forced_pr != POWER_SUPPLY_TYPEC_PR_NONE &&
 				--wait_count)
 			msleep(20);
-#endif
 
 		if (!wait_count) {
 			usbpd_err(&pd->dev, "setting mode timed out\n");
@@ -5007,11 +5183,20 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 				POWER_SUPPLY_PROP_TYPEC_POWER_ROLE, &value);
 			return -ETIMEDOUT;
 		}
+#endif
 
 		break;
 
 	case DUAL_ROLE_PROP_DR:
 		usbpd_dbg(&pd->dev, "Setting data_role to %d\n", *val);
+
+#ifdef CONFIG_LGE_DUAL_SCREEN
+		if (pd->discovered_vid == 0x1004 &&
+		    pd->discovered_pid == 0x637a) {
+			usbpd_err(&pd->dev, "DS2 does not support changing data_role\n");
+			return -ENOTSUPP;
+		}
+#endif
 
 #ifdef CONFIG_LGE_USB
 		if (pd->is_control) {
@@ -5085,6 +5270,14 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 	case DUAL_ROLE_PROP_PR:
 		usbpd_dbg(&pd->dev, "Setting power_role to %d\n", *val);
 
+#ifdef CONFIG_LGE_DUAL_SCREEN
+		if (pd->discovered_vid == 0x1004 &&
+		    pd->discovered_pid == 0x637a) {
+			usbpd_err(&pd->dev, "DS2 does not support changing power_role\n");
+			return -ENOTSUPP;
+		}
+#endif
+
 #ifdef CONFIG_LGE_USB
 		if (pd->is_control) {
 			if (*val == DUAL_ROLE_PROP_PR_SRC)
@@ -5154,6 +5347,29 @@ static int usbpd_dr_set_property(struct dual_role_phy_instance *dual_role,
 		break;
 
 #ifdef CONFIG_LGE_USB
+	case DUAL_ROLE_PROP_VCONN_SUPPLY:
+		if (*val == DUAL_ROLE_PROP_VCONN_SUPPLY_YES) {
+			if (!pd->vconn_enabled) {
+				ret = regulator_enable(pd->vconn);
+				if (ret) {
+					usbpd_err(&pd->dev, "Unable to enable vconn\n");
+					return ret;
+				}
+				pd->vconn_enabled = true;
+			}
+		} else if (*val == DUAL_ROLE_PROP_VCONN_SUPPLY_NO) {
+			if (pd->vconn_enabled) {
+				ret = regulator_disable(pd->vconn);
+				if (ret) {
+					usbpd_err(&pd->dev, "Unable to disable vconn\n");
+					return ret;
+				}
+				pd->vconn_enabled = false;
+			}
+		}
+		dual_role_instance_changed(pd->dual_role);
+		break;
+
 	case DUAL_ROLE_PROP_CONTROL:
 		usbpd_dbg(&pd->dev, "Setting control to %d\n", *val);
 
@@ -5231,6 +5447,7 @@ static int usbpd_dr_prop_writeable(struct dual_role_phy_instance *dual_role,
 	switch (prop) {
 	case DUAL_ROLE_PROP_MODE:
 #ifdef CONFIG_LGE_USB
+	case DUAL_ROLE_PROP_VCONN_SUPPLY:
 	case DUAL_ROLE_PROP_CONTROL:
 #endif
 #ifdef CONFIG_LGE_USB_MOISTURE_DETECTION
@@ -5962,6 +6179,9 @@ struct usbpd *usbpd_create(struct device *parent)
 		goto del_pd;
 	}
 	INIT_WORK(&pd->sm_work, usbpd_sm);
+#ifdef CONFIG_LGE_USB
+	INIT_WORK(&pd->stop_periph_work, stop_usb_peripheral_work);
+#endif
 	INIT_WORK(&pd->start_periph_work, start_usb_peripheral_work);
 	hrtimer_init(&pd->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	pd->timer.function = pd_timeout;

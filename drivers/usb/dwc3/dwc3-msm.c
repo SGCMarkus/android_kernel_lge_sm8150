@@ -47,6 +47,9 @@
 #include <linux/extcon.h>
 #include <linux/reset.h>
 #include <linux/clk/qcom.h>
+#ifdef CONFIG_LGE_DUAL_SCREEN
+#include <linux/lge_ds2.h>
+#endif
 
 #include "power.h"
 #include "core.h"
@@ -366,6 +369,10 @@ static int get_psy_type(struct dwc3_msm *mdwc);
 #if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 extern bool usb_super_speed;
 extern bool is_dd_working(void);
+#endif
+
+#ifdef CONFIG_LGE_DUAL_SCREEN
+extern bool is_ds2_connected(void);
 #endif
 
 /**
@@ -2978,6 +2985,16 @@ static void dwc3_resume_work(struct work_struct *w)
 		} else {
 			mdwc->override_usb_speed = 0;
 		}
+#endif
+#ifdef CONFIG_LGE_DUAL_SCREEN
+		if (is_ds2_connected()) {
+                        dev_info(mdwc->dev, "%s: ds2_connected "
+                                        "limit USB Speed to High Speed.\n",
+                                        __func__);
+                        mdwc->override_usb_speed = USB_SPEED_HIGH;
+                } else {
+                        mdwc->override_usb_speed = 0;
+                }
 #endif
 
 		/* Use default dwc->maximum_speed if speed isn't reported */

@@ -197,11 +197,8 @@ obj-$(CONFIG_LGE_BROADCAST_TDMB) += broadcast/
 obj-$(CONFIG_LATTICE_ICE40)              += ice40/
 
 ifeq ($(CONFIG_TRUSTONIC_TEE),y)
-ifeq ($(KR_BUILD), true)
-obj-$(CONFIG_TRUSTONIC_TEE) += gud/
-else
-ifeq ($(CONFIG_TRUSTONIC_TEE_DEFAULT),y)
 obj-$(CONFIG_TRUSTONIC_TEE) += gud/
 endif
-endif
-endif
+
+# ISDBT
++obj-$(CONFIG_LGE_BROADCAST_ISDBT_JAPAN) += broadcast/

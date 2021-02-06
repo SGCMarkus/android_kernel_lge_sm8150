@@ -51,18 +51,22 @@
 #define MR_LINK_PRBS7 0x100
 #define MR_LINK_CUSTOM80 0x200
 #define MR_LINK_TRAINING4  0x40
-#ifdef CONFIG_LGE_COVER_DISPLAY
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 #include <linux/hall_ic.h>
+#include "../lge/cover/lge_cover_ctrl.h"
+struct hallic_dev dd_lt_dev = {
+	.name = "dd_lt_status",
+	.state = 0,
+};
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
 #include "../lge/cover/lge_cover_ctrl_ops.h"
 extern bool is_dd_connected(void);
 extern bool is_dd_button_enabled(void);
 extern struct lge_dp_display* get_lge_dp(void);
 extern struct ice40 *global_ice40;
 extern int ice40_mcu_reg_write_norecovery(struct ice40 *ice40, uint addr, uint val);
-struct hallic_dev dd_lt_dev = {
-	.name = "dd_lt_status",
-	.state = 0,
-};
 int link_tr_state;
 EXPORT_SYMBOL(link_tr_state);
 int mainlink_state;
@@ -70,6 +74,12 @@ EXPORT_SYMBOL(mainlink_state);
 int color_mode_state;
 EXPORT_SYMBOL(color_mode_state);
 #endif
+
+#ifdef CONFIG_LGE_DUAL_SCREEN
+#include <linux/lge_ds2.h>
+extern bool is_ds2_connected(void);
+#endif
+
 #ifdef CONFIG_LGE_DISPLAY_COMMON
 bool dp_lt1_state;
 #endif
@@ -421,6 +431,12 @@ static int dp_ctrl_link_rate_down_shift(struct dp_ctrl_private *ctrl)
 		ctrl->link->link_params.bw_code = DP_LINK_BW_5_4;
 	}
 #endif
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+	if (is_ds2_connected()) {
+		pr_info("Force set BW 2.7G for DS2\n");
+		ctrl->link->link_params.bw_code = DP_LINK_BW_2_7;
+	}
+#endif
 	pr_debug("new bw code=0x%x\n", ctrl->link->link_params.bw_code);
 
 	return ret;
@@ -521,6 +537,10 @@ static int dp_ctrl_link_train(struct dp_ctrl_private *ctrl)
 #ifdef CONFIG_LGE_DISPLAY_COMMON
 	if (ctrl->parser->lge_dp_use && !dp_lt1_state)
 		ctrl->link->phy_params.v_level = 2;
+#ifdef CONFIG_LGE_DUAL_SCREEN
+	else if (is_ds2_connected())
+		ctrl->link->phy_params.v_level = 2;
+#endif
 #ifdef CONFIG_LGE_COVER_DISPLAY
 	else if (is_dd_connected())
 		ctrl->link->phy_params.v_level = 2;
@@ -710,8 +730,14 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow)
 		dp_ctrl_configure_source_link_params(ctrl, true);
 
 		rc = dp_ctrl_setup_main_link(ctrl);
-#ifdef CONFIG_LGE_COVER_DISPLAY
-		if (!rc) {
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+		if(!rc) {
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+			if (is_ds2_connected()) {
+				hallic_set_state(&dd_lt_dev, 1);
+			}
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY)
 			if (is_dd_connected()) {
 				hallic_set_state(&dd_lt_dev, 1);
 
@@ -720,7 +746,7 @@ static int dp_ctrl_link_setup(struct dp_ctrl_private *ctrl, bool shallow)
 					ops->set_recovery_state(RECOVERY_NONE);
 				}
 			}
-
+#endif
 			break;
 		}
 #else
@@ -1395,7 +1421,7 @@ static void dp_ctrl_off(struct dp_ctrl *dp_ctrl)
 
 	dp_ctrl_disable_link_clock(ctrl);
 
-#ifdef CONFIG_LGE_COVER_DISPLAY
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 	dd_lt_dev.state = 0;
 #endif
 	ctrl->mst_mode = false;
@@ -1494,7 +1520,7 @@ struct dp_ctrl *dp_ctrl_get(struct dp_ctrl_in *in)
 	dp_ctrl->stream_off = dp_ctrl_stream_off;
 	dp_ctrl->stream_pre_off = dp_ctrl_stream_pre_off;
 	dp_ctrl->set_mst_channel_info = dp_ctrl_set_mst_channel_info;
-#ifdef CONFIG_LGE_COVER_DISPLAY
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 	if (hallic_register(&dd_lt_dev) < 0 ) {
 		pr_err("dd_lt_dev registration failed\n");
 	} else {

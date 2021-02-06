@@ -36,6 +36,12 @@ enum usbpd_svdm_cmd_type {
 #define USBPD_SVDM_EXIT_MODE		0x5
 #define USBPD_SVDM_ATTENTION		0x6
 
+#ifdef CONFIG_LGE_USB
+/* DP specific VDM Commands */
+#define DP_USBPD_VDM_STATUS 0x10
+#define DP_USBPD_VDM_CONFIGURE  0x11
+#endif
+
 /*
  * Implemented by client
  */

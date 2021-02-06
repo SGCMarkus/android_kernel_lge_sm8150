@@ -176,6 +176,7 @@ enum lge_laop_operator_type {
 
 enum lge_sku_carrier_type lge_get_sku_carrier(void);
 enum lge_laop_operator_type lge_get_laop_operator(void);
+int lge_get_capsensor(void);
 #endif
 
 #endif /* __ASM_ARCH_MSM_BOARD_LGE_H */

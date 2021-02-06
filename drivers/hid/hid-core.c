@@ -49,6 +49,13 @@ module_param_named(debug, hid_debug, int, 0600);
 MODULE_PARM_DESC(debug, "toggle HID debugging messages");
 EXPORT_SYMBOL_GPL(hid_debug);
 
+int hid_touch_debug_mask = BASE_INFO;
+/* Debug mask value
+ * usage: echo [debug_mask] > /sys/module/hid/parameters/debug_mask
+ */
+module_param_named(debug_mask, hid_touch_debug_mask, int, 0664);
+MODULE_PARM_DESC(debug_mask, "Use Touch_HID debug log trace");
+
 static int hid_ignore_special_drivers = 0;
 module_param_named(ignore_special_drivers, hid_ignore_special_drivers, int, 0600);
 MODULE_PARM_DESC(ignore_special_drivers, "Ignore any special drivers and handle all devices by generic driver");

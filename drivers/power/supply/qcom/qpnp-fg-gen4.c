@@ -2794,8 +2794,8 @@ static int fg_gen4_adjust_recharge_soc(struct fg_gen4_chip *chip)
 
 				new_recharge_soc = recharge_soc;
 				fg->recharge_soc_adjusted = false;
-				chip->chg_term_good = false;
 #endif
+				chip->chg_term_good = false;
 			}
 		} else {
 			if (!fg->recharge_soc_adjusted)

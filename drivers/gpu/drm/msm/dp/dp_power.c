@@ -22,6 +22,9 @@
 #undef pr_debug
 #define pr_debug pr_err
 
+#if defined (CONFIG_LGE_DUAL_SCREEN)
+#include <linux/lge_ds2.h>
+#endif
 
 struct dp_power_private {
 	struct dp_parser *parser;
@@ -418,6 +421,13 @@ static void dp_power_set_gpio(struct dp_power_private *power, bool flip)
 	for (i = 0; i < mp->num_gpio; i++) {
 		if (dp_power_find_gpio(config->gpio_name, "aux-sel"))
 			config->value = flip;
+
+#if defined (CONFIG_LGE_DUAL_SCREEN)
+		if (is_ds2_connected()) {
+			pr_info("ds2 connected. invert flip\n");
+			config->value = !flip;
+		}
+#endif
 
 		if (gpio_is_valid(config->gpio)) {
 			pr_debug("gpio %s, value %d\n", config->gpio_name,

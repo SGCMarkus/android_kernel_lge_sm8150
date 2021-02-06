@@ -19,7 +19,7 @@
 #include "cam_common_util.h"
 #include "cam_packet_util.h"
 
-#ifdef CONFIG_MACH_SM8150_BETA
+#if defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
 #include <soc/qcom/lge/lge_regulator_mode_change.h>
 #endif
 
@@ -27,7 +27,7 @@ static void cam_sensor_update_req_mgr(
 	struct cam_sensor_ctrl_t *s_ctrl,
 	struct cam_packet *csl_packet)
 {
-	struct cam_req_mgr_add_request add_req;
+	struct cam_req_mgr_add_request add_req = {0,};
 
 	add_req.link_hdl = s_ctrl->bridge_intf.link_hdl;
 	add_req.req_id = csl_packet->header.request_id;
@@ -1106,12 +1106,18 @@ int cam_sensor_power_up(struct cam_sensor_ctrl_t *s_ctrl)
 		CAM_ERR(CAM_SENSOR, "failed: %pK %pK", power_info, slave_info);
 		return -EINVAL;
 	}
-#ifdef CONFIG_MACH_SM8150_BETA
+#if defined(CONFIG_MACH_SM8150_BETA)
     if (slave_info->sensor_slave_addr == 0x7a)
     {
         CAM_INFO(CAM_SENSOR, "bob_mode_enable", slave_info->sensor_slave_addr);
         bob_mode_enable();
     }
+#elif defined(CONFIG_MACH_SM8150_MH2LM)
+	if ((isEnable == FALSE) && (slave_info->sensor_slave_addr == 0x20)) {
+		CAM_INFO(CAM_SENSOR, "bob_mode_enable", slave_info->sensor_slave_addr);
+		bob_mode_enable();
+		isEnable = TRUE;
+	}
 #endif
 	if (s_ctrl->bob_pwm_switch) {
 		rc = cam_sensor_bob_pwm_mode_switch(soc_info,
@@ -1155,7 +1161,7 @@ int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 	struct v4l2_subdev *cci_subdev = cam_cci_get_subdev(CCI_DEVICE_0);
 	struct cci_device *cci_dev = v4l2_get_subdevdata(cci_subdev);
 #endif
-#ifdef CONFIG_MACH_SM8150_BETA
+#if defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
    struct cam_camera_slave_info *slave_info = &(s_ctrl->sensordata->slave_info);
 #endif
 
@@ -1176,12 +1182,18 @@ int cam_sensor_power_down(struct cam_sensor_ctrl_t *s_ctrl)
 		CAM_ERR(CAM_SENSOR, "power down the core is failed:%d", rc);
 		return rc;
 	}
-#ifdef CONFIG_MACH_SM8150_BETA
+#if defined(CONFIG_MACH_SM8150_BETA)
     if (slave_info->sensor_slave_addr == 0x7a)
     {
         CAM_INFO(CAM_SENSOR, "bob_mode_disable", slave_info->sensor_slave_addr);
         bob_mode_disable();
     }
+#elif defined(CONFIG_MACH_SM8150_MH2LM)
+	if ((isEnable == TRUE) && (slave_info->sensor_slave_addr == 0x20)) {
+		CAM_INFO(CAM_SENSOR, "bob_mode_disable", slave_info->sensor_slave_addr);
+		bob_mode_disable();
+		isEnable = FALSE;
+	}
 #endif
 	if (s_ctrl->bob_pwm_switch) {
 		rc = cam_sensor_bob_pwm_mode_switch(soc_info,

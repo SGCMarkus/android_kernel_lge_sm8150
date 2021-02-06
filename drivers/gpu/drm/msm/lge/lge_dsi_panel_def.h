@@ -61,6 +61,18 @@ enum lge_ddic_dsi_cmd_set_type {
 	LGE_DDIC_DSI_DISP_SHA_LUT,
 	LGE_DDIC_DSI_DISP_TRUEVIEW_LUT,
 	LGE_DDIC_DSI_BRIGHTNESS_CTRL_EXT_COMMAND,
+	LGE_DDIC_DSI_FP_LHBM_COMMAND,
+	LGE_DDIC_DSI_FP_LHBM_BR_LVL_COMMAND,
+	LGE_DDIC_DSI_FP_LHBM_LUT,
+	LGE_DDIC_DSI_TC_PERF_COMMAND,
+	LGE_DDIC_DSI_RGB_LUT,
+	LGE_DDIC_DSI_ACE_LUT,
+	LGE_DDIC_DSI_FP_LHBM_READY,
+	LGE_DDIC_DSI_FP_LHBM_EXIT,
+	LGE_DDIC_DSI_FP_LHBM_AOD_COMMAND,
+	LGE_DDIC_DSI_FP_LHBM_EXIT_POST,
+	LGE_DDIC_DSI_FP_LHBM_IRC_SET,
+	LGE_DDIC_DSI_FP_NORM_IRC_SET,
 	LGE_DDIC_DSI_CMD_SET_MAX
 };
 
@@ -150,6 +162,10 @@ struct lge_ddic_ops {
 	int (*set_irc_state)(struct dsi_panel *panel, enum lge_irc_mode mode, enum lge_irc_ctrl enable);
 	int (*set_irc_default_state)(struct dsi_panel *panel);
 	void (*set_dim_ctrl)(struct dsi_panel *panel, bool status);
+	void (*lge_set_fp_lhbm)(struct dsi_panel *panel, int input);
+	void (*lge_set_fp_lhbm_br_lvl)(struct dsi_panel *panel, int input);
+	void (*lge_set_tc_perf)(struct dsi_panel *panel, int input);
+	void (*lge_damping_mode_set)(struct dsi_panel *panel, int input);
 
 	/* For Display DRS */
 	int (*bist_ctrl)(struct dsi_panel *panel, bool enable);
@@ -174,6 +190,28 @@ struct lge_ddic_ops {
 struct lge_dsi_color_manager_mode_entry {
 	u32 color_manager_mode;
 	u32 color_manager_status;
+};
+
+struct lge_lut_command {
+    u32 size;
+    const u8 *buf;
+};
+
+enum lge_cm_lut_type {
+	LGE_CM_LUT_COLOR_MODE_SET = 0,
+	LGE_CM_LUT_SATURATION,
+	LGE_CM_LUT_SHARPNESS,
+	LGE_CM_LUT_RGB,
+	LGE_CM_LUT_ACE,
+	LGE_CM_LUT_TRUEVIEW,
+	LGE_CM_LUT_RGB_HUE,
+	LGE_CM_LUT_TYPE_MAX,
+};
+
+struct lge_cm_lut_list_set {
+	enum lge_cm_lut_type type;
+	u32 count;
+	struct lge_lut_command *cmds;
 };
 
 struct lge_dsi_panel {
@@ -261,7 +299,20 @@ struct lge_dsi_panel {
 	int vr_lp_mode;
 	bool use_dim_ctrl;
 	bool use_fp_lhbm;
+	bool is_fp_hbm_mode;
+	u32 fp_hbm_mode_backlight_lvl;
+	bool need_fp_lhbm_set;
 	int fp_lhbm_mode;
+	int old_fp_lhbm_mode;
+	int fp_lhbm_br_lvl;
+	int old_panel_fp_mode;
+	int forced_lhbm;
+	bool use_tc_perf;
+	int tc_perf;
+
+	bool use_damping_mode;
+	int damping_hdr;
+
 	bool true_view_supported;
 	u32 true_view_mode;
 
@@ -304,7 +355,7 @@ struct lge_dsi_panel {
 	u32 aod_interface;
 	const char *aod_interface_type[3];
 
-#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY) || IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
 	/*For Cover Display */
 	struct backlight_device *bl_cover_device;
 	int bl_cover_lvl_unset;
@@ -335,6 +386,11 @@ struct lge_dsi_panel {
 
 	bool use_ddic_reg_lock;
 	struct lge_ddic_dsi_panel_cmd_set lge_cmd_sets[LGE_DDIC_DSI_CMD_SET_MAX];
+
+	struct lge_cm_lut_list_set cm_lut_sets[LGE_CM_LUT_TYPE_MAX];
+	bool use_cm_lut;
+	const char **cm_lut_name_list;
+	int cm_lut_cnt;
 };
 
 #endif //_H_LGE_DSI_PANEL_DEF_

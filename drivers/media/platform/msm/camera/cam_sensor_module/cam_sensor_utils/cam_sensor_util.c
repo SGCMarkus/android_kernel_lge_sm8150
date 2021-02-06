@@ -36,9 +36,26 @@ static struct i2c_settings_list*
 	else
 		return NULL;
 
+/* LGE_CHANGE_S, page allocation fail because GD1 sensor is trying to allocate about 105KB. sungmin.cho@lge.com 2019-04-29 */
+#ifdef QCOM_ORG
 	tmp->i2c_settings.reg_setting = (struct cam_sensor_i2c_reg_array *)
+		kcalloc(size, sizeof(struct cam_sensor_i2c_reg_array),
+			GFP_KERNEL);
+#else
+	if (size * sizeof(struct cam_sensor_i2c_reg_array) <= PAGE_SIZE)
+	{
+		tmp->i2c_settings.reg_setting = (struct cam_sensor_i2c_reg_array *)
 		vzalloc(size * sizeof(struct cam_sensor_i2c_reg_array));
+	}
+	else {
+		tmp->i2c_settings.reg_setting = (struct cam_sensor_i2c_reg_array *)
+		vzalloc(size * sizeof(struct cam_sensor_i2c_reg_array));
+	}
+#endif
+/* LGE_CHANGE_E, page allocation fail because GD1 sensor is trying to allocate about 105KB. sungmin.cho@lge.com 2019-04-29 */
+
 	if (tmp->i2c_settings.reg_setting == NULL) {
+		CAM_ERR(CAM_SENSOR, "failed alloc : n = %d, sizeof(cam_sensor_i2c_reg_array) = %d, total = %d", size,  sizeof(struct cam_sensor_i2c_reg_array), size * sizeof(struct cam_sensor_i2c_reg_array));
 		list_del(&(tmp->list));
 		kfree(tmp);
 		return NULL;
