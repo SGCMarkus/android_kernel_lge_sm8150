@@ -35,6 +35,7 @@
 #include <linux/input.h>
 #include <linux/input/mt.h>
 #include <touch_hwif.h>
+#include <touch_common.h>
 #include <linux/input/lge_touch_notify.h>
 #include <linux/input/lge_touch_module.h>
 #if defined(CONFIG_LGE_TOUCH_USE_PANEL_NOTIFY)
@@ -52,7 +53,7 @@
 #define LGE_TOUCH_NAME		"lge_touch"
 #define LGE_TOUCH_DRIVER_NAME	"lge_touch_driver"
 #define MAX_FINGER		10
-#define MAX_LPWG_CODE		128
+#define MAX_LPWG_CODE		10
 #define EUPGRADE		140
 #define EHWRESET_ASYNC		141
 #define EHWRESET_SYNC		142
@@ -120,6 +121,11 @@ extern u32 touch_debug_mask;
 #define TOUCH_IRQ_SWIPE_LEFT2		(1 << 12)
 #define TOUCH_IRQ_SWIPE_RIGHT2		(1 << 13)
 #define TOUCH_IRQ_ERROR			(1 << 15)
+#define TOUCH_IRQ_LPWG_LONGPRESS_DOWN		(1 << 16)
+#define TOUCH_IRQ_LPWG_LONGPRESS_UP		(1 << 17)
+#define TOUCH_IRQ_LPWG_SINGLE_WAKEUP		(1 << 18)
+#define TOUCH_IRQ_LPWG_LONGPRESS_DOWN_AROUND	(1 << 19)
+#define TOUCH_IRQ_LPWG_LONGPRESS_UP_AROUND	(1 << 20)
 
 enum {
 	POWER_OFF = 0,
@@ -202,6 +208,7 @@ enum {
 	SWIPE_L,
 	SWIPE_R2,
 	SWIPE_L2,
+	SWIPE_DEFAULT,
 };
 
 enum {
@@ -329,6 +336,11 @@ enum {
 	TOUCH_UEVENT_WATER_MODE_OFF,
 	TOUCH_UEVENT_AI_BUTTON,
 	TOUCH_UEVENT_AI_PICK,
+	TOUCH_UEVENT_LPWG_LONGPRESS_DOWN,
+	TOUCH_UEVENT_LPWG_LONGPRESS_UP,
+	TOUCH_UEVENT_LPWG_SINGLE_WAKEUP,
+	TOUCH_UEVENT_LPWG_LONGPRESS_DOWN_AROUND,
+	TOUCH_UEVENT_LPWG_LONGPRESS_UP_AROUND,
 	TOUCH_UEVENT_SIZE,
 };
 
@@ -361,6 +373,7 @@ struct state_info {
 	atomic_t connect; /* connection using USB port */
 	atomic_t wireless; /* connection using wirelees_charger */
 	atomic_t earjack; /* connection using earjack */
+	atomic_t dualscreen; /* connection using Dualscreen accessory */
 	atomic_t lockscreen;
 	atomic_t ime;
 	atomic_t film;
@@ -409,6 +422,7 @@ struct touch_operation_role {
 	bool use_lpwg_test;
 	bool hide_coordinate;
 	bool use_film_status;
+	bool use_synaptics_touchcomm;
 };
 
 struct tci_info {
@@ -569,6 +583,8 @@ struct touch_core_data {
 	struct touch_xfer_msg *xfer;
 
 	struct mutex lock;
+	struct mutex irq_lock;
+	struct mutex finger_mask_lock;
 	struct workqueue_struct *wq;
 	struct delayed_work init_work;
 	struct delayed_work upgrade_work;
@@ -698,5 +714,7 @@ extern void secure_touch_notify(struct touch_core_data *ts);
 extern void secure_touch_init(struct touch_core_data *ts);
 extern void secure_touch_stop(struct touch_core_data *ts, bool blocking);
 #endif
+
+extern bool is_ddic_name(char *ddic_name);
 
 #endif /* LGE_TOUCH_CORE_H */

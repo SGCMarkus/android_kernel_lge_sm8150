@@ -43,6 +43,7 @@ extern int osal_als_attrs_size;
 
 extern void osal_report_als(struct amsDriver_chip *chip);
 extern void osal_report_flicker(struct amsDriver_chip *chip);
+extern void osal_report_sw_flicker(struct amsDriver_chip *chip);
 extern ssize_t osal_flicker_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet);
 extern ssize_t osal_als_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet);
 extern int osal_configure_als_mode(struct amsDriver_chip *chip, u8 state);
@@ -50,6 +51,8 @@ extern int osal_get_lux(struct amsDriver_chip *chip);
 extern int osal_read_als(struct amsDriver_chip *chip);
 extern void osal_report_als(struct amsDriver_chip *chip);
 extern int osal_set_segment_tables(struct amsDriver_chip *chip);
+extern ssize_t osal_sw_flicker_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet);
+
 #endif
 
 #endif /*__OSAL_LINUX_INPUT_ALS_H */

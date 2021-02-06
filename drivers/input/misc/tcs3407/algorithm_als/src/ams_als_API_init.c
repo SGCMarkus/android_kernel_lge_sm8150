@@ -51,17 +51,9 @@ int amsAlg_als_initAlg (amsAlsContext_t * ctx, amsAlsInitData_t * initData){
         ctx->calibration.thresholdLow = initData->calibration.thresholdLow;
         ctx->calibration.thresholdHigh = initData->calibration.thresholdHigh;
         ctx->calibration.calibrationFactor = initData->calibration.calibrationFactor;
-#if defined CONFIG_AMS_OPTICAL_SENSOR_ALS_CLEAR
-        ctx->calibration.D_factor = initData->calibration.D_factor;
-        ctx->calibration.L1_factor = initData->calibration.L1_factor;
-        ctx->calibration.L2_factor = initData->calibration.L2_factor;
-        ctx->calibration.L3_factor = initData->calibration.L3_factor;
-#endif
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB
-#ifdef CONFIG_AMS_ALS_CRGBW
         ctx->calibration.Wbc = initData->calibration.Wbc;
         ctx->calibration.C_coef = initData->calibration.C_coef;
-#endif
         ctx->calibration.R_coef = initData->calibration.R_coef;
         ctx->calibration.G_coef = initData->calibration.G_coef;
         ctx->calibration.B_coef = initData->calibration.B_coef;
@@ -72,18 +64,7 @@ int amsAlg_als_initAlg (amsAlsContext_t * ctx, amsAlsInitData_t * initData){
         ctx->calibration.D_factor = initData->calibration.D_factor;
         ctx->calibration.CT_coef = initData->calibration.CT_coef;
         ctx->calibration.CT_offset = initData->calibration.CT_offset;
-#endif
-#ifdef CONFIG_AMS_ALS_CRWBI
-        ctx->calibration.Wbc = initData->calibration.Wbc;
-        ctx->calibration.Wideband_C_factor = initData->calibration.Wideband_C_factor;
-        ctx->calibration.Wideband_R_factor = initData->calibration.Wideband_R_factor;
-        ctx->calibration.Wideband_B_factor = initData->calibration.Wideband_B_factor;
-#endif
-#if defined CONFIG_AMS_OPTICAL_SENSOR_ALS_CLEAR || defined CONFIG_AMS_OPTICAL_SENSOR_259x
-        ctx->calibration.D_factor  = initData->calibration.D_factor;
-        ctx->calibration.L1_factor = initData->calibration.L1_factor;
-        ctx->calibration.L2_factor = initData->calibration.L2_factor;
-        ctx->calibration.L3_factor = initData->calibration.L3_factor;
+
 #endif
     }
 

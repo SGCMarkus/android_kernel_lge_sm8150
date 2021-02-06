@@ -25,7 +25,11 @@
 #include <touch_i2c.h>
 #endif
 #define TOUCH_SHOW(ret, buf, fmt, args...) \
-	(ret += snprintf(buf + ret, PAGE_SIZE - ret, fmt, ##args))
+	do { \
+		if (PAGE_SIZE - ret <= 0) \
+			break; \
+		ret += snprintf(buf + ret, PAGE_SIZE - ret, fmt, ##args); \
+	} while(0);
 
 static char ime_str[3][8] = {"OFF", "ON", "SWYPE"};
 static char incoming_call_str[7][15] = {"IDLE", "RINGING", "OFFHOOK", "CDMA_RINGING", "CDMA_OFFHOOK", "LTE_RINGING", "LTE_OFFHOOK"};
@@ -779,6 +783,62 @@ static ssize_t store_swipe_enable(struct device *dev,
 	return count;
 }
 
+static ssize_t store_swipe_pay_area(struct device *dev,
+		const char *buf, size_t count)
+{
+	struct touch_core_data *ts = to_touch_core(dev);
+	int type = PAY_TYPE_DISABLE;
+	int offset_y = 0;
+	int start_x = 0;
+	int start_y = 0;
+	int width = 0;
+	int height = 0;
+	int end_x = 0;
+	int end_y = 0;
+	int mode = SWIPE_DEFAULT;
+
+	if (sscanf(buf, "%d %d %d %d %d %d", &type, &offset_y, &start_x,
+				&start_y, &width, &height) <= 0)
+		return count;
+
+	TOUCH_I("%s: type = %d, offset_y = %d, start_x = %d, start_y = %d, width = %d, height = %d\n",
+			__func__, type, offset_y,
+			start_x, start_y, width, height);
+
+	switch (type) {
+	case PAY_TYPE_SWIPE_L:
+		mode = SWIPE_L2;
+		break;
+	case PAY_TYPE_SWIPE_R:
+		mode = SWIPE_R2;
+		break;
+	default:
+		TOUCH_E("%s : type is no pay_area(%d)\n", __func__, type);
+		break;
+	}
+
+	if (type == PAY_TYPE_SWIPE_L || type == PAY_TYPE_SWIPE_R) {
+		if (offset_y == 0 && start_x == 0 && start_y == 0
+				&& width == 0 && height == 0) {
+			TOUCH_I("%s : Values are not changed.\n", __func__);
+		} else {
+			end_x = start_x + width - 1;
+			end_y = start_y + height - 1;
+
+			ts->swipe[mode].start_area.x1 = start_x;
+			ts->swipe[mode].start_area.y1 = start_y;
+			ts->swipe[mode].start_area.x2 = end_x;
+			ts->swipe[mode].start_area.y2 = end_y;
+		}
+	}
+
+	mutex_lock(&ts->lock);
+	ts->driver->swipe_enable(dev, true);
+	mutex_unlock(&ts->lock);
+
+	return count;
+}
+
 static ssize_t show_swipe_tool(struct device *dev, char *buf)
 {
 	struct touch_core_data *ts = to_touch_core(dev);
@@ -1205,17 +1265,19 @@ static ssize_t store_secure_touch_enable(struct device *dev,
 			if (token != NULL) {
 				/* Synaptics int pin is not auto cleared by Firmware */
 				if (!strcmp(token, "synaptics")) {
-					while(gpio_get_value(ts->int_pin) == 0 && cnt < 10) {
-						touch_msleep(10);
-						cnt++;
-					}
+					if (ts->lpwg.screen) {
+						while(gpio_get_value(ts->int_pin) == 0 && cnt < 10) {
+							touch_msleep(10);
+							cnt++;
+						}
 
-					TOUCH_I("delay time : %d\n", cnt*10);
+						TOUCH_I("delay time : %d\n", cnt*10);
 
-					if  (cnt >= 10) {
-						TOUCH_I("need init\n");
-						touch_interrupt_control(ts->dev, INTERRUPT_DISABLE);
-						mod_delayed_work(ts->wq, &ts->init_work, 0);
+						if  (cnt >= 10) {
+							TOUCH_I("need init\n");
+							touch_interrupt_control(ts->dev, INTERRUPT_DISABLE);
+							mod_delayed_work(ts->wq, &ts->init_work, 0);
+						}
 					}
 				}
 			}
@@ -1407,6 +1469,7 @@ static TOUCH_ATTR(debug_option, show_debug_option_state,
 				store_debug_option_state);
 static TOUCH_ATTR(swipe_available, show_swipe_available, NULL);
 static TOUCH_ATTR(swipe_enable, show_swipe_enable, store_swipe_enable);
+static TOUCH_ATTR(swipe_pay_area, NULL, store_swipe_pay_area);
 static TOUCH_ATTR(swipe_tool, show_swipe_tool, store_swipe_tool);
 static TOUCH_ATTR(app_data, show_app_data, store_app_data);
 static TOUCH_ATTR(click_test, show_click_test, NULL);
@@ -1444,6 +1507,7 @@ static struct attribute *touch_attribute_list[] = {
 	&touch_attr_debug_option.attr,
 	&touch_attr_swipe_available.attr,
 	&touch_attr_swipe_enable.attr,
+	&touch_attr_swipe_pay_area.attr,
 	&touch_attr_swipe_tool.attr,
 	&touch_attr_app_data.attr,
 	&touch_attr_click_test.attr,

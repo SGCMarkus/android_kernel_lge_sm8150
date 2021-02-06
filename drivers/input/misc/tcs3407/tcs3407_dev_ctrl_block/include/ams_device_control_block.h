@@ -62,15 +62,20 @@ typedef enum {
 } ternary;
 
 typedef struct {
+    uint32_t wideband;
+    uint32_t clear;
+    uint32_t saturation;
     ternary  freq100Hz;
     ternary  freq120Hz;
     uint32_t mHz;
+    uint16_t mHzbysw;    
     uint16_t flicker_raw_data;
+    uint32_t mLux;
 } ams_apiAlsFlicker_t;
 
 typedef struct {
     uint32_t mLux;
-    uint32_t colorTemp;
+    uint32_t saturation;
     uint32_t red;
     uint32_t green;
     uint32_t blue;
@@ -560,7 +565,7 @@ typedef enum _3407_regMasks {
 
 #define AMS_SET_ALS_GAIN(mGain)     {ams_setField(ctx->portHndl, DEVREG_CFG1,    alsGainToReg(mGain),       MASK_AGAIN);}
 #define AMS_SET_ALS_INDEX_TO_GAIN(mGain)     {ams_setField(ctx->portHndl, DEVREG_CFG1,    alsIndexToGain(mGain),       MASK_AGAIN);}
-#define AMS_SET_FLICKER_INDEX_TO_FDGAIN(mGain)     {ams_setField(ctx->portHndl, DEVREG_FD_CFG3,    alsIndexToGain(mGain),       MASK_FD_GAIN);}
+#define AMS_SET_FLICKER_INDEX_TO_FDGAIN(mGain)     {ams_setField(ctx->portHndl, DEVREG_FD_CFG3,    alsIndexToGain(mGain) ,       MASK_FD_GAIN);}
 
 #define AMS_DISABLE_ALS_FLICKER()           {ams_setField(ctx->portHndl, DEVREG_ENABLE,  LOW,                       (MASK_AEN|MASK_FDEN));}
 #define AMS_ENABLE_ALS_FLICKER()           {ams_setField(ctx->portHndl, DEVREG_ENABLE,  HIGH,                       (MASK_AEN|MASK_FDEN));}
@@ -661,9 +666,8 @@ typedef enum _3407_configureFeature {
     AMS_CONFIG_ALS_RGB,
     AMS_CONFIG_ALS_CT,
     AMS_CONFIG_ALS_WIDEBAND,
-    AMS_CONFIG_FLICKER,
-    AMS_CONFIG_MOBEAM,
-    AMS_CONFIG_REMCON,
+    AMS_CONFIG_HW_FLICKER,
+    AMS_CONFIG_SW_FLICKER,
     AMS_CONFIG_FEATURE_LAST
 }ams_configureFeature_t;
 
@@ -696,7 +700,7 @@ typedef struct _calibrationData {
 } ams_calibrationData_t;
 
 typedef struct _flickerParams {
-    uint32_t    samplePeriod_us;
+    uint32_t    sampling_time;
     uint16_t    gain;
     uint8_t     compare;
     uint8_t     statusReg;
@@ -723,6 +727,7 @@ typedef struct _3407Context {
                                  regardless of xINT bits */
     bool alwaysReadProx;      /* ditto PDATA */
     bool alwaysReadFlicker;
+    //uint8_t valid_flickerhz_count;
 	
     uint32_t updateAvailable;
     uint8_t shadowEnableReg;
@@ -736,6 +741,7 @@ typedef enum _sensorType {
     AMS_NO_SENSOR_AVAILABLE,
     AMS_AMBIENT_SENSOR,
     AMS_FLICKER_SENSOR,
+    AMS_SW_FLICKER_SENSOR    ,
     AMS_PROXIMITY_SENSOR,
     AMS_WIDEBAND_ALS_SENSOR,
     AMS_LAST_SENSOR
@@ -783,6 +789,7 @@ extern bool ams_getDeviceInfo(ams_deviceInfo_t * info);
 extern bool ams_getMode(ams_deviceCtx_t * ctx, ams_mode_t * mode);
 extern bool ams_deviceInit(ams_deviceCtx_t * ctx, AMS_PORT_portHndl * portHndl, ams_calibrationData_t * calibrationData);
 extern bool ams_deviceEventHandler(ams_deviceCtx_t * ctx);
+extern bool ams_devicePollingHandler(ams_deviceCtx_t * ctx);
 extern uint32_t ams_getResult(ams_deviceCtx_t * ctx);
 extern bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, deviceConfigOptions_t option, uint32_t data);
 extern bool ams_deviceGetConfig(ams_deviceCtx_t * ctx);
@@ -792,7 +799,7 @@ extern bool ams_deviceGetAls(ams_deviceCtx_t * ctx, ams_apiAls_t * exportData);
 extern bool ams_deviceGetPrx(ams_deviceCtx_t * ctx, ams_apiPrx_t * exportData);
 extern bool ams_deviceCalibrateProx(ams_deviceCtx_t * ctx, ams_calibrationData_t * calibrationData);
 extern bool ams_deviceGetFlicker(ams_deviceCtx_t * ctx, ams_apiAlsFlicker_t * exportData);
-extern void ams_deviceGetSWFlicker(ams_deviceCtx_t * ctx);
+extern void ams_deviceGetSWFlicker(ams_deviceCtx_t * ctx, ams_apiAlsFlicker_t * exportData);
 extern bool ams_deviceGetRegdump(ams_deviceCtx_t * ctx) ;
 extern void ams_smux_read(ams_deviceCtx_t *ctx ) ;
 extern void ams_smux_set(ams_deviceCtx_t *ctx , ams_deviceIdentifier_e devID);

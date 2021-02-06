@@ -151,7 +151,7 @@ typedef struct {
 
 typedef struct {
     uint32_t mLux;
-    uint32_t colorTemp;
+    uint32_t saturation;
     uint32_t clear;
     uint32_t red;
     uint32_t green;
@@ -164,6 +164,51 @@ typedef struct {
     uint32_t rawBlue;	
 }ams_ccb_als_result_t;
 
+typedef struct _fifo{
+    uint16_t AdcClear;
+    uint16_t AdcRed;
+#if defined(CONFIG_AMS_ALS_CRWBI)
+    uint16_t AdcGreenWb;
+#else
+    uint16_t AdcGreen;
+#endif
+    uint16_t AdcBlue;
+#if defined(CONFIG_AMS_ALS_CRGBW)
+    uint16_t AdcWb;
+#endif
+    uint16_t AdcFlicker;
+} adcDataSet_t;
+
+
+#if defined(CONFIG_AMS_ALS_CRGBW)
+#define AMS_PORT_LOG_CRGB_W(dataset) \
+        AMS_PORT_msg_4("ccb_alsHandle: C, R,G,B = %u, %u,%u,%u" \
+            , dataset.AdcClear \
+            , dataset.AdcRed \
+            , dataset.AdcGreen \
+            , dataset.AdcBlue \
+            ); \
+        AMS_PORT_msg_1(" WB = %u\n", dataset.AdcWb); \
+
+#elif defined(CONFIG_AMS_ALS_CRWBI)
+#define AMS_PORT_LOG_CRGB_W(dataset) \
+        AMS_PORT_msg_4("ccb_alsHandle: C, R,G/WB,B = %u, %u,%u,%u\n" \
+            , dataset.AdcClear \
+            , dataset.AdcRed \
+            , dataset.AdcGreenWb \
+            , dataset.AdcBlue \
+            )
+#else
+#define AMS_PORT_LOG_CRGB_W(dataset) \
+        AMS_PORT_msg_4("ccb_alsHandle: C,R,G,B = %u, %u,%u,%u\n" \
+            , dataset.AdcClear \
+            , dataset.AdcRed \
+            , dataset.AdcGreen \
+            , dataset.AdcBlue \
+            )
+#endif
+
+
 extern void ccb_alsInit(void * dcbCtx, ams_ccb_als_init_t * initData);
 extern void ccb_alsInit_FIFO(void * dcbCtx, ams_ccb_als_init_t * initData);
 
@@ -171,8 +216,10 @@ extern void ccb_alsInfo(ams_ccb_als_info_t* infoData);
 extern void ccb_alsGetConfig(void * dcbCtx, ams_ccb_als_config_t * configData);
 extern void ccb_alsSetConfig(void * dcbCtx, ams_ccb_als_config_t * configData);
 extern bool ccb_alsHandle(void * dcbCtx, ams_ccb_als_dataSet_t * data);
-extern bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16_t *data);
+extern bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData);
+extern bool ccb_FlickerFIFO4096Event(void * dcbCtx, ams_ccb_als_dataSet_t * alsData);
 extern void ccb_alsGetResult(void * dcbCtx, ams_ccb_als_result_t * result);
 extern bool ccb_sw_flicker_GetResult(void * dcbCtx);
+extern bool ccb_sw_bin4096_flicker_GetResult(void * dcbCtx);
 
 #endif

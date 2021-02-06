@@ -47,6 +47,17 @@
 #include <linux/dd_sar.h>
 #endif
 
+#if defined(CONFIG_LGE_DUAL_SCREEN) || defined(CONFIG_LGE_COVER_DISPLAY)
+#include <linux/lge_cover_display.h>
+#endif
+
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+#include <linux/lge_ds2.h>
+#include <soc/qcom/lge/board_lge.h>
+
+#define BACKCOVER_CLOSE 5
+extern int lge_get_dual_display_support(void);
+#endif
 #ifdef CONFIG_LGE_COVER_DISPLAY
 #include <linux/timer.h>
 #include <linux/jiffies.h>
@@ -55,7 +66,6 @@
 #include "../../gpu/drm/msm/lge/dp/lge_dp_def.h"
 #include <linux/fpga/ice40-spi.h>
 #include "../../gpu/drm/msm/lge/cover/lge_cover_ctrl_ops.h"
-#include <linux/lge_cover_display.h>
 
 extern int lp5521_cover_connect(void);
 extern int global_luke_status;
@@ -88,10 +98,6 @@ extern bool is_dd_connected(void);
 extern bool is_dd_powermode(void);
 extern bool is_dd_display_recovery_working(void);
 
-struct hallic_dev cover_recovery = {
-	.name = "cover_recovery",
-	.state = 0,
-};
 
 #define LUKE_MAX_RETRY_COUNT 10
 enum luke_check_state {
@@ -127,16 +133,8 @@ static struct cover_connection_handle cover_handle = {false, true, NULL};
 struct hallic_dev luke_btn_sdev = {
        .name = "luke_btn",
 };
-struct hallic_dev luke_sdev = {
-       .name = "coverdisplay",
-       .svid_handler_list = LIST_HEAD_INIT(luke_sdev.svid_handler_list),
-};
 struct hallic_dev mcu_fw_sdev = {
        .name = "mcu_fw",
-};
-struct hallic_dev cover_fw_dev = {
-       .name = "cover_fw",
-       .state = -1,
 };
 struct hallic_dev mcu_int_check_sdev = {
        .name = "mcu_int_check",
@@ -179,11 +177,23 @@ static struct delayed_work mcu_int_check_work;
 
 
 static struct mutex p_lock;
-#elif defined (CONFIG_LGE_DUAL_SCREEN)
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+struct hallic_dev luke_sdev = {
+       .name = "coverdisplay",
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+       .svid_handler_list = LIST_HEAD_INIT(luke_sdev.svid_handler_list),
+#endif
+};
 struct hallic_dev cover_fw_dev = {
        .name = "cover_fw",
        .state = -1,
 };
+struct hallic_dev cover_recovery = {
+	.name = "cover_recovery",
+	.state = 0,
+};
+extern bool lge_get_mfts_mode(void);
 #endif
 
 struct gpio_button_data {
@@ -620,7 +630,7 @@ static void gpio_keys_enable_button(struct gpio_button_data *bdata)
 	}
 }
 
-#ifdef CONFIG_LGE_COVER_DISPLAY
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 static void send_recovery_event(int num)
 {
 	if (!cover_recovery.state) {
@@ -628,7 +638,19 @@ static void send_recovery_event(int num)
 		hallic_set_state(&cover_recovery, num);
 	}
 }
+#endif
 
+#ifdef CONFIG_LGE_DUAL_SCREEN
+void request_dualscreen_recovery(void)
+{
+	pr_info("[Dualscreen] %s\n", __func__);
+	send_recovery_event(1);
+	cover_recovery.state = 0;
+}
+EXPORT_SYMBOL(request_dualscreen_recovery);
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
 void request_cover_recovery(int num)
 {
 	struct lge_cover_ops *ops = get_lge_cover_ops();
@@ -1477,6 +1499,20 @@ static ssize_t virtual_mcu_firmware_write_store(struct device *dev, struct devic
 	return count;
 }
 #endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+static ssize_t cover_recovery_req_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	int delay;
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
+
+	sscanf(buf, "%d", &delay);
+	pr_err("%s : %d\n", __func__, delay);
+
+	send_recovery_event(1);
+	cover_recovery.state = 0;       //FIXME : This value is set if power on control receivced from framework in DS1.
+
+    return ret;
+}
+#endif
 
 /**
  * gpio_keys_attr_show_helper() - fill in stringified bitmap of buttons
@@ -1689,6 +1725,11 @@ static DEVICE_ATTR(virtual_mcu_firmware_write, S_IRUGO | S_IWUSR | S_IWGRP,
        NULL,
        virtual_mcu_firmware_write_store);
 #endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+static DEVICE_ATTR(cover_recovery_req, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       cover_recovery_req_store);
+#endif
 
 static struct attribute *gpio_keys_attrs[] = {
 	&dev_attr_keys.attr,
@@ -1697,15 +1738,16 @@ static struct attribute *gpio_keys_attrs[] = {
 	&dev_attr_disabled_switches.attr,
 #ifdef CONFIG_LGE_COVER_DISPLAY
 	&dev_attr_virtual_luke_btn_state.attr,
-	&dev_attr_virtual_mcu_firmware_write.attr,
 	&dev_attr_mcu_firmware_version.attr,
 	&dev_attr_mcu_power_control.attr,
 	&dev_attr_mcu_sub_power_control.attr,
 	&dev_attr_mcu_power_onoff_test.attr,
 	&dev_attr_cover_fw_update.attr,
 	&dev_attr_cover_version_check.attr,
-#elif defined (CONFIG_LGE_DUAL_SCREEN)
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 	&dev_attr_virtual_mcu_firmware_write.attr,
+	&dev_attr_cover_recovery_req.attr,
 #endif
 	NULL,
 };
@@ -1751,10 +1793,21 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 #endif
 			if (sdev.state_front != !!state) {
 				sdev.state_front = state;
+
 				hallic_set_state(&sdev, state);
 				pr_err("[Display] smart_cover state switched to %s \n", (state ? "CLOSE" : "OPEN"));
 			}
 		}
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "ds2_smart_cover", 15) &&
+		    lge_get_dual_display_support()) {
+				if (sdev.state_front != state) {
+					sdev.state_front = state;
+					hallic_set_state(&sdev, state);
+					pr_err("[Display] %s state switched to %s \n", "ds2_smart_cover", (state ? "CLOSE" : "OPEN"));
+			}
+		}
+#endif
 
 		if (!strncmp(bdata->button->desc, "nfc_cover", 9)){
 			if (ndev.state != !!state) {
@@ -1775,7 +1828,22 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 				pr_err("[Display] cover_display_back state switched to %s\n", ((state==BACKCOVER_CLOSE) ? "CLOSE" : "OPEN"));
 			}
 		}
+#endif
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "ds2_cover_display_back", 22) &&
+		    lge_get_dual_display_support()) {
+				if (state) {
+					state = BACKCOVER_CLOSE;
+				}
+				if (sdev.state_back != state) {
+					sdev.state_back = state;
+					hallic_set_state(&sdev, state);
+					pr_err("[Display] %s state switched to %s \n", "ds2_cover_display_back", (state ? "CLOSE" : "OPEN"));
+				}
+			}
+#endif
 
+#if defined (CONFIG_LGE_COVER_DISPLAY)
 		if (!strncmp(bdata->button->desc, "luke", 4) &&
 		    lge_get_dual_display_support()){
 
@@ -1932,6 +2000,24 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 						}
 					}
 				}
+			}
+		}
+#elif defined (CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "luke", 4) &&
+		    lge_get_dual_display_support()) {
+
+			// when second display is connected
+			if (state == 1) {
+				if(lge_get_mfts_mode())
+					luke_sdev.state = 1;
+				set_hallic_status(true);
+				set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_CHECKING);
+				pr_info("DS2 cover hallic connected\n");
+			} else if (state == 0) { // when second display is disconnected
+				if(lge_get_mfts_mode())
+					luke_sdev.state = 0;
+				pr_info("DS2 cover hallic disconnected\n");
+				set_hallic_status(false);
 			}
 		}
 #endif
@@ -2114,17 +2200,25 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 		}
 #ifdef CONFIG_LGE_SUPPORT_HALLIC
 		if (bdata->button->desc != NULL) {
-#ifdef CONFIG_LGE_COVER_DISPLAY
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+			if (!strncmp(bdata->button->desc, "ds2_smart_cover", 15))
+#elif defined(CONFIG_LGE_COVER_DISPLAY)
 			if (!strncmp(bdata->button->desc, "smart_cover", 11) &&
-			    lge_get_dual_display_support()){
-#else
-			if (!strncmp(bdata->button->desc, "smart_cover", 11)) {
+			    lge_get_dual_display_support())
 #endif
+#else
+			if (!strncmp(bdata->button->desc, "smart_cover", 11))
+#endif
+			{
 				if (hallic_register(&sdev) < 0) {
-					pr_err("smart_cover switch registration failed\n");
+					pr_err("%s switch registration failed\n", bdata->button->desc);
 				}
-				pr_err("smart_cover_dev switch registration success\n");
+				pr_err("%s switch registration success\n", bdata->button->desc);
 			}
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+			if (!strncmp(bdata->button->desc, "ds2_cover_display_back", 22))
+				pr_err("ds2_cover_display_back register");
+#endif
 		}
 
 		if (bdata->button->desc != NULL) {
@@ -2133,25 +2227,31 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 				pr_err("hallic_dev switch registration success\n");
 			}
 		}
-#endif
-
 #ifdef CONFIG_LGE_COVER_DISPLAY
-			if (bdata->button->desc &&
-			    !strncmp(bdata->button->desc, "luke", 4) &&
-				     lge_get_dual_display_support()) {
-				if (hallic_register(&luke_sdev) < 0) {
-					pr_err("luke_dev switch registration failed\n");
-				}
-				pr_err("luke_dev switch registration success\n");
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "luke", 4) &&
+			     lge_get_dual_display_support()) {
+			if (hallic_register(&luke_sdev) < 0) {
+				pr_err("luke_dev switch registration failed\n");
 			}
-			if (bdata->button->desc &&
-			    !strncmp(bdata->button->desc, "mcu_fw", 4)) {
-				if (hallic_register(&mcu_fw_sdev) < 0) {
-					pr_err("mcu_fw_dev switch registration failed\n");
-				}
-				pr_err("mcu_fw_dev switch registration success\n");
+			pr_err("luke_dev switch registration success\n");
+		}
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "mcu_fw", 4)) {
+			if (hallic_register(&mcu_fw_sdev) < 0) {
+				pr_err("mcu_fw_dev switch registration failed\n");
 			}
-
+			pr_err("mcu_fw_dev switch registration success\n");
+		}
+#elif defined(CONFIG_LGE_DUAL_SCREEN)
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "luke", 4) &&
+			     lge_get_dual_display_support()) {
+			if (hallic_register(&luke_sdev) < 0) {
+				pr_err("ds2 luke_dev switch registration failed\n");
+			}
+			pr_err("ds2 luke_dev switch registration success\n");
+		}
 #endif
 		if (button->irq) {
 			bdata->irq = button->irq;
@@ -2462,24 +2562,6 @@ static int gpio_keys_probe(struct platform_device *pdev)
 		}
 	}
 
-	if (!cover_fw_dev.dev) {
-		error = hallic_register(&cover_fw_dev);
-		if (error) {
-			pr_err("cover_fw_dev switch dev register failed\n");
-			return error;
-		}
-		else
-			pr_err("cover_fw_dev switch registration success\n");
-	}
-
-	if (!cover_recovery.dev) {
-		error = hallic_register(&cover_recovery);
-		if(error) {
-			pr_err("cover recovery switch dev register failed\n");
-			return error;
-		}
-	}
-
 	if (!mcu_int_check_sdev.dev) {
 		error = hallic_register(&mcu_int_check_sdev);
 		if(error) {
@@ -2487,7 +2569,8 @@ static int gpio_keys_probe(struct platform_device *pdev)
 			return error;
 		}
 	}
-#elif defined (CONFIG_LGE_DUAL_SCREEN)
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
 	if (!cover_fw_dev.dev) {
 		error = hallic_register(&cover_fw_dev);
 		if (error) {
@@ -2496,6 +2579,13 @@ static int gpio_keys_probe(struct platform_device *pdev)
 		}
 		else
 			pr_err("cover_fw_dev switch registration success\n");
+	}
+	if (!cover_recovery.dev) {
+		error = hallic_register(&cover_recovery);
+		if(error) {
+			pr_err("cover recovery switch dev register failed\n");
+			return error;
+		}
 	}
 #endif
 	error = devm_device_add_group(dev, &gpio_keys_attr_group);

@@ -43,6 +43,7 @@
 
 #include "ams_port_platform.h"
 #include "ams_device_control_block.h"
+
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_CCB
 #include "../../ccb_als/include/core_control_block_als.h"
 #endif
@@ -110,8 +111,11 @@ deviceRegisterTable_t deviceRegisterDefinition[DEVREG_REG_MAX] = {
     { 0xD6, 0xFf },          /* DEVREG_AZ_CONFIG */
     { 0xD7, 0x21},           /*DEVREG_FD_CFG0*/
     { 0xD8, 0x68},           /*DEVREG_FD_CFG1*/
+												 
     { 0xD9, 0x64},           /*DEVREG_FD_CFG2*/
     { 0xDA, 0x91 },           /*DEVREG_FD_CFG3*/    	
+													   
+	
     { 0xDB, 0x00 },          /* DEVREG_FD_STATUS */
     /* 0xEF-0xF8 Reserved */
     { 0xF9, 0x00 },          /* DEVREG_INTENAB */
@@ -170,9 +174,11 @@ uint8_t FlickerGainToReg(uint32_t x){
     int i;
 
     for (i = sizeof(alsGain_conversion)/sizeof(uint32_t)-1; i != 0; i--) {
-        if (x >= alsGain_conversion[i]) break;
+//        if (x >= alsGain_conversion[i]) break;
+        if (x == i) break;
+		
     }
-    return (i << 3);
+    return (i );
 }
 
 
@@ -207,7 +213,7 @@ bool ams_deviceGetAls(ams_deviceCtx_t * ctx, ams_apiAls_t * exportData){
     ams_ccb_als_result_t result;
     ccb_alsGetResult(ctx, &result);
     exportData->mLux        = result.mLux;
-    exportData->colorTemp   = result.colorTemp;
+    exportData->saturation   = result.saturation;
 
     exportData->red         = result.red;
     exportData->green       = result.green;
@@ -222,6 +228,7 @@ bool ams_deviceGetAls(ams_deviceCtx_t * ctx, ams_apiAls_t * exportData){
     return false;
 }
 
+#if 0
 static void _3407_handleAlsEvent(ams_deviceCtx_t * ctx){
     ams_ccb_als_dataSet_t ccbAlsData;
     ccbAlsData.statusReg = ctx->shadowStatus1Reg;
@@ -230,17 +237,31 @@ static void _3407_handleAlsEvent(ams_deviceCtx_t * ctx){
     ccb_alsHandle(ctx, &ccbAlsData);
 }
 #endif
+#endif
 
 bool _3407_flickerInit(ams_deviceCtx_t * ctx);
 
-#ifdef AMS_SW_FLICKER	
-void  ams_deviceGetSWFlicker(ams_deviceCtx_t * ctx){
+void  ams_deviceGetSWFlicker(ams_deviceCtx_t * ctx, ams_apiAlsFlicker_t * exportData){
    //ams_flicker_ctx_t *flickerCtx = (ams_flicker_ctx_t *)&ctx->flickerCtx;
-   ccb_sw_flicker_GetResult(ctx);
+   //ccb_sw_flicker_GetResult(ctx);
+    ams_ccb_als_result_t result;
+    ccb_alsGetResult(ctx, &result);
+    if(result.wideband <=200)
+		result.saturation = 1;/*general low IR light source*/
 
-   AMS_PORT_log_1("ams_deviceGetSWFlicker: ctx->flickerCtx.mHzbysw =%u\n", ctx->flickerCtx.mHzbysw);
+    if(result.wideband >200 && result.mLux < 600)
+		result.saturation = 2;/*high IR light source*/
+
+    if(result.wideband >200 && result.mLux >= 600)
+		result.saturation = 3;/*Sun light*/
+	
+    exportData->wideband    = result.wideband; /*AWB*/
+    exportData->clear    = result.clear; 
+    exportData->saturation    = result.saturation; 	
+    exportData->mHzbysw = ctx->flickerCtx.lastValid.mHzbysw; 
+    exportData->mLux    = result.mLux;  /*C/AWB*/
+    AMS_PORT_msg_5("ams_deviceGetSWFlicker: freq %u, AWB %d , Clear ch  %d, Sun Light %d\n ,C/AWB %d", ctx->flickerCtx.lastValid.mHzbysw,exportData->wideband,exportData->clear,exportData->saturation,exportData->mLux);
 }
-#endif
 
 
 bool ams_deviceGetFlicker(ams_deviceCtx_t * ctx, ams_apiAlsFlicker_t * exportData){
@@ -261,40 +282,54 @@ bool ams_deviceGetFlicker(ams_deviceCtx_t * ctx, ams_apiAlsFlicker_t * exportDat
     if ((exportData->freq100Hz == PRESENT) && (exportData->freq120Hz == PRESENT))
         exportData->mHz = flickerCtx->lastValid.mHz = (uint32_t)(ULONG_MAX);
     else if (exportData->freq100Hz == PRESENT)
-        exportData->mHz = flickerCtx->lastValid.mHz = 100000;
+
+        exportData->mHz = flickerCtx->lastValid.mHz = 100;
+ 
     else if (exportData->freq120Hz == PRESENT)
-        exportData->mHz = flickerCtx->lastValid.mHz = 120000;
+															   
+        exportData->mHz = flickerCtx->lastValid.mHz = 120;
+
     else
         exportData->mHz = 0;
 
+
 	exportData->flicker_raw_data = flickerCtx->flicker_raw_data;
+																																																		
+ 
     return false;
 }
 
-#ifdef  AMS_SW_FLICKER 
+
+
 static void _3407_handleFlickerFIFOEvent(ams_deviceCtx_t * ctx){
-    uint16_t data[128]={0,};
     bool ret;
+																	
 
-    ams_ccb_als_dataSet_t ccbAlsData;
-	
-    ret = ccb_FlickerFIFOEvent(ctx, &ccbAlsData,data);
+    ams_ccb_als_dataSet_t ccbAlsData = {0,};
+#if defined (AMS_BIN_2048_MODE1)  ||defined (AMS_BIN_2048_MODE2) 
+    ret = ccb_FlickerFIFO4096Event(ctx, &ccbAlsData);
+#endif
 
-    if( ctx->flickerCtx.flicker_finished ==1){
-		ctx->flickerCtx.flicker_finished =0;
-		ccb_sw_flicker_GetResult(ctx); 
-    }
-
-		
+#if !defined (AMS_BIN_2048_MODE1)  && !defined (AMS_BIN_2048_MODE2) 
+    ret = ccb_FlickerFIFOEvent(ctx, &ccbAlsData);
+#endif		
 }
 
 
-#else
-static void _3407_handleFlickerEvent(ams_deviceCtx_t * ctx){
+static bool  _3407_handleFlickerEvent(ams_deviceCtx_t * ctx){
 uint8_t status4 ,fd_cfg3;
 //uint16_t flicker_raw =0 ;
+//    uint8_t     flickerstatus;
 
     ams_flicker_ctx_t *flickerCtx = (ams_flicker_ctx_t *)&ctx->flickerCtx;
+#if 0
+   if(ctx->valid_flickerhz_count == 2){
+	//ams_deviceSetConfig(ctx, AMS_CONFIG_HW_FLICKER, AMS_CONFIG_ENABLE, 0);/*hw flicker disable*/
+	ams_deviceSetConfig(ctx, AMS_CONFIG_SW_FLICKER, AMS_CONFIG_ENABLE, 1);/*sw flicker enable*/
+	return 0;
+   }
+ #endif
+ 
     ams_getByte(ctx->portHndl, DEVREG_FD_STATUS, &flickerCtx->statusReg);	
     ams_getByte(ctx->portHndl, DEVREG_FD_CFG3, &fd_cfg3);	
     ams_getByte(ctx->portHndl, DEVREG_STATUS4,&status4);
@@ -304,20 +339,48 @@ uint8_t status4 ,fd_cfg3;
     //ams_getWord(ctx->portHndl, DEVREG_ADATA5L,&flickerCtx->flicker_raw_data);
 	
 //    ams_setByte(ctx->portHndl, DEVREG_FD_STATUS, flickerCtx->statusReg);
-	
-    if (flickerCtx->statusReg & MASK_FLICKER_VALID)
+//    flickerstatus = 	 flickerCtx->statusReg & (MASK_FLICKER_VALID | MASK_100HZ_FLICKER |MASK_120HZ_FLICKER); /*status & 0x2f*/
+
+    AMS_PORT_msg_2("_3407_handleFlickerEvent:    flickerCtx->statusReg =0x%x, gain %x"
+		,  flickerCtx->statusReg,fd_cfg3);
+    //AMS_PORT_log_3("_3407_handleFlickerEvent:   FD status = 0x%02x ,status4 0x%x, fd_gain =0x%x \n"
+	//	, flickerCtx->statusReg, status4,fd_cfg3);
+
+#if 0
+    if (flickerCtx->statusReg == (MASK_FLICKER_VALID | MASK_100HZ_FLICKER)) //100 hz detect 
+    {
         ctx->updateAvailable |= (1 << AMS_FLICKER_SENSOR);
-    AMS_PORT_log_3("_3407_handleFlickerEvent:   FD status = 0x%02x ,status4 0x%x, fd_gain =0x%x \n"
+	 ctx->valid_flickerhz_count = 0;
+	 return 0;
+    }
+
+    if (flickerCtx->statusReg == (MASK_FLICKER_VALID | MASK_120HZ_FLICKER)) //120 hz detect 
+    {
+        ctx->updateAvailable |= (1 << AMS_FLICKER_SENSOR);
+	 ctx->valid_flickerhz_count = 0;
+	 return 0;
+ 
+    }
+
+    if ( flickerstatus == (MASK_FLICKER_VALID )) //120 hz detect 
+    {
+	 ctx->valid_flickerhz_count++;
+    }
+#else
+    if (flickerCtx->statusReg  & MASK_FLICKER_VALID) //100 hz detect 
+        ctx->updateAvailable |= (1 << AMS_FLICKER_SENSOR);
+
+    AMS_PORT_msg_3("_3407_handleFlickerEvent:   FD status = 0x%02x ,status4 0x%x, fd_gain =0x%x \n"
 		, flickerCtx->statusReg, status4,fd_cfg3);
-}
+
 #endif
+	
+   return 0;
+}
 
 
 
-
-
-
-bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, deviceConfigOptions_t option, uint32_t data){
+bool    ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, deviceConfigOptions_t option, uint32_t data){
     int ret = 0;
 
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_CCB
@@ -345,9 +408,9 @@ bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, 
                     if ((ctx->mode & MODE_ALS_ALL) == 0) {
                         ccb_alsInit(ctx, &ctx->ccbAlsCtx.initData);
                         ctx->shadowEnableReg |= (AEN | PON);
-#ifndef AMS_SW_FLICKER						
+						
                         ctx->shadowIntenabReg |= AIEN;
-#endif                        
+                       
                     } else {
                         /* force interrupt */
                         ams_setWord(ctx->portHndl, DEVREG_AIHTL, 0x00);
@@ -366,18 +429,16 @@ bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, 
     }
 #endif
 
-    if (feature == AMS_CONFIG_FLICKER){
-        AMS_PORT_log("ams_configureFeature_t  AMS_CONFIG_FLICKER\n");
+    if (feature == AMS_CONFIG_HW_FLICKER){
+        AMS_PORT_log("ams_configureFeature_t  AMS_CONFIG_HW_FLICKER\n");
         switch (option)
         {
             case AMS_CONFIG_ENABLE: /* power on */
                 AMS_PORT_log_1("deviceConfigOptions_t   AMS_CONFIG_ENABLE(%u)\n", data);
                 AMS_PORT_log_1("current mode            %d\n", ctx->mode);
                 if (data == 0) {
-#ifndef AMS_SW_FLICKER					
-                    //ams_setField(ctx->portHndl, DEVREG_CFG9, LOW, SIEN_FD);   shmoon_190520
+                    //ams_setField(ctx->portHndl, DEVREG_CFG9, LOW, SIEN_FD);
                     ams_setField(ctx->portHndl, DEVREG_CFG9, LOW, MASK_SIEN_FD);
-#endif
                     if (ctx->mode == MODE_FLICKER) {
                         /* if no other active features, turn off device */
                         ctx->shadowEnableReg = 0;
@@ -391,21 +452,12 @@ bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, 
                             }
                     }
                 } else {
-#ifdef  AMS_SW_FLICKER
-                    ctx->shadowEnableReg |= ( AEN |FDEN | PON);
-                    ctx->shadowIntenabReg |= FIEN/*|ASIEN_FDSIEN*/;
-                   // ams_setField(ctx->portHndl, DEVREG_CFG9, SIEN_FD, SIEN_FD);
-#endif
                     ctx->shadowEnableReg |= ( FDEN | PON);
                     ctx->shadowIntenabReg |= SIEN;
-                    //ams_setField(ctx->portHndl, DEVREG_CFG9, SIEN_FD, SIEN_FD);   shmoon_190520
-                    ams_setField(ctx->portHndl, DEVREG_CFG9, MASK_SIEN_FD, MASK_SIEN_FD);
+                    //ams_setField(ctx->portHndl, DEVREG_CFG9, SIEN_FD, SIEN_FD);
+                    ams_setField(ctx->portHndl, DEVREG_CFG9, SIEN_FD, MASK_SIEN_FD);
                     ctx->mode |= MODE_FLICKER;
-#ifdef  AMS_SW_FLICKER
-                     ccb_alsInit_FIFO(ctx, &ctx->ccbAlsCtx.initData);
-#else
                      _3407_flickerInit(ctx);
-#endif
 					
                 }
                 break;
@@ -416,19 +468,79 @@ bool ams_deviceSetConfig(ams_deviceCtx_t * ctx, ams_configureFeature_t feature, 
             default:
                 break;
         }
+    	}
+	
+      if (feature == AMS_CONFIG_SW_FLICKER){
+        AMS_PORT_log("ams_configureFeature_t  AMS_CONFIG_SW_FLICKER\n");
+        switch (option)
+        {
+            case AMS_CONFIG_ENABLE: /* power on */
+                AMS_PORT_log_1("deviceConfigOptions_t   AMS_CONFIG_ENABLE(%u)\n", data);
+                AMS_PORT_log_1("current mode            %d\n", ctx->mode);
+                if (data == 0) {
+                    if (ctx->mode == MODE_FLICKER) {
+                        /* if no other active features, turn off device */
+                        ctx->shadowEnableReg = 0;
+                        ctx->shadowIntenabReg = 0;
+                        ctx->mode = MODE_OFF;
+                    } else {
+                        ctx->mode &= ~MODE_FLICKER;
+                            ctx->shadowEnableReg &= ~(FDEN);
+                            if (!(ctx->mode & MODE_IRBEAM)) {
+                                ctx->shadowIntenabReg &= ~(SIEN);
+                            }
+                    }
+                } else {
+                    ctx->shadowEnableReg |= ( AEN |FDEN | PON);
+#if !defined(AMS_BIN_2048_MODE1) && !defined(AMS_BIN_2048_MODE2)
+                    ctx->shadowIntenabReg |= FIEN;
+#endif
+                    ctx->mode |= MODE_FLICKER;
+                    ccb_alsInit_FIFO(ctx, &ctx->ccbAlsCtx.initData);
+                }
+                break;
+            case AMS_CONFIG_THRESHOLD: /* set threshold */
+                AMS_PORT_log(  "deviceConfigOptions_t   AMS_CONFIG_THRESHOLD\n");
+                /* TODO?:  set FD_COMPARE value? */
+                break;
+            default:
+                break;
+        }
     }
+
     ams_setByte(ctx->portHndl, DEVREG_ENABLE, ctx->shadowEnableReg);
-    mdelay(2);
+    mdelay(10);
     ams_setByte(ctx->portHndl, DEVREG_INTENAB, ctx->shadowIntenabReg);
 
     return 0;
 }
 
+#if defined ( AMS_BIN_2048_MODE1) ||defined ( AMS_BIN_2048_MODE2)
+bool ams_devicePollingHandler(ams_deviceCtx_t * ctx)
+{
+
+      ams_ccb_als_dataSet_t ccbAlsData;
+
+      //AMS_PORT_log( "ams_devicePollingHandler");
+
+     _3407_handleFlickerFIFOEvent(ctx);
+	 
+     if( ctx->flickerCtx.flicker_finished ==1){
+                ccb_alsHandle(ctx, &ccbAlsData);
+                ccb_sw_bin4096_flicker_GetResult(ctx);
+                ctx->updateAvailable |= (1 << AMS_SW_FLICKER_SENSOR);	 
+      }		
+
+return true;
+}
+#endif
 
 bool ams_deviceEventHandler(ams_deviceCtx_t * ctx)
 {
     int ret = 1;
     uint8_t status5 = 0;
+    //amsAlsDataSet_t inputDataAls;
+    ams_ccb_als_dataSet_t ccbAlsData ={0,};
 
     ams_getByte(ctx->portHndl, DEVREG_STATUS, &ctx->shadowStatus1Reg);
     ams_getByte(ctx->portHndl, DEVREG_STATUS2, &ctx->shadowStatus2Reg);
@@ -436,16 +548,16 @@ bool ams_deviceEventHandler(ams_deviceCtx_t * ctx)
     if (ctx->shadowStatus1Reg & SINT)
     {
         ams_getByte(ctx->portHndl, DEVREG_STATUS5, &status5);
-        AMS_PORT_log_3( "ctx->shadowStatus1Reg %x, status5 %x, mode %x",ctx->shadowStatus1Reg,status5, ctx->mode);
+        AMS_PORT_msg_3( "ctx->shadowStatus1Reg %x, status5 %x, mode %x",ctx->shadowStatus1Reg,status5, ctx->mode);
     }
 
     if (ctx->shadowStatus1Reg != 0) {
         /* this clears interrupt(s) and STATUS5 */
         ams_setByte(ctx->portHndl, DEVREG_STATUS, ctx->shadowStatus1Reg);
     } else {
-        AMS_PORT_log( "ams_devEventHd Error Case!!!!\n");
+        AMS_PORT_msg( "ams_devEventHd Error Case!!!!\n");
         ams_getByte(ctx->portHndl, DEVREG_STATUS, &ctx->shadowStatus1Reg);
-        AMS_PORT_log_1( "ctx->shadowStatus1Reg %x",ctx->shadowStatus1Reg);
+        AMS_PORT_msg_1( "ctx->shadowStatus1Reg %x",ctx->shadowStatus1Reg);
         //ams_setByte(ctx->portHndl, DEVREG_STATUS, 0xff);
         ret = 1 ;
         return ret;
@@ -454,31 +566,55 @@ bool ams_deviceEventHandler(ams_deviceCtx_t * ctx)
 loop:
     AMS_PORT_get_timestamp_usec(&ctx->timeStamp);
 
-    //S_PORT_log_3( "ams_devEventHd loop: DCB 0x%02x, STATUS 0x%02x, STATUS2 0x%02x\n", ctx->mode, ctx->shadowStatus1Reg, ctx->shadowStatus2Reg);
-
+    //AMS_PORT_msg_3( "ams_devEventHd loop_insde: DCB 0x%02x, STATUS 0x%02x, STATUS2 0x%02x\n", ctx->mode, ctx->shadowStatus1Reg, ctx->shadowStatus2Reg);
+#if 0
     if ((ctx->shadowStatus1Reg & ALS_INT_ALL) /*|| ctx->alwaysReadAls*/) {
         if ((ctx->mode & MODE_ALS_ALL) && (!(ctx->mode & MODE_IRBEAM))) {
             AMS_PORT_log_2( "_3407_handleAlsEvent INT:%d alwaysReadAls = %d\n", (ctx->shadowStatus1Reg & ALS_INT_ALL), ctx->alwaysReadAls);
             _3407_handleAlsEvent(ctx);
         }
     }
-
-#ifdef AMS_SW_FLICKER
-    if ((ctx->shadowStatus1Reg & (FIFOINT | AINT)) /*||((status5 & SINT_FD))*/) {
+#endif
+    if ((ctx->shadowStatus1Reg & (ASAT_FDSAT |FIFOINT | AINT)) ) {		
             _3407_handleFlickerFIFOEvent(ctx);
+            if( ctx->flickerCtx.flicker_finished ==1){
+                ccb_alsHandle(ctx, &ccbAlsData);
+#if defined ( AMS_BIN_2048_MODE1) ||defined ( AMS_BIN_2048_MODE2) 
+                ccb_sw_bin4096_flicker_GetResult(ctx);
+#endif
+
+#if !defined ( AMS_BIN_2048_MODE1) && !defined ( AMS_BIN_2048_MODE2) 
+        	  ccb_sw_flicker_GetResult(ctx); 
+#endif
+                ctx->updateAvailable |= (1 << AMS_SW_FLICKER_SENSOR);	 
+// shmoon_s
+          if (ctx->shadowStatus1Reg != 0) {
+              /* this clears interrupt(s) and STATUS5 */
+              ams_setByte(ctx->portHndl, DEVREG_STATUS, ctx->shadowStatus1Reg);
+          } else {
+              AMS_PORT_msg( "ams_devEventHd Error Case!!!!\n");
+              ams_getByte(ctx->portHndl, DEVREG_STATUS, &ctx->shadowStatus1Reg);
+              //AMS_PORT_log_1( "ctx->shadowStatus1Reg %x",ctx->shadowStatus1Reg);
+              //ams_setByte(ctx->portHndl, DEVREG_STATUS, 0xff);
+              ret = 1 ;
+              return ret;
+          }
+// shmoon_e
+                
+		  return ret ;
+            }
     }   
-#else	
+	
     if ((status5 & SINT_FD) ) {
         if (ctx->mode & MODE_FLICKER){
-            AMS_PORT_log_1("_3407_handleFlickerEvent status5:0x%02x  \n", (status5 & SINT_FD));
+            //AMS_PORT_msg_1("_3407_handleFlickerEvent status5:0x%02x  \n", (status5 & SINT_FD));
             _3407_handleFlickerEvent(ctx);
         }
     }   
 
-#endif	
 	
     ams_getByte(ctx->portHndl, DEVREG_STATUS, &ctx->shadowStatus1Reg);
-   //AMS_PORT_log_1( "after ams_devEventHd loop:shadowStatus1Reg 0x%x!!!!!!!!!!\n",ctx->shadowStatus1Reg);
+   //AMS_PORT_msg_1( "after ams_devEventHd loop:shadowStatus1Reg 0x%x!!!!!!!!!!\n",ctx->shadowStatus1Reg);
 
     if (ctx->shadowStatus1Reg & SINT) {
         ams_getByte(ctx->portHndl, DEVREG_STATUS5, &status5);
@@ -489,14 +625,13 @@ loop:
     if (ctx->shadowStatus1Reg != 0) {
         /* this clears interrupt(s) and STATUS5 */
         ams_setByte(ctx->portHndl, DEVREG_STATUS, ctx->shadowStatus1Reg);
-#if defined( AMS_SW_FLICKER)
-        if (!(ctx->shadowStatus1Reg & ( PSAT)))/*changed to update event data during saturation*/
-#else
-        if (!(ctx->shadowStatus1Reg & (ASAT_FDSAT | PSAT)))/*changed to update event data during saturation*/
-#endif			
+//#if defined( AMS_SW_FLICKER)
+        if (!(ctx->shadowStatus1Reg & PSAT))/*changed to update event data during saturation*/
+//#else
+       // if (!(ctx->shadowStatus1Reg & (ASAT_FDSAT | PSAT)))/*changed to update event data during saturation*/
+//#endif			
         {
-             //AMS_PORT_log_1( "ams_devEventHd loop:go loop shadowStatus1Reg 0x%x!!!!!!!!!!\n",ctx->shadowStatus1Reg);
-            //S_PORT_log_3( "ams_devEventHd go_loop DCB 0x%02x, STATUS 0x%02x, STATUS2 0x%02x\n", ctx->mode, ctx->shadowStatus1Reg, ctx->shadowStatus2Reg);
+             //AMS_PORT_msg_1( "ams_devEventHd loop:go loop shadowStatus1Reg 0x%x!!!!!!!!!!\n",ctx->shadowStatus1Reg);
             goto loop;
         }
     }

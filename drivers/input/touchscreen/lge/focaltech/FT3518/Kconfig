@@ -1,0 +1,13 @@
+#
+# LGE touch core configuration
+#
+
+if INPUT_TOUCHSCREEN
+
+menuconfig LGE_TOUCH_FOCALTECH_FT3518
+	bool "LGE Touch Core ODM Device Driver - FT3518"
+	depends on LGE_TOUCH_CORE_BASE
+	help
+	  If your device is ft3518, say Y
+
+endif

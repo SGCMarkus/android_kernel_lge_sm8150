@@ -44,115 +44,9 @@
 #define AMS_ALS_GAIN_FACTOR             1000
 #define CPU_FRIENDLY_FACTOR_1024        1
 
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB
-#if defined(CONFIG_AMS_ALS_CRGBW) /* use CRGB here */
-static void als_calc_LUX_CCT (amsAlsContext_t * ctx,
-                                uint16_t clearADC,
-                                uint16_t redADC,
-                                uint16_t greenADC,
-                                uint16_t blueADC) {
-    int64_t lux = 0;
 
-    lux = ctx->calibration.C_coef * clearADC
-            + ctx->calibration.R_coef * redADC
-            + ctx->calibration.G_coef * greenADC
-            + ctx->calibration.B_coef * blueADC;
-
-    /* int64_t is a long long on most platforms but only a long in cygwin64.
-     * Promote to long long for portability (on cyg64 they're same size but
-     * compiler complains if you use %ll for a long).
-     *
-     * Regarding 64-bit division in the linux kernel on an ARM:
-     * ARM 32 bit toolchains require a function implementation called __aeabi_uldivmod
-     * to do the division.  This function is missing. 64-bit division below is done
-     * with do_div() for linux kernel builds.
-     */
-    AMS_PORT_log_2("als_calc_LUX_CCT: tempLux=%lld, cpl=%u\n", (long long int)lux, ctx->cpl);
-
-    lux <<= AMS_ROUND_SHFT_VAL;
-    if (lux < (LONG_MAX / ctx->calibration.calibrationFactor)) {
-#ifdef __KERNEL__
-        lux = lux * ctx->calibration.calibrationFactor;
-        do_div(lux, ctx->cpl);
-#else
-        lux = (lux * ctx->calibration.calibrationFactor) / ctx->cpl;
-#endif
-    } else {
-#ifdef __KERNEL__
-        do_div(lux, ctx->cpl);
-        lux *= ctx->calibration.calibrationFactor;
-#else
-        lux = (lux / ctx->cpl ) * ctx->calibration.calibrationFactor;
-#endif
-    }
-    lux += AMS_ROUND_ADD_VAL;
-    lux >>= AMS_ROUND_SHFT_VAL;
-    ctx->results.mLux = (uint32_t)lux;
-
-    if (redADC == 0 ) redADC = 1;
-    ctx->results.CCT = ((ctx->calibration.CT_coef * blueADC) / redADC) + ctx->calibration.CT_offset;
-}
-#else /* _CRGBI or _CRWBI use derived IR, and derived G if _CRWBI, but not C here */
-static void als_calc_LUX_CCT (amsAlsContext_t * ctx,
-                                uint16_t redADC,
-                                uint16_t greenADC,
-                                uint16_t blueADC) {
-    int32_t rp1;
-    int32_t gp1;
-    int32_t bp1;
-    int64_t lux = 0;
-
-    rp1 = redADC   - ctx->results.IR;
-    gp1 = greenADC - ctx->results.IR;
-    bp1 = blueADC  - ctx->results.IR;
-
-    if (redADC > ctx->results.IR)
-    {
-        lux += (int32_t)(ctx->calibration.R_coef * rp1);
-    }
-    if (greenADC > ctx->results.IR)
-    {
-        lux += (int32_t)(ctx->calibration.G_coef * gp1);
-    }
-    if (blueADC > ctx->results.IR)
-    {
-        lux += (int32_t)((int32_t)ctx->calibration.B_coef * bp1);
-    }
-
-    /* int64_t is a long long on most platforms but only a long in cygwin64.
-     * Promote to long long for portability (on cyg64 they're same size but
-     * compiler complains if you use %ll for a long).
-     */
-    AMS_PORT_log_2("als_calc_LUX_CCT: tempLux=%lld, cpl=%u\n", (long long int)lux, ctx->cpl);
-
-    lux <<= AMS_ROUND_SHFT_VAL;
-    if (lux < (LONG_MAX / ctx->calibration.calibrationFactor)) {
-#ifdef __KERNEL__
-        lux = lux * ctx->calibration.calibrationFactor;
-        do_div(lux, ctx->cpl);
-#else
-        lux = (lux * ctx->calibration.calibrationFactor) / ctx->cpl;
-#endif
-    } else {
-#ifdef __KERNEL__
-        do_div(lux, ctx->cpl);
-        lux *= ctx->calibration.calibrationFactor;
-#else
-        lux = (lux / ctx->cpl ) * ctx->calibration.calibrationFactor;
-#endif
-    }
-    lux += AMS_ROUND_ADD_VAL;
-    lux >>= AMS_ROUND_SHFT_VAL;
-    ctx->results.mLux = (uint32_t)lux;
-
-    if (rp1 == 0 ) rp1 = 1;
-    ctx->results.CCT = ((ctx->calibration.CT_coef * bp1) / rp1) + ctx->calibration.CT_offset;
-}
-#endif /* CRGBW vs. CRGBI/CRWBI */
-#endif
-
-#define WBD_FACTOR  2266
-//#define WBD_FACTOR  AMS_ALS_Cc
+//#define STAR_D_FACTOR  2266
+#define STAR_D_FACTOR  AMS_ALS_Cc
 
 void als_update_statics(amsAlsContext_t * ctx) {
     uint64_t tempCpl;
@@ -197,7 +91,9 @@ void als_update_statics(amsAlsContext_t * ctx) {
     }
     if (tempCpl > (uint32_t)ULONG_MAX){
         /* if we get here, we have an problem */
-        while(1);
+        //while(1); shmoon_190715
+        AMS_PORT_log("tempCpl > ULONG_MAX");
+        return;
     }
 
 #ifdef __KERNEL__
@@ -208,7 +104,7 @@ void als_update_statics(amsAlsContext_t * ctx) {
 
     tempCpl = (tempTime_us * tempGain);
     do_div(tempCpl , AMS_ALS_GAIN_FACTOR);
-    do_div(tempCpl , WBD_FACTOR);
+    do_div(tempCpl , STAR_D_FACTOR);
     //do_div(tempCpl , ctx->calibration.D_factor);
 
 	
@@ -233,12 +129,9 @@ void als_update_statics(amsAlsContext_t * ctx) {
         /* just changed settings, lux readings could be jumpy */
         ctx->notStableMeasurement = true;
     }
-    AMS_PORT_log_1("als_update_statics: uvir_cpl=%u\n", ctx->uvir_cpl);
-    AMS_PORT_log_4("als_update_statics: time=%d, gain=%d, dFactor=%d => cpl=%u\n", ctx->time_us, ctx->gain, ctx->calibration.D_factor, ctx->cpl);
+    AMS_PORT_msg_4("als_update_statics: time=%d, gain=%d, dFactor=%d => uvir_cpl=%u\n", ctx->time_us, ctx->gain, ctx->calibration.D_factor, ctx->uvir_cpl);
 }
 
-#define WIDEBAND_CONST 4*AMS_ALS_FACTOR
-#define CLEAR_CONST 1.5 * AMS_ALS_FACTOR
 
 /* als_compute_data -- different versions depending on the input data available */
 #if defined(CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB) || defined(CONFIG_AMS_OPTICAL_SENSOR_ALS_WIDEBAND)
@@ -247,7 +140,7 @@ void als_compute_data (amsAlsContext_t * ctx, amsAlsDataSet_t * inputData) {
 
 uint32_t UVIR_clear;
 uint32_t UVIR_wideband;
-
+uint32_t tempIR;
     if (inputData->datasetArray->clearADC < (uint16_t)USHRT_MAX){
         ctx->results.IR = 0;
 
@@ -256,12 +149,12 @@ uint32_t UVIR_wideband;
         ctx->results.rawRed = inputData->datasetArray->redADC;
         ctx->results.rawGreen = inputData->datasetArray->greenADC;
         ctx->results.rawBlue = inputData->datasetArray->blueADC;
-      /*  ctx->results.irrRed = (inputData->datasetArray->redADC * (ctx->calibration.Rc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
+        ctx->results.irrRed = (inputData->datasetArray->redADC * (ctx->calibration.Rc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrClear = (inputData->datasetArray->clearADC * (ctx->calibration.Cc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrBlue = (inputData->datasetArray->blueADC * (ctx->calibration.Bc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrGreen = (inputData->datasetArray->greenADC * (ctx->calibration.Gc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
-        ctx->results.irrWideband = (inputData->datasetArray->widebandADC * (ctx->calibration.Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;*/
-
+        ctx->results.irrWideband = (inputData->datasetArray->widebandADC * (ctx->calibration.Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
+#if 0
         AMS_PORT_log_4("als_compute_data: RC  %u, CC  %u, BCl %u,  GC %u \n"
                         , AMS_ALS_Rc
                         , AMS_ALS_Cc
@@ -271,17 +164,24 @@ uint32_t UVIR_wideband;
         AMS_PORT_log_1("als_compute_data: WC  %u\n"
                         , AMS_ALS_Wbc
                        );                     
+#endif
+	 tempIR = (inputData->datasetArray->redADC +inputData->datasetArray->greenADC+inputData->datasetArray->blueADC);
+	 if(tempIR > inputData->datasetArray->clearADC){
+           ctx->results.IR = (tempIR - inputData->datasetArray->clearADC)>>1;// divide 2 
+	 }else{
+           ctx->results.IR = 0;
+	 }
 
-/******TEST1 ************/
+         if(ctx->cpl ==0)
+		ctx->cpl = 1;
+
         ctx->results.irrRed = (inputData->datasetArray->redADC * (AMS_ALS_Rc/ CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrClear = (inputData->datasetArray->clearADC * (AMS_ALS_Cc/ CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrBlue = (inputData->datasetArray->blueADC * (AMS_ALS_Bc/ CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrGreen = (inputData->datasetArray->greenADC * (AMS_ALS_Gc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
 	  
 
-        if(ctx->cpl ==0)
-			ctx->cpl = 1;
-
+     
         UVIR_clear = (inputData->datasetArray->clearADC * ( AMS_ALS_Cc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         UVIR_wideband = (inputData->datasetArray->widebandADC * ( AMS_ALS_Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
 
@@ -289,73 +189,31 @@ uint32_t UVIR_wideband;
         ctx->results.irrWideband = (4000 * UVIR_wideband)-( 1400 * UVIR_clear); //)/AMS_ALS_GAIN_FACTOR);
 
         if(ctx->results.irrWideband  < 0 ){
-			ctx->results.irrWideband = 0;
-	 }else{
-	 	ctx->results.irrWideband = ctx->results.irrWideband/AMS_ALS_GAIN_FACTOR; 
-	 }
+			ctx->results.irrWideband = 1;/*minium*/
+	    }else{
+	 		ctx->results.irrWideband = ctx->results.irrWideband/AMS_ALS_GAIN_FACTOR; 
+	    }
 
-        AMS_PORT_log_5("als_compute_data: TEST 1 UVIR_clear = %u, UVIR_wideband = %u, cpl =%u, AWB %d  gain %d\n"
-                        , UVIR_clear
-                        , UVIR_wideband
-                        ,ctx->cpl
-                        ,ctx->results.irrWideband
-                        ,ctx->gain
-                       );                     
+                    
+        if(ctx->results.irrWideband  ==  0 ){
+			ctx->results.irrWideband = 1;/*minium*/
+	    }
+                        
+	 ctx->results.mLux= (UVIR_clear * AMS_ALS_GAIN_FACTOR ) / ctx->results.irrWideband; /*Clear / AWB*/
+	 ctx->results.IR = (ctx->results.IR* AMS_ALS_GAIN_FACTOR ) / inputData->datasetArray->clearADC; /*IR / Clear*/
 
-/******TEST1 ************/
-
-#if 0
-/******TEST2 ************/
-
-        ctx->results.irrRed = (inputData->datasetArray->redADC * ( CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-        ctx->results.irrClear = (inputData->datasetArray->clearADC * ( CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-        ctx->results.irrBlue = (inputData->datasetArray->blueADC * ( CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-        ctx->results.irrGreen = (inputData->datasetArray->greenADC * ( CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-//        ctx->results.irrWideband = (inputData->datasetArray->widebandADC * (ctx->calibration.Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
-
-
-        if(ctx->uvir_cpl ==0)
-			ctx->uvir_cpl = 1;
-
-        UVIR_clear = (inputData->datasetArray->clearADC * ( AMS_ALS_Cc / CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-        UVIR_wideband = (inputData->datasetArray->widebandADC * ( AMS_ALS_Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->uvir_cpl;
-
-	/*ctx->results.irrWideband = ((4 * UVIR_wideband)-((3* UVIR_clear)>>1));*/
-        ctx->results.irrWideband = (((4000 * UVIR_wideband)-( 1400 * UVIR_clear))/AMS_ALS_GAIN_FACTOR);
-
-
-
-        if(ctx->results.irrWideband  < 0 )
-			ctx->results.irrWideband = 0;
-	
-		
-        AMS_PORT_log_5("als_compute_data: TEST 2 UVIR_clear = %u, UVIR_wideband = %u, uvir_cpl =%u, AWB %d ,gain %d\n"
-                        , UVIR_clear
-                        , UVIR_wideband
-                        ,ctx->uvir_cpl
-                        ,ctx->results.irrWideband
-                        ,ctx->gain
-                       );                     
-
-/******TEST2 ************/
-#endif
-
-        /*AMS_PORT_log_4("als_compute_data: irrRed = %u, irrGreen = %u, irrBlue = %u, irrWideband = %u\n"
-                        , ctx->results.irrRed
-                        , ctx->results.irrGreen
-                        , ctx->results.irrBlue
+	 
+        AMS_PORT_msg_2("als_compute_data:  C/AWB =%u , AWB %d \n"
+                        ,ctx->results.mLux
                         , ctx->results.irrWideband
-                       );*/
+                       );                     
 
-
-
-
-        als_calc_LUX_CCT(ctx
+        /*als_calc_LUX_CCT(ctx
             , inputData->datasetArray->clearADC
             , inputData->datasetArray->redADC
             , inputData->datasetArray->greenADC
             , inputData->datasetArray->blueADC
-            );
+            );*/
     } else {
         /* measurement is saturated */
         AMS_PORT_log("als_compute_data:  saturated\n");
@@ -367,8 +225,8 @@ void als_compute_data (amsAlsContext_t * ctx, amsAlsDataSet_t * inputData) {
 
     uint16_t widebandADC = inputData->datasetArray->greenADC;
 
-    AMS_PORT_log_3("als_compute_data: cpl=%u, Wbc factor=%u, greenWbADC=%u\n", ctx->cpl, ctx->calibration.Wbc, widebandADC);
-    AMS_PORT_log_3("als_compute_data: WB CRB coefs = (%u, %u, %u)\n", ctx->calibration.Wideband_C_factor, ctx->calibration.Wideband_R_factor, ctx->calibration.Wideband_B_factor);
+    AMS_PORT_msg_3("als_compute_data: cpl=%u, Wbc factor=%u, greenWbADC=%u\n", ctx->cpl, ctx->calibration.Wbc, widebandADC);
+    AMS_PORT_msg_3("als_compute_data: WB CRB coefs = (%u, %u, %u)\n", ctx->calibration.Wideband_C_factor, ctx->calibration.Wideband_R_factor, ctx->calibration.Wideband_B_factor);
     ctx->results.irrWideband = (widebandADC * (ctx->calibration.Wbc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
 
     ctx->results.IR = 0;
@@ -378,8 +236,8 @@ void als_compute_data (amsAlsContext_t * ctx, amsAlsDataSet_t * inputData) {
                                               - (inputData->datasetArray->redADC * ctx->calibration.Wideband_R_factor)
                                               - (inputData->datasetArray->blueADC * ctx->calibration.Wideband_B_factor)
                                             ) / AMS_WIDEBAND_SCALE_FACTOR;
-        AMS_PORT_log_3("als_compute_data: IR = %u - %u = %u\n", widebandADC, inputData->datasetArray->clearADC, ctx->results.IR);
-        AMS_PORT_log_3("als_compute_data: R = %u, B = %u, G' = %u\n", inputData->datasetArray->redADC, inputData->datasetArray->blueADC, inputData->datasetArray->greenADC);
+        AMS_PORT_msg_3("als_compute_data: IR = %u - %u = %u\n", widebandADC, inputData->datasetArray->clearADC, ctx->results.IR);
+        AMS_PORT_msg_3("als_compute_data: R = %u, B = %u, G' = %u\n", inputData->datasetArray->redADC, inputData->datasetArray->blueADC, inputData->datasetArray->greenADC);
     }
 
     if (inputData->datasetArray->clearADC < (uint16_t)USHRT_MAX){
@@ -402,11 +260,11 @@ void als_compute_data (amsAlsContext_t * ctx, amsAlsDataSet_t * inputData) {
         ctx->results.irrClear = (inputData->datasetArray->clearADC * (ctx->calibration.Cc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrBlue = (inputData->datasetArray->blueADC * (ctx->calibration.Bc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrGreen = (inputData->datasetArray->greenADC * (ctx->calibration.Gc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
-        AMS_PORT_log_2("als_compute_data: irrClear = %u, irrWideband = %u\n"
+        AMS_PORT_msg_2("als_compute_data: irrClear = %u, irrWideband = %u\n"
                         , ctx->results.irrClear
                         , ctx->results.irrWideband
                         );
-        AMS_PORT_log_3("als_compute_data: irrRed = %u, irrGreen = %u, irrBlue = %u\n"
+        AMS_PORT_msg_3("als_compute_data: irrRed = %u, irrGreen = %u, irrBlue = %u\n"
                         , ctx->results.irrRed
                         , ctx->results.irrGreen
                         , ctx->results.irrBlue
@@ -444,10 +302,10 @@ void als_compute_data (amsAlsContext_t * ctx, amsAlsDataSet_t * inputData) {
         ctx->results.irrClear = (inputData->datasetArray->clearADC * (ctx->calibration.Cc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrBlue = (inputData->datasetArray->blueADC * (ctx->calibration.Bc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
         ctx->results.irrGreen = (inputData->datasetArray->greenADC * (ctx->calibration.Gc / CPU_FRIENDLY_FACTOR_1024)) / ctx->cpl;
-        AMS_PORT_log_1("als_compute_data: irrClear = %u\n"
+        AMS_PORT_msg_1("als_compute_data: irrClear = %u\n"
                         , ctx->results.irrClear
                         );
-        AMS_PORT_log_3("als_compute_data: irrRed = %u, irrGreen = %u, irrBlue = %u\n"
+        AMS_PORT_msg_3("als_compute_data: irrRed = %u, irrGreen = %u, irrBlue = %u\n"
                         , ctx->results.irrRed
                         , ctx->results.irrGreen
                         , ctx->results.irrBlue

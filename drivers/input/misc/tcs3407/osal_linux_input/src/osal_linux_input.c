@@ -66,7 +66,10 @@
 uint8_t AMS_PORT_getByte(AMS_PORT_portHndl * handle, uint8_t reg, uint8_t * data, uint8_t len){
     int ret;
     if (handle == NULL)
+    {
 	    printk(KERN_ERR "\nAMS_Driver: %s: handle is NULL\n", __func__);
+        return 0;
+    }
 
     ret = i2c_smbus_read_i2c_block_data(handle, reg, len, data);
     if (ret < 0) 
@@ -79,7 +82,10 @@ uint8_t AMS_PORT_getByte(AMS_PORT_portHndl * handle, uint8_t reg, uint8_t * data
 uint8_t AMS_PORT_setByte(AMS_PORT_portHndl * handle, uint8_t reg, uint8_t * data, uint8_t len){
     int ret;
     if (handle == NULL)
+    {
 	    printk(KERN_ERR "\nAMS_Driver: %s: handle is NULL\n", __func__);
+        return 0;
+    }
 
     ret = i2c_smbus_write_i2c_block_data(handle, reg, len, data);
     if (ret < 0)
@@ -107,7 +113,6 @@ static int amsdriver_pltf_power_on(struct amsDriver_chip *chip)
 	return rc;
 }
 
-
 static int amsdriver_pltf_power_off(struct amsDriver_chip *chip)
 {
 	int rc = 0;
@@ -122,7 +127,6 @@ static int amsdriver_pltf_power_off(struct amsDriver_chip *chip)
 	return rc;
 }
 
-
 static int amsdriver_power_on(struct amsDriver_chip *chip)
 {
 	int rc;
@@ -134,7 +138,6 @@ static int amsdriver_power_on(struct amsDriver_chip *chip)
 			__func__);
 	return ams_deviceInit(chip->deviceCtx, chip->client, NULL);
 }
-
 
 static int amsdriver_add_sysfs_interfaces(struct device *dev,
 	struct device_attribute *a, int size)
@@ -167,7 +170,7 @@ static irqreturn_t amsdriver_irq(int irq, void *handle)
 	int interruptsHandled = 0;
 
 	//mutex_lock(&chip->lock);
-	if (chip->in_suspend) {
+	if ( (chip->in_suspend) || (chip->sensor_enable == false) ) {
 		dev_info(dev, "%s: in suspend\n", __func__);
 		chip->irq_pending = 1;
 		ret = 0;
@@ -175,24 +178,27 @@ static irqreturn_t amsdriver_irq(int irq, void *handle)
 	}
 	ret = ams_deviceEventHandler(chip->deviceCtx);
 	interruptsHandled = ams_getResult(chip->deviceCtx);
-       //AMS_PORT_log_1( "amsdriver_irq !! interruptsHandled %d",interruptsHandled);
 
-
+#if 0
 	if (interruptsHandled & (1 << AMS_AMBIENT_SENSOR))
 		osal_report_als(chip);
+#endif
 
 	if (interruptsHandled & (1 << AMS_FLICKER_SENSOR))
 		osal_report_flicker(chip);
+
+    if (interruptsHandled & (1 << AMS_SW_FLICKER_SENSOR))
+        osal_report_sw_flicker(chip);
  
-return ret;
+//return ret;
+return IRQ_HANDLED;
 bypass:
 	//mutex_unlock(&chip->lock);
 	return ret ? IRQ_HANDLED : IRQ_NONE;
 }
 
-
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS
-static int osal_als_idev_open(struct input_dev *idev)
+//static int osal_flicker_idev_open(struct input_dev *idev)     //shmoon_190604
+int osal_flicker_idev_open(struct input_dev *idev)
 {
 #if 1
 	struct amsDriver_chip *chip = dev_get_drvdata(&idev->dev);
@@ -207,29 +213,36 @@ static int osal_als_idev_open(struct input_dev *idev)
 	}
 
         //ams_smux_set(chip->deviceCtx);
-	rc = osal_als_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+	rc = osal_flicker_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+	//rc = osal_als_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+		
 	if (rc)
 		amsdriver_pltf_power_off(chip);
+    else
+        chip->sensor_enable = true;
 chip_on_err:
 	AMS_MUTEX_UNLOCK(&chip->lock);
 #endif	
 	return 0;
 }
 
-static void osal_als_idev_close(struct input_dev *idev)
+//static void osal_flicker_idev_close(struct input_dev *idev)   //shmoon_190604
+void osal_flicker_idev_close(struct input_dev *idev)
 {
 	int rc = 0;
 	struct amsDriver_chip *chip = dev_get_drvdata(&idev->dev);
 	dev_info(&idev->dev, "%s\n", __func__);
 
 	AMS_MUTEX_LOCK(&chip->lock);
-	rc = osal_als_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+	rc = osal_flicker_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+//	rc = osal_als_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+	
 	if (rc)
 		amsdriver_pltf_power_off(chip);
+    else
+        chip->sensor_enable = false;
 	AMS_MUTEX_UNLOCK(&chip->lock);
 }
-#endif
-
 
 static enum hrtimer_restart tcs3407_timer_func(struct hrtimer *timer)
 {
@@ -242,25 +255,33 @@ static enum hrtimer_restart tcs3407_timer_func(struct hrtimer *timer)
 
 void tcs3407_work_func_light(struct work_struct *work)
 {
-	//byte piData[20] = {0,};
-    	//s_byte piOffset[18] = {0,};
-	//s_byte ucCalibStat = 0;
-	//u8 again;
-	//int lux = 0;
-	struct amsDriver_chip *chip
+#if defined ( AMS_BIN_2048_MODE1) ||defined ( AMS_BIN_2048_MODE2)
+
+	int interruptsHandled = 0;
+	//ams_apiAlsFlicker_t outData;
+
+  	struct amsDriver_chip *chip
 		= container_of(work, struct amsDriver_chip, work_light1);
 
 	//printk("#> tmg49xx_work_func_light \n");
 
-#if 0// proximity raw data monitoring 
+       //AMS_MUTEX_LOCK(&chip->lock);
+       if (chip->flicker_idev) {
+   	       ams_devicePollingHandler(chip->deviceCtx);
+       }
 
-#else
-    AMS_MUTEX_LOCK(&chip->lock);
-    AMS_PORT_log( "tcs3407_work_func_light");
+      interruptsHandled = ams_getResult(chip->deviceCtx);
+      //AMS_PORT_log_1( "amsdriver_irq !! interruptsHandled %d",interruptsHandled);
+
+	if (interruptsHandled & (1 << AMS_FLICKER_SENSOR))
+		osal_report_flicker(chip);
+
+	if (interruptsHandled & (1 << AMS_SW_FLICKER_SENSOR))
+		osal_report_sw_flicker(chip);
+
 		
-    AMS_MUTEX_UNLOCK(&chip->lock);
-
-#endif 
+    //AMS_MUTEX_UNLOCK(&chip->lock);
+#endif
 }
 #if 0
 static int tcs3407_parse_dt(struct device *dev)
@@ -343,7 +364,7 @@ int amsdriver_probe(struct i2c_client *client,
 	/********************************************************************/
 	/* Validate the appropriate ams device is available for this driver */
 	/********************************************************************/
-        deviceId = ams_validateDevice(chip->client);
+    deviceId = ams_validateDevice(chip->client);
 	dev_info(dev, "deviceId: %d\n", deviceId);
 
 	if (deviceId == AMS_UNKNOWN_DEVICE) {
@@ -362,6 +383,14 @@ int amsdriver_probe(struct i2c_client *client,
 		 amsDeviceInfo.driverVersion);
 
         chip->deviceCtx = kzalloc(amsDeviceInfo.memorySize, GFP_KERNEL);
+        if(!chip->deviceCtx)
+        {
+            //SHMOON_190816
+            dev_err(dev, "%s: Failed to alloc hip->deviceCtx!\n", __func__);
+            ret = -ENOMEM;
+            goto malloc_failed;
+        }
+
         ret = ams_deviceInit(chip->deviceCtx, chip->client, NULL);
         if (ret == false){
 		dev_info(dev, "ams_amsDeviceInit() ok\n");
@@ -369,13 +398,15 @@ int amsdriver_probe(struct i2c_client *client,
 		dev_info(dev, "ams_deviceInit failed.\n");
         goto id_failed;
         }
+        
+        chip->sensor_enable = false;
 
 
 	/*********************/
 	/* Initialize ALS    */
 	/*********************/
-
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS
+#if 0
+//#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS
 	/* setup */
 	dev_info(dev, "Setup for ALS\n");
 	chip->als_idev = input_allocate_device();
@@ -389,8 +420,8 @@ int amsdriver_probe(struct i2c_client *client,
 	set_bit(EV_ABS, chip->als_idev->evbit);
 	set_bit(ABS_MISC, chip->als_idev->absbit);
 	input_set_abs_params(chip->als_idev, ABS_MISC, 0, 65535, 0, 0);
-	chip->als_idev->open = osal_als_idev_open;
-	chip->als_idev->close = osal_als_idev_close;
+	//chip->als_idev->open = osal_als_idev_open;
+	//chip->als_idev->close = osal_als_idev_close;
 	dev_set_drvdata(&chip->als_idev->dev, chip);
 	ret = input_register_device(chip->als_idev);
 	if (ret){
@@ -399,9 +430,10 @@ int amsdriver_probe(struct i2c_client *client,
 				__func__);
 		goto input_a_alloc_failed;
 	}
-
+/*  shmoon_190604
 	ret = amsdriver_add_sysfs_interfaces(&chip->als_idev->dev,
 			osal_als_attrs, osal_als_attrs_size);
+*/
 	if (ret){
 		goto input_a_sysfs_failed;
 	}
@@ -420,11 +452,21 @@ int amsdriver_probe(struct i2c_client *client,
 	}
 	chip->flicker_idev->name = "FLICKER";
 	chip->flicker_idev->id.bustype = BUS_I2C;
+/*
 	set_bit(EV_ABS, chip->flicker_idev->evbit);
-	set_bit(ABS_MISC, chip->flicker_idev->absbit);
-	input_set_abs_params(chip->flicker_idev, ABS_MISC, 0, 65535, 0, 0);
-	//chip->flicker_idev->open = osal_flicker_idev_open;
-	//chip->flicker_idev->close = osal_flicker_idev_close;
+	set_bit(ABS_DISTANCE, chip->flicker_idev->absbit);
+	input_set_abs_params(chip->flicker_idev, ABS_DISTANCE, 0, 65535, 0, 0);
+*/
+	input_set_capability(chip->flicker_idev, EV_REL, REL_X); /*Saturation bit*/
+	input_set_capability(chip->flicker_idev, EV_REL, REL_Y); /*Clear*/
+	input_set_capability(chip->flicker_idev, EV_REL, REL_Z); /*Wide*/
+	input_set_capability(chip->flicker_idev, EV_REL, REL_RX); /*Flicker*/
+    input_set_capability(chip->flicker_idev, EV_REL, REL_RY); /*Signal for terminating flicker thread*/
+
+/*  shmoon_190604
+	chip->flicker_idev->open = osal_flicker_idev_open;
+	chip->flicker_idev->close = osal_flicker_idev_close;
+*/
 	dev_set_drvdata(&chip->flicker_idev->dev, chip);
 	ret = input_register_device(chip->flicker_idev);
 	if (ret){
@@ -434,16 +476,23 @@ int amsdriver_probe(struct i2c_client *client,
 		goto input_a_alloc_failed;
 	}
 
+	ret = amsdriver_add_sysfs_interfaces(&chip->flicker_idev->dev,
+			osal_als_attrs, osal_als_attrs_size);
+
+	if (ret){
+		goto input_a_sysfs_failed;
+	}
+
 	INIT_WORK(&chip->work_light1, tcs3407_work_func_light);
 
 	/* hrtimer settings.  we poll for light values using a timer. */
 	hrtimer_init(&chip->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 //    	chip->light_poll_delay = ns_to_ktime(3.6 * NSEC_PER_MSEC);  // 60msec Polling time
 
-	chip->light_poll_delay = ns_to_ktime(20 * NSEC_PER_MSEC);  // 20msec Polling time
+//	chip->light_poll_delay = ns_to_ktime(20 * NSEC_PER_MSEC);  // 20msec Polling time
 //	chip->light_poll_delay = ns_to_ktime(60 * NSEC_PER_MSEC);  // 60msec Polling time
 //	chip->light_poll_delay = ns_to_ktime(128 * NSEC_PER_MSEC);  // 100msec Polling time
-//	chip->light_poll_delay = ns_to_ktime(50 * NSEC_PER_MSEC);  // 60msec Polling time
+	chip->light_poll_delay = ns_to_ktime(50 * NSEC_PER_MSEC);  // 50msec Polling time
 //	chip->light_poll_delay = ns_to_ktime(10 * NSEC_PER_MSEC);  // 60msec Polling time
 	chip->timer.function = tcs3407_timer_func;
 
@@ -458,7 +507,7 @@ int amsdriver_probe(struct i2c_client *client,
 	/* Initialize IRQ & Handler */
 	/****************************/
 	ret = request_threaded_irq(client->irq, NULL, &amsdriver_irq,
-				IRQF_TRIGGER_FALLING | IRQF_SHARED | IRQF_ONESHOT,
+				IRQF_TRIGGER_FALLING | /*IRQF_SHARED |*/IRQF_ONESHOT,
 				"ams_tcs3407", chip);
 
 	if (ret) {
@@ -478,13 +527,13 @@ int amsdriver_probe(struct i2c_client *client,
 irq_register_fail:
 
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS
-	if (chip->als_idev)
+	if (chip->flicker_idev)
 	{
-		amsdriver_remove_sysfs_interfaces(&chip->als_idev->dev,
+		amsdriver_remove_sysfs_interfaces(&chip->flicker_idev->dev,
 						osal_als_attrs, 
 						osal_als_attrs_size);
 input_a_sysfs_failed:
-		input_unregister_device(chip->als_idev);
+		input_unregister_device(chip->flicker_idev);
 	}
 input_a_alloc_failed:
 #endif
@@ -508,11 +557,14 @@ int amsdriver_suspend(struct device *dev)
 {
 	struct amsDriver_chip  *chip = dev_get_drvdata(dev);
 
-	printk(KERN_ERR "\nAMS_Driver: suspend()\n");
-	dev_info(dev, "%s\n", __func__);
+	dev_info(dev, "%s chip->sensor_enable:%d\n", __func__, chip->sensor_enable);
+
+    if(chip->sensor_enable == false)
+        return 0;
+
 	AMS_MUTEX_LOCK(&chip->lock);
 	chip->in_suspend = 1;
-#if 0
+
 	if (chip->wake_irq) {
 		irq_set_irq_wake(chip->client->irq, 1);
 	} else if (!chip->unpowered) {
@@ -520,7 +572,11 @@ int amsdriver_suspend(struct device *dev)
 		/* TODO
 		   platform power off */
 	}
-#endif	
+
+    osal_sw_flicker_enable_set(chip, AMSDRIVER_ALS_DISABLE);/*POWER OFF*/
+    printk(KERN_ERR "\nAMS_Driver: suspend() done\n");
+    chip->sensor_enable == false;
+
 	AMS_MUTEX_UNLOCK(&chip->lock);
 
 	return 0;
@@ -530,19 +586,26 @@ int amsdriver_resume(struct device *dev)
 {
 	struct amsDriver_chip *chip = dev_get_drvdata(dev);
 
-	return 0;
+	//return 0;
 	printk(KERN_ERR "\nAMS_Driver: resume()\n");
+    if(chip->sensor_enable == false)
+        return 0;
+    
 	AMS_MUTEX_LOCK(&chip->lock);
-#if 0
+
 	chip->in_suspend = 0;
+
+	//amsdriver_power_on(chip); /*Device init & reset */
+	osal_sw_flicker_enable_set(chip, AMSDRIVER_ALS_ENABLE); /*POWER ON*/
 
 	if (chip->wake_irq) {
 		irq_set_irq_wake(chip->client->irq, 0);
 		chip->wake_irq = 0;
 	}
-#endif
+
 /* err_power: */
 	AMS_MUTEX_UNLOCK(&chip->lock);
+    printk(KERN_ERR "\nAMS_Driver: resume() done\n");
 
 	return 0;
 }

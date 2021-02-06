@@ -39,35 +39,23 @@
 int amsAlg_als_processData(amsAlsContext_t * ctx, amsAlsDataSet_t * inputData){
     int ret = 0;
 
-    if (inputData->status & ALS_STATUS_RDY){
-        ctx->previousLux = ctx->results.mLux;
+    if (inputData->status & 0x80 ){ /*ASAT_FDSAT*/
+        	ctx->results.saturation = 1;
+    }else{
+        	ctx->results.saturation = 0;
+    }
+	
+   //ctx->previousLux = ctx->results.mLux;
+   
         if (ctx->previousGain != ctx->gain){
             als_update_statics(ctx);
         } else {
             ctx->notStableMeasurement = false;
         }
-#if defined(CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB) || defined(CONFIG_AMS_OPTICAL_SENSOR_ALS_WIDEBAND)
         als_compute_data(ctx, inputData);
-#endif
-#if defined CONFIG_AMS_OPTICAL_SENSOR_ALS_CLEAR
-        als_compute_data_clear(ctx, inputData);
-#endif
-        als_ave_LUX(ctx);
-    }
+        //als_ave_LUX(ctx);
 
-    if (ctx->adaptive){
-        if (inputData->status & ALS_STATUS_OVFL){
-            ctx->results.adaptive = ADAPTIVE_ALS_GAIN_DEC_REQUEST;
-        } else {
-            ctx->results.adaptive = als_adaptive(ctx, inputData);
-        }
-    } else {
-        ctx->results.adaptive = ADAPTIVE_ALS_NO_REQUEST;
-    }
-
-    if (ctx->notStableMeasurement) {
-        ctx->results.mLux = ctx->previousLux;
-    }
+ 
     return ret;
 }
 #endif

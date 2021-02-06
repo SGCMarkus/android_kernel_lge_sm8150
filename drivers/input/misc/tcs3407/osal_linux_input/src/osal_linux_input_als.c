@@ -53,17 +53,21 @@
 #include "ams_port_platform.h"
 #include "osal_linux_input.h"
 
+
+int i = 0;
+
  ssize_t osal_flicker_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet)
 {
 	ssize_t rc = 0;
 
-	rc |= ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_FLICKER, AMS_CONFIG_ENABLE, valueToSet);
+	rc |= ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_HW_FLICKER, AMS_CONFIG_ENABLE, valueToSet);
 	return 0;
 }
 
 
 #if defined(CONFIG_AMS_OPTICAL_SENSOR_ALS)
 
+#if 0
 void osal_report_als(struct amsDriver_chip *chip)
 {
 	ams_apiAls_t outData;
@@ -76,20 +80,90 @@ void osal_report_als(struct amsDriver_chip *chip)
 		input_sync(chip->als_idev);
 	}
 }
+#endif
 
 void osal_report_flicker(struct amsDriver_chip *chip)
 {
-	ams_apiAlsFlicker_t outData;
-	int flicker;
+    static unsigned int i = 0;   //shmoon_190612
+    uint32_t temp = 0;
+    uint32_t flicker = 0;
 
 	if (chip->flicker_idev) {
-		ams_deviceGetFlicker
-			(chip->deviceCtx, &outData);
-		
-		flicker = outData.mHz;
-		
+#if 1
+        ams_apiAlsFlicker_t outData;
+
+        ams_deviceGetFlicker(chip->deviceCtx, &outData);
+        temp = outData.mHz;
+#else
+        ams_deviceCtx_t * ctx = (ams_deviceCtx_t *)chip->deviceCtx;
+
+        ams_deviceGetSWFlicker(chip->deviceCtx);
+        temp = ctx->flickerCtx.lastValid.mHz;
+        printk(KERN_INFO"%s temp:%d \n",__func__, temp);
+#endif
+        temp = temp << 8;
+        flicker = temp | i++;
+
+        if (i > 5)
+            i = 0;
+
+        printk(KERN_INFO"%s temp:%d flicker:%d \n",__func__, temp, flicker);
 		input_report_abs(chip->flicker_idev, ABS_DISTANCE, flicker);
 		input_sync(chip->flicker_idev);
+	}
+}
+
+
+
+void osal_report_sw_flicker(struct amsDriver_chip *chip)
+{
+	ams_apiAlsFlicker_t outData = {0,};
+    static unsigned int i = 0;   //shmoon_190612
+    int j =0;
+    uint32_t temp[4] = {0,};
+    uint32_t flicker, satur, clr, wb = 0;
+
+	if (chip->flicker_idev) {
+#if 0
+
+        ams_deviceGetFlicker(chip->deviceCtx, &outData);
+        temp = outData.mHz;
+#else
+        //ams_deviceCtx_t * ctx = (ams_deviceCtx_t *)chip->deviceCtx;
+
+        ams_deviceGetSWFlicker(chip->deviceCtx,&outData);
+        temp[0] = outData.mHzbysw;
+        temp[1] = outData.saturation; /*1:general low IR light source , 2:high IR light source, 3:under sun light  */
+        temp[2] = outData.clear;
+        temp[3] = outData.wideband;
+
+        for (j=0;j<4;j++)
+            temp[j] = temp[j] << 8;
+
+        //printk(KERN_INFO"%s temp:%d \n",__func__, temp);
+#endif
+
+        flicker = temp[0] | i;
+        satur = temp[1] | i;
+        clr = temp[2] | i;
+        wb = temp[3] | i;
+
+        AMS_PORT_msg_4("outData (mHzbysw:%u, Sun light :%u, clear:%u, wideband:%u)\n",
+            outData.mHzbysw, outData.saturation, outData.clear, outData.wideband);
+        /*        
+        printk(KERN_INFO"%s temp (flicker:%u, satur:%u, clr:%u, wb:%u)\n",
+            __func__, flicker, satur, clr, wb);
+        */
+		//input_report_abs(chip->flicker_idev, ABS_DISTANCE, flicker);
+		input_report_rel(chip->flicker_idev, REL_X, satur);
+		input_report_rel(chip->flicker_idev, REL_Y, clr);
+		input_report_rel(chip->flicker_idev, REL_Z, wb);
+        input_report_rel(chip->flicker_idev, REL_RX, flicker);
+		input_sync(chip->flicker_idev);
+
+        i++;
+        if (i > 5)
+            i = 0;
 	}
 }
 
@@ -195,14 +269,12 @@ static ssize_t osal_smux_store(struct device *dev,
 }
 
 
-
+#if 0
 static ssize_t osal_sw_flicker_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t size)
 {
-#ifdef AMS_SW_FLICKER	
 	struct amsDriver_chip *chip = dev_get_drvdata(dev);
-#endif
 	bool value;
 
 	if (strtobool(buf, &value))
@@ -211,17 +283,14 @@ static ssize_t osal_sw_flicker_store(struct device *dev,
 	printk(KERN_INFO"%s sw_flicke mode  \n",__func__);
 
 	if (value){
-		#ifdef AMS_SW_FLICKER	
 	      ams_deviceGetSWFlicker(chip->deviceCtx);
-	      //ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_FLICKER, AMS_CONFIG_ENABLE, 0);
-	      #endif
 	}
        else
 	   	;
 	return size;
 
 }
-
+#endif
 static ssize_t osal_als_reg_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t size)
@@ -258,6 +327,23 @@ ssize_t osal_als_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet)
 	return 0;
 }
 
+
+
+ssize_t osal_hw_flicker_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet)
+{
+	ssize_t rc = 0;
+	rc |= ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_HW_FLICKER, AMS_CONFIG_ENABLE, valueToSet);
+	return 0;
+}
+
+
+ssize_t osal_sw_flicker_enable_set(struct amsDriver_chip *chip, uint8_t valueToSet)
+{
+	ssize_t rc = 0;
+	rc |= ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_SW_FLICKER, AMS_CONFIG_ENABLE, valueToSet);
+	return 0;
+}
+
 static ssize_t osal_als_enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -277,16 +363,28 @@ static ssize_t osal_als_enable_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t size)
 {
-	struct amsDriver_chip *chip = dev_get_drvdata(dev);
-	bool value;
+    // SHMOON : In MH2, als_power_state node is used for making input event for terminating flicker thread.
+    struct amsDriver_chip *chip = dev_get_drvdata(dev);
+    bool value;
 
-	if (strtobool(buf, &value))
-		return -EINVAL;
-
-	if (value) 
-		osal_als_enable_set(chip, AMSDRIVER_ALS_ENABLE);
-	else 
-		osal_als_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+    if (strtobool(buf, &value))
+    {
+        dev_info(dev, "invalue param!\n");
+        return -EINVAL;
+    }
+#if 0  
+    if (value) 
+        osal_als_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+    else 
+        osal_als_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+#else
+    if (value)
+    {
+        dev_info(dev, "osal_als_enable_store called!\n");
+        input_report_rel(chip->flicker_idev, REL_RY, 1001);
+        input_sync(chip->flicker_idev);
+    }
+#endif
 
 	return size;
 }
@@ -306,9 +404,100 @@ static ssize_t osal_flicker_enable_show(struct device *dev,
 	}
 }
 
+
+
+
 static ssize_t osal_flicker_enable_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t size)
+#if 1
+{
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	bool value;
+
+	if (strtobool(buf, &value))
+		return -EINVAL;
+#if 0  // shmoon_190604
+	if (value) 
+		osal_hw_flicker_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+	else 
+		osal_hw_flicker_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+#else
+	if (value)
+	{
+        int err = osal_flicker_idev_open(chip->flicker_idev);
+        dev_info(&chip->client->dev, "osal_flicker_idev_open err:%d\n",err);
+	}
+    else
+        osal_flicker_idev_close(chip->flicker_idev);
+#endif
+
+	return size;
+}
+#else
+{
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	//bool value;
+       uint8_t enable;
+	ssize_t ret;
+
+	ret = kstrtol(buf,0,(long*)(&(enable)));
+	
+	
+	//if (strtobool(buf, &value))
+	if (ret !=0)	
+		return -EINVAL;
+
+      dev_err(&chip->client->dev, "enable %d\n",enable);
+	  
+	if (enable==0){
+		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_HW_FLICKER, AMS_CONFIG_ENABLE, 0);
+	}
+
+	else if (enable==1){
+		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_HW_FLICKER, AMS_CONFIG_ENABLE, 1);
+	}
+
+	return size;
+}
+#endif
+
+#if 0
+static ssize_t osal_flicker_data_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+
+	ams_apiAlsFlicker_t outData;
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	ams_deviceGetSWFlicker(chip->deviceCtx);
+       //ccb_sw_flicker_GetResult(chip->deviceCtx, uint16_t *data)
+	return snprintf(buf, PAGE_SIZE, "%d\n", outData.mHz);
+
+
+}
+#endif
+
+static ssize_t osal_sw_flicker_enable_show(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	ams_mode_t mode;
+
+	ams_getMode(chip->deviceCtx, &mode);
+
+	if (mode & MODE_FLICKER){
+		return snprintf(buf, PAGE_SIZE, "%d\n", 1);
+	} else {
+		return snprintf(buf, PAGE_SIZE, "%d\n", 0);
+	}
+}
+
+
+
+static ssize_t osal_sw_flicker_enable_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t size)
+#if 1
 {
 	struct amsDriver_chip *chip = dev_get_drvdata(dev);
 	bool value;
@@ -316,45 +505,89 @@ static ssize_t osal_flicker_enable_store(struct device *dev,
 	if (strtobool(buf, &value))
 		return -EINVAL;
 
-	if (value)
-		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_FLICKER, AMS_CONFIG_ENABLE, 1);
-	else
-		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_FLICKER, AMS_CONFIG_ENABLE, 0);
-
+	if (value) {
+		chip->sensor_enable = true;
+ 		osal_sw_flicker_enable_set(chip, AMSDRIVER_ALS_ENABLE);
+		hrtimer_start(&chip->timer, chip->light_poll_delay, HRTIMER_MODE_REL);/*polling start*/
+	} else {
+		chip->sensor_enable = false;
+		hrtimer_cancel(&chip->timer);/*polling stop*/
+		osal_sw_flicker_enable_set(chip, AMSDRIVER_ALS_DISABLE);
+	}
+    
 	return size;
 }
-
-static ssize_t osal_flicker_data_show(struct device *dev,
-	struct device_attribute *attr, char *buf)
-{
-
-#ifdef AMS_SW_FLICKER    
-	ams_apiAlsFlicker_t outData;
-	struct amsDriver_chip *chip = dev_get_drvdata(dev);
-	ams_deviceGetSWFlicker(chip->deviceCtx);
-       //ccb_sw_flicker_GetResult(chip->deviceCtx, uint16_t *data)
-	return snprintf(buf, PAGE_SIZE, "%d\n", outData.mHz);
 #else
-   
-    return snprintf(buf, PAGE_SIZE, "%d\n", 1);       
-#endif
+{
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	//bool value;
+       uint8_t enable;
+	ssize_t ret;
 
+	ret = kstrtol(buf,0,(long*)(&(enable)));
+	
+	
+	//if (strtobool(buf, &value))
+	if (ret !=0)	
+		return -EINVAL;
 
+      dev_err(&chip->client->dev, "enable %d\n",enable);
+	  
+	if (enable==0){
+		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_SW_FLICKER, AMS_CONFIG_ENABLE, 0);
+	}
+
+	else if (enable==1){
+		ams_deviceSetConfig(chip->deviceCtx, AMS_CONFIG_SW_FLICKER, AMS_CONFIG_ENABLE, 1);
+	}
+ 
+	return size;
 }
+#endif
+/*
+static ssize_t  osal_polling_timer_enable_store(struct device *dev,
+struct device_attribute *attr,
+	const char *buf, size_t size)
+{
+	struct amsDriver_chip *chip = dev_get_drvdata(dev);
+	bool value;
+					  
+			 
 
+	if (strtobool(buf, &value))
+ 
+ 
+							  
+			  
+		return -EINVAL;
+
+	if (value)
+	{
+		printk("starting poll timer %lld ns\n", ktime_to_ns(chip->light_poll_delay));
+		hrtimer_start(&chip->timer, chip->light_poll_delay, HRTIMER_MODE_REL);
+	}else{
+		hrtimer_cancel(&chip->timer);
+		cancel_work_sync(&chip->work_light1);
+																					
+	}
+ 
+	return size;
+}
+*/
 
 struct device_attribute osal_als_attrs[] = {
-	__ATTR(als_lux,           0440, osal_device_als_lux_show,       NULL),
-	__ATTR(als_red,           0440, osal_als_red_show,              NULL),
-	__ATTR(als_green,         0440, osal_als_green_show,            NULL),
-	__ATTR(als_blue,          0440, osal_als_blue_show,             NULL),
-	__ATTR(als_clear,         0440, osal_als_clear_show,            NULL),
-	__ATTR(flicker_raw_data,         0440, osal_flicker_raw_show,            NULL),
-	__ATTR(als_power_state,   0660, osal_als_enable_show,           osal_als_enable_store),
-	__ATTR(flicker_power_state,   0660, osal_flicker_enable_show,   osal_flicker_enable_store),
-	__ATTR(flicker_sw_debug,         0660, osal_flicker_data_show,            osal_sw_flicker_store),	
-	__ATTR(als_debug,         0660, osal_als_reg_show,            osal_als_reg_store),
-	__ATTR(smux_setting,         0660, osal_smux_show,            osal_smux_store),
+	__ATTR(als_lux,           0444, osal_device_als_lux_show,       NULL),
+	__ATTR(als_red,           0444, osal_als_red_show,              NULL),
+	__ATTR(als_green,         0444, osal_als_green_show,            NULL),
+	__ATTR(als_blue,          0444, osal_als_blue_show,             NULL),
+	__ATTR(als_clear,         0444, osal_als_clear_show,            NULL),
+	__ATTR(flicker_raw_data,         0444, osal_flicker_raw_show,            NULL),
+	__ATTR(als_power_state,   0664, osal_als_enable_show,           osal_als_enable_store),
+	__ATTR(flicker_power_state,   0664, osal_flicker_enable_show,   osal_flicker_enable_store),
+	__ATTR(flicker_sw_power_state,   0664, osal_sw_flicker_enable_show,   osal_sw_flicker_enable_store),
+	//__ATTR(polling_enable,         0660, NULL,            osal_polling_timer_enable_store),	
+	__ATTR(als_debug,         0664, osal_als_reg_show,            osal_als_reg_store),
+	__ATTR(smux_setting,         0664, osal_smux_show,            osal_smux_store),
 
 };
 

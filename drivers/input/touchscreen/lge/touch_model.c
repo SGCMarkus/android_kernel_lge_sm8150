@@ -50,6 +50,7 @@ int touch_get_dts_base(struct touch_core_data *ts)
 	PROPERTY_BOOL(np, "use_lpwg_test", ts->role.use_lpwg_test);
 	PROPERTY_BOOL(np, "hide_coordinate", ts->role.hide_coordinate);
 	PROPERTY_BOOL(np, "use_film_status", ts->role.use_film_status);
+	PROPERTY_BOOL(np, "use_synaptics_touchcomm", ts->role.use_synaptics_touchcomm);
 
 	/* Power */
 	PROPERTY_GPIO(np, "vcl-gpio", ts->vcl_pin);

@@ -171,7 +171,7 @@ typedef struct _amsAlsResult {
     int32_t    irrWideband;
     uint32_t    mLux;
     uint32_t    mLux_ave;
-    uint32_t    CCT;
+    uint32_t    saturation;
     amsAlsAdaptive_t adaptive;
     uint32_t    rawClear;
     uint32_t    rawRed;

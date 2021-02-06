@@ -35,54 +35,24 @@
 #include "core_control_block_als.h"
 #include "ams_port_platform.h"
 #include "ams_device_control_block.h"
+#if !defined (AMS_BIN_2048_MODE1) && !defined (AMS_BIN_2048_MODE2) 
 #include "ams_fft.h"
-
-typedef struct _fifo{
-    uint16_t AdcClear;
-    uint16_t AdcRed;
-#if defined(CONFIG_AMS_ALS_CRWBI)
-    uint16_t AdcGreenWb;
-#else
-    uint16_t AdcGreen;
-#endif
-    uint16_t AdcBlue;
-#if defined(CONFIG_AMS_ALS_CRGBW)
-    uint16_t AdcWb;
-#endif
-    uint16_t AdcFlicker;
-} adcDataSet_t;
-
-#if defined(CONFIG_AMS_ALS_CRGBW)
-#define AMS_PORT_LOG_CRGB_W(dataset) \
-        AMS_PORT_log_4("ccb_alsHandle: C, R,G,B = %u, %u,%u,%u" \
-            , dataset.AdcClear \
-            , dataset.AdcRed \
-            , dataset.AdcGreen \
-            , dataset.AdcBlue \
-            ); \
-        AMS_PORT_log_1(" WB = %u\n", dataset.AdcWb); \
-        AMS_PORT_log_1(" Flicker = %u\n", dataset.AdcFlicker);
-
-#elif defined(CONFIG_AMS_ALS_CRWBI)
-#define AMS_PORT_LOG_CRGB_W(dataset) \
-        AMS_PORT_log_4("ccb_alsHandle: C, R,G/WB,B = %u, %u,%u,%u\n" \
-            , dataset.AdcClear \
-            , dataset.AdcRed \
-            , dataset.AdcGreenWb \
-            , dataset.AdcBlue \
-            )
-#else
-#define AMS_PORT_LOG_CRGB_W(dataset) \
-        AMS_PORT_log_4("ccb_alsHandle: C,R,G,B = %u, %u,%u,%u\n" \
-            , dataset.AdcClear \
-            , dataset.AdcRed \
-            , dataset.AdcGreen \
-            , dataset.AdcBlue \
-            )
 #endif
 
-#define FLICKER_SAMPLES 103
+#if defined (AMS_BIN_2048_MODE1) ||defined (AMS_BIN_2048_MODE2) 
+#include <linux/kfifo.h>
+#include "ams_fft_2048.h"
+#endif
+
+#if defined (AMS_BIN_2048_MODE1) ||defined (AMS_BIN_2048_MODE2) 
+static DECLARE_KFIFO(ams_fifo,u8, 2*PAGE_SIZE);
+#endif
+
+
+#define FLICKER_SAMPLES 128
 #define FFT_BIN_COUNT 512
+#define FFT_BIN_HALF FFT_BIN_COUNT/2
+
 #define MAX_DATA_SETS (32 / 8)
 
 
@@ -90,13 +60,18 @@ typedef struct _fifo{
 
 
 int16_t FlickerSampleData[FFT_BIN_COUNT];
-uint16_t fifodata[128];
+uint16_t fifodata[FLICKER_SAMPLES];
+
+#define CLOCK_FREQ 720000
+
 
 void ccb_alsInit_FIFO(void * dcbCtx, ams_ccb_als_init_t* initData){
     ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
     ams_ccb_als_ctx_t * ccbCtx = &ctx->ccbAlsCtx;
     amsAlsInitData_t initAlsData = {0,};
-
+    amsAlsAlgoInfo_t infoAls = {0,};
+    uint32_t scaledGain = 0;
+    uint8_t gain = 0;
     
     if (initData){
         memcpy(&ccbCtx->initData, initData, sizeof(ams_ccb_als_init_t));
@@ -115,42 +90,79 @@ void ccb_alsInit_FIFO(void * dcbCtx, ams_ccb_als_init_t* initData){
     initAlsData.calibration.thresholdLow = ccbCtx->initData.calibrationData.thresholdLow;
     initAlsData.calibration.thresholdHigh = ccbCtx->initData.calibrationData.thresholdHigh;
     initAlsData.calibration.Wbc = ccbCtx->initData.calibrationData.Wbc;
+    ccbCtx->ctxAlgAls.time_us = ccbCtx->initData.configData.uSecTime = AMS_ALS_ATIME;/*50msec*/
+    initAlsData.calibration.D_factor = AMS_ALS_D_FACTOR;
 
-AMS_PORT_log_3("ccb_alsInit time %d, gain value %d , autogain %d\n",initAlsData.time_us,initAlsData.gain,ctx->ccbAlsCtx.initData.autoGain);
-#ifdef   AMS_SW_FLICKER
+#ifdef CONFIG_AMS_OPTICAL_SENSOR_3407
+        AMS_GET_ALS_GAIN(scaledGain, gain);
+        ctx->ccbAlsCtx.ctxAlgAls.gain = scaledGain;
+#endif
+    amsAlg_als_getAlgInfo (&infoAls);
+    amsAlg_als_initAlg(&ccbCtx->ctxAlgAls, &initAlsData);
+    AMS_PORT_log_3("ccb_alsInit time %d, gain value %d , autogain %d\n",initAlsData.time_us,initAlsData.gain,ctx->ccbAlsCtx.initData.autoGain);
 
-AMS_PORT_log("!!!!start ccb_alsInit_FIFO!!!!!");
     ams_setField(ctx->portHndl, DEVREG_PCFG1, 0x08, 0x08);
     ams_setByte(ctx->portHndl, DEVREG_FD_CFG0, 0x80); /*fifo mode*/
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG0,  ( 0x80 | (FD_SAMPLES_128) | (FD_COMPARE_6_32NDS)));		
+
     ams_setByte(ctx->portHndl, DEVREG_CFG4, 0x80);
-    ams_setByte(ctx->portHndl, DEVREG_WTIME, 0x00);
-    ams_setByte(ctx->portHndl, DEVREG_CFG8, 0xC8); //FIFO_THR:16, FD_AGC_DISABLE:YES , AUTOAGAIN_DISABLE
-    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, (((AGAIN_16)<<3) | (1<<0)));
-    ccbCtx->initData.configData.uSecTime = 1000;
-    
-    AMS_SET_ALS_TIME(0);
-    AMS_SET_ALS_STEP_TIME(ccbCtx->initData.configData.uSecTime); /*2.5msec*/   
-    ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
-    AMS_SET_ALS_PERS(0x00);
-    /* force interrupt */
-    ccbCtx->shadowAiltReg = 0xffff;
-    ccbCtx->shadowAihtReg = 0;
-    AMS_SET_ALS_THRS_LOW(ccbCtx->shadowAiltReg);
-    AMS_SET_ALS_THRS_HIGH(ccbCtx->shadowAihtReg);
-     ctx->flickerCtx.flicker_finished = 0;
-    AMS_DISABLE_FLICKER_AUTOGAIN(HIGH);
+    ams_setByte(ctx->portHndl, DEVREG_CFG8, 0xCC); //FIFO_THR:16, FD_AGC_DISABLE:YES , AUTOAGAIN_ENABLE
+
+#if !defined(  AMS_BIN_2048_MODE1) &&!defined(  AMS_BIN_2048_MODE1) 
+    ctx->flickerCtx.sampling_time = 1000; // 2k
+    ctx->flickerCtx.sampling_time = (CLOCK_FREQ / (2 * ctx->flickerCtx.sampling_time)) - 1;	
+    ctx->flickerCtx.gain = AGAIN_16;
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, ((ctx->flickerCtx.gain <<3)));
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, (ctx->flickerCtx.sampling_time >>8) & 0x03);	
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG1, ctx->flickerCtx.sampling_time & 0xff);
+    AMS_PORT_log("!!!!start 128 fft ccb_alsInit_FIFO!!!!!");
+	
 #endif
 
+   
+#ifdef AMS_BIN_2048_MODE1
+    ctx->flickerCtx.sampling_time = 2000; // 2k
+    ctx->flickerCtx.sampling_time = (CLOCK_FREQ / (2 * ctx->flickerCtx.sampling_time)) - 1;	
+    ctx->flickerCtx.gain = AGAIN_16;
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, ((ctx->flickerCtx.gain <<3)));
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, (ctx->flickerCtx.sampling_time >>8) & 0x03);	
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG1, ctx->flickerCtx.sampling_time & 0xff);
+    AMS_PORT_log("!!!!start mode1  fft ccb_alsInit_FIFO!!!!!");
+	
+#endif
+
+#ifdef AMS_BIN_2048_MODE2
+    ctx->flickerCtx.sampling_time = 4000; // 4k
+    ctx->flickerCtx.sampling_time = (CLOCK_FREQ / (2 * ctx->flickerCtx.sampling_time)) - 1;	
+    ctx->flickerCtx.gain = AGAIN_16;
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, ((ctx->flickerCtx.gain <<3)));
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, (ctx->flickerCtx.sampling_time >>8) & 0x03);	
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG1, ctx->flickerCtx.sampling_time & 0xff);
+    AMS_PORT_log("!!!!start mode2  fft ccb_alsInit_FIFO!!!!!");
+	
+#endif
+
+#ifdef AMS_BIN_2048_MODE3
+    ctx->flickerCtx.sampling_time = 3000; // 3k
+    ctx->flickerCtx.sampling_time = (CLOCK_FREQ / (2 * ctx->flickerCtx.sampling_time)) - 1;	
+    ctx->flickerCtx.gain = AGAIN_16;
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, ((ctx->flickerCtx.gain <<3)));
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG3, (ctx->flickerCtx.sampling_time >>8) & 0x03);	
+    ams_setByte(ctx->portHndl, DEVREG_FD_CFG1, ctx->flickerCtx.sampling_time & 0xff);
+    AMS_PORT_log("!!!!start mode3  fft ccb_alsInit_FIFO!!!!!");
+	
+#endif  
+
     AMS_SET_ALS_TIME(ccbCtx->initData.configData.uSecTime);
-    AMS_SET_ALS_PERS(0x01);
-    AMS_SET_ALS_GAIN(ctx->ccbAlsCtx.initData.configData.gain);
+    AMS_SET_ALS_STEP_TIME(AMS_ALS_STEP_TIME); 
 
-    ccbCtx->shadowAiltReg = 0xffff;
-    ccbCtx->shadowAihtReg = 0;
-    AMS_SET_ALS_THRS_LOW(ccbCtx->shadowAiltReg);
-    AMS_SET_ALS_THRS_HIGH(ccbCtx->shadowAihtReg);
-    ccbCtx->state = AMS_CCB_ALS_RGB;
-
+    ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
+#if defined (AMS_BIN_2048_MODE1) ||defined (AMS_BIN_2048_MODE2)     
+    INIT_KFIFO(ams_fifo);/*kfifo init*/
+#endif
+    /* force interrupt */
+     ctx->flickerCtx.flicker_finished = 0;
+     ccbCtx->state = AMS_CCB_ALS_RGB;
 } 
 
 void ccb_alsInit(void * dcbCtx, ams_ccb_als_init_t* initData){
@@ -233,7 +245,9 @@ void ccb_alsInit(void * dcbCtx, ams_ccb_als_init_t* initData){
 #endif
     amsAlg_als_initAlg(&ccbCtx->ctxAlgAls, &initAlsData);
 
+    ccbCtx->initData.configData.uSecTime = AMS_ALS_ATIME;/*50msec*/
     AMS_SET_ALS_TIME(ccbCtx->initData.configData.uSecTime);
+    AMS_SET_ALS_STEP_TIME(AMS_ALS_STEP_TIME); 
     AMS_SET_ALS_PERS(0x01);
     AMS_SET_ALS_GAIN(ctx->ccbAlsCtx.initData.configData.gain);
 
@@ -257,9 +271,61 @@ void ccb_alsSetConfig(void * dcbCtx, ams_ccb_als_config_t * configData){
     ccbCtx->initData.configData.threshold = configData->threshold;
 }
 
+#if defined (AMS_BIN_2048_MODE1)  ||defined (AMS_BIN_2048_MODE2) 
+bool ccb_FlickerFIFO4096Event(void * dcbCtx, ams_ccb_als_dataSet_t * alsData)
+{
+    ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
+
+    int i =0;
+    int kfifo_size =0 ;
+    uint8_t fifo_lvl =0;
+    //uint8_t fifo_ov =0 ;
+    uint16_t fifo_size,quotient,remainder =0;
+    uint8_t fifo_buffer[512]={0,};	/* LGE_CHANGE, fixed kernel stack corruption, 2019-08-26, CST */
+//    uint8_t fifo_buffer[256]={0,};
+//    uint16_t fifo_wbuffer[128]={0,};	
+
+    ams_getByte(ctx->portHndl, DEVREG_FIFO_STATUS,&fifo_lvl); //current fifo count     
+    //ams_getByte(ctx->portHndl, DEVREG_STATUS4,&fifo_ov);
+	
+    fifo_size = fifo_lvl * BYTE;	
+    quotient = fifo_size / 32; 
+    remainder = fifo_size % 32; 
+
+   //if(fifo_lvl >=  128)//>128
+   if(fifo_lvl <=  128)//>128  /* LGE_CHANGE, fixed kernel stack corruption, 2019-08-26, CST */
+   {
+
+        if(quotient == 0) // fifo size is less than 32 , reading remainder 
+        {
+        	ams_getBuf(ctx->portHndl, DEVREG_FDATAL, (uint8_t*)&fifo_buffer[0], remainder);
+        }
+        else
+        {
+        	for(i=0; i<quotient;i++)
+        	{
+        		ams_getBuf(ctx->portHndl, DEVREG_FDATAL, (uint8_t*)&fifo_buffer[i*32], 32);
+        	}
+        	if(remainder != 0)        
+        		ams_getBuf(ctx->portHndl, DEVREG_FDATAL, (uint8_t*)&fifo_buffer[i*32], remainder);
+        }
 
 
-bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16_t *data)
+	   kfifo_in(&ams_fifo,fifo_buffer,fifo_lvl*BYTE);
+
+	   if((kfifo_size = kfifo_len(&ams_fifo)) >= (PAGE_SIZE)) //4096 byte , 2048 level
+	   {
+	    	ctx->flickerCtx.flicker_finished = 1;
+              AMS_PORT_log_1("FIFO now is full!!! ready  to calc freq   fifo size %d",kfifo_size);
+	   }	  
+      }
+  // AMS_PORT_log_1("Last ccb_alsHd: buffer count %d \n" , buffer_count);
+return false;
+}
+#endif 
+
+
+bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData)
 {
     ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
 
@@ -276,19 +342,6 @@ bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16
 
     uint8_t fifo_buffer[256]={0,};	
 //    uint16_t fifo_wbuffer[128]={0,};	
-#if 0
-    if (ctx->ccbAlsCtx.initData.autoGain){
-        uint32_t scaledGain;
-#ifdef AMS_ALS_GAIN_V2
-        uint8_t gainLevel;
-        AMS_GET_ALS_GAIN(scaledGain, gainLevel);
-#else
-        uint8_t gain;
-        AMS_GET_ALS_GAIN(scaledGain, gain);
-#endif
-        ctx->ccbAlsCtx.ctxAlgAls.gain = scaledGain;
-    }
-#endif
 
     ams_getByte(ctx->portHndl, DEVREG_FIFO_STATUS,&fifo_lvl); //current fifo count     
     ams_getByte(ctx->portHndl, DEVREG_STATUS4,&fifo_ov);
@@ -304,7 +357,7 @@ bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16
 
    if(fifo_lvl >=  128)//>128
    {
-        //AMS_PORT_log_2("~~~~FIFO ~level ready to %d overflow %d \n",fifo_lvl,fifo_ov);
+        //AMS_PORT_msg_2("~~~~FIFO ~level ready to %d overflow %d \n",fifo_lvl,fifo_ov);
    
         if(quotient == 0) // fifo size is less than 32 , reading remainder 
         {
@@ -324,7 +377,7 @@ bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16
          {
          
     	          fifodata[j]= (uint16_t)((fifo_buffer[i]<<0) |(fifo_buffer[i+1]<<8));
-    	          //AMS_PORT_log_2("ccb_FlickerFIFOEvent: data[%d] = %d \n" , j, fifodata[j]);
+    	          //AMS_PORT_msg_2("ccb_FlickerFIFOEvent: data[%d] = %d \n" , j, fifodata[j]);
     		   i = i+2;
           }
 	   //memcpy(fifodata,data,sizeof(data));
@@ -344,75 +397,7 @@ bool ccb_FlickerFIFOEvent(void * dcbCtx, ams_ccb_als_dataSet_t * alsData, uint16
 return true;
    }
 
-
-#ifdef ALS_AUTOGAIN  
-
-		// Do S/W AGC 
-		AMS_ALS_GET_CRGB_W(&adcData);
-		{
-				uint64_t temp;
-				uint32_t recommendedGain;
-				uint32_t max_count;
-				uint32_t adcObjective;
-
-         			max_count = (1024 * ccbCtx->initData.configData.uSecTime) / 2780;
-				//uint32_t adcObjective = ctx->ccbAlsCtx.ctxAlgAls.saturation * 128;
-				adcObjective= max_count * 128;
-				adcObjective /= 160; /* about 80% (128 / 160) */
-//				adcObjective /= 210; /* about 80% (128 / 160) */				
-
-				if (adcData.AdcClear == 0){
-						/* to avoid divide by zero */
-						adcData.AdcClear = 1;
-				}
-				temp = adcObjective * 2048; /* 2048 to avoid floating point operation later on */
-#ifdef __KERNEL__
-				do_div(temp, adcData.AdcClear);
-#else
-				temp /= adcData.AdcClear;
-#endif
-				temp *= ctx->ccbAlsCtx.ctxAlgAls.gain;
-#ifdef __KERNEL__
-				do_div(temp, 2048);
-#else
-				temp /= 2048;
-#endif
-
-				recommendedGain = temp & 0xffffffff;
-#if 0
-				AMS_PORT_log_4("ccb_FlickerFIFOEvent: Clear ADC : %d,Red  ADC : %d,Green ADC : %d, Blue ADC : %d\n", adcData.AdcClear,adcData.AdcRed,adcData.AdcGreen,adcData.AdcBlue);
-
-				AMS_PORT_log_4("ccb_FlickerFIFOEvent: AMS_CCB_ALS_AUTOGAIN: sat=%u, objctv=%u, cur=%u, rec=%u"
-								, ctx->ccbAlsCtx.ctxAlgAls.saturation
-								, adcObjective
-								, ctx->ccbAlsCtx.ctxAlgAls.gain
-								, recommendedGain
-							  );
-#endif
-				recommendedGain = alsGainToReg(recommendedGain);
-				recommendedGain = alsGain_conversion[recommendedGain];
-				if (recommendedGain != ctx->ccbAlsCtx.ctxAlgAls.gain){
-						//AMS_PORT_log_1("ccb_FlickerFIFOEvent: gain chg to: %u\n", recommendedGain);
-						ctx->ccbAlsCtx.ctxAlgAls.gain = recommendedGain;
-						//ccbCtx->alg_config.gain = recommendedGain/1000;
-                                          AMS_DISABLE_ALS_FLICKER();
-                                          //ctx->shadowIntenabReg &= ~(FIEN|ASIEN_FDSIEN);
-                                          //ams_setField(ctx->portHndl, DEVREG_INTENAB, HIGH,ctx->shadowIntenabReg );/*disable*/
-                                          ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
-        					AMS_SET_ALS_GAIN(ctx->ccbAlsCtx.ctxAlgAls.gain);
-						//AMS_SET_FD_GAIN(ctx->ccbAlsCtx.ctxAlgAls.gain);
-                                          //ctx->shadowIntenabReg = (FIEN|ASIEN_FDSIEN);
-                                          //ams_setField(ctx->portHndl, DEVREG_INTENAB, HIGH,ctx->shadowIntenabReg );/*enable*/
-
-                                          AMS_ENABLE_ALS_FLICKER();
-						
-				}
-				else
-						;//AMS_PORT_log_1("ccb_alsHd: no chg, gain %u\n", ctx->ccbAlsCtx.ctxAlgAls.gain);
-		}
-#endif   
-
-  // AMS_PORT_log_1("Last ccb_alsHd: buffer count %d \n" , buffer_count);
+  // AMS_PORT_msg_1("Last ccb_alsHd: buffer count %d \n" , buffer_count);
 return false;
 }
 
@@ -422,74 +407,29 @@ bool ccb_alsHandle(void * dcbCtx, ams_ccb_als_dataSet_t * alsData){
     amsAlsDataSet_t inputDataAls = {0,};
     static adcDataSet_t adcData = {0,}; /* QC - is this really needed? */
 
-    //AMS_PORT_log_Msg_1(AMS_DEBUG, "ccb_alsHandle: case = %d\n", ccbCtx->state);
-#if 0
-    AMS_ALS_GET_CRGB_W((uint8_t *)&adcData);
-    AMS_PORT_LOG_CRGB_W(adcData);
-#endif
+   
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_3407
     /* get gain from HW register if so configured */
     if (ctx->ccbAlsCtx.initData.autoGain){
         uint32_t scaledGain;
-#ifdef AMS_ALS_GAIN_V2
-        uint8_t gainLevel;
-        AMS_GET_ALS_GAIN(scaledGain, gainLevel);
-#else
         uint8_t gain;
         AMS_GET_ALS_GAIN(scaledGain, gain);
-#endif
         ctx->ccbAlsCtx.ctxAlgAls.gain = scaledGain;
     }
 #endif
 
     switch (ccbCtx->state){
     case AMS_CCB_ALS_INIT:
-        AMS_DISABLE_ALS();
-        AMS_SET_ALS_TIME(ccbCtx->initData.configData.uSecTime);
-        AMS_SET_ALS_PERS(0x01);
-        AMS_SET_ALS_GAIN(ctx->ccbAlsCtx.initData.configData.gain);
-        /* force interrupt */
-        ccbCtx->shadowAiltReg = 0xffff;
-        ccbCtx->shadowAihtReg = 0;
-        AMS_SET_ALS_THRS_LOW(ccbCtx->shadowAiltReg);
-        AMS_SET_ALS_THRS_HIGH(ccbCtx->shadowAihtReg);
-        ccbCtx->state = AMS_CCB_ALS_RGB;
-        AMS_REENABLE_ALS();
         break;
     case AMS_CCB_ALS_RGB: /* state to measure RGB */
-#ifdef HAVE_OPTION__ALWAYS_READ
-    if ((alsData->statusReg & (AINT)) || ctx->alwaysReadAls)
-#else
-    if (alsData->statusReg & (AINT))
-#endif
         {
         AMS_ALS_GET_CRGB_W(&adcData);
-        inputDataAls.status = ALS_STATUS_RDY;
+        inputDataAls.status = ctx->shadowStatus1Reg; /*saturation condition check*/
         inputDataAls.datasetArray = (alsData_t*)&adcData;
         AMS_PORT_LOG_CRGB_W(adcData);
 
-       /* if (ctx->ccbAlsCtx.ctxAlgAls.previousGain !=
-                    ctx->ccbAlsCtx.ctxAlgAls.gain) {
-                    AMS_DISABLE_ALS();
-                    AMS_PORT_log_Msg(AMS_DEBUG, "ccb_alsHandle: ALS Disalbe to Enable \n");
-                    AMS_REENABLE_ALS();
-         }*/
-
         amsAlg_als_processData(&ctx->ccbAlsCtx.ctxAlgAls, &inputDataAls);
 
-        if (ctx->mode & MODE_ALS_LUX) {
-            ctx->updateAvailable |= (1 << AMS_AMBIENT_SENSOR);
-        }
-#if defined ( CONFIG_AMS_OPTICAL_SENSOR_490x )
-        /* In order to implement the proper interrupt reporting of LUX vs RGB vs IR HIDs on intel
-           we need to clearly differentiate between the different type of available ALS results */
-        if (ctx->mode & MODE_ALS_IR) {
-            ctx->updateAvailable |= (1 << AMS_AMBIENT_SENSOR_IR);
-        }
-        if (ctx->mode & MODE_ALS_RGB) {
-            ctx->updateAvailable |= (1 << AMS_AMBIENT_SENSOR_RGB);
-        }
-#endif
 
 #if 0
         AMS_PORT_log_1( "ccb_alsHandle: Unstable?= %d\n", ccbCtx->ctxAlgAls.notStableMeasurement);
@@ -512,90 +452,11 @@ bool ccb_alsHandle(void * dcbCtx, ams_ccb_als_dataSet_t * alsData){
         AMS_PORT_log_1( "ccb_alsHandle: gain     = %d\n", ccbCtx->ctxAlgAls.gain);
         AMS_PORT_log_1( "ccb_alsHandle: cpl      = %d\n", ccbCtx->ctxAlgAls.cpl);
         AMS_PORT_log_1( "ccb_alsHandle: thshld   = %d\n", ccbCtx->initData.configData.threshold);
-#endif
         AMS_PORT_log_1( "ccb_alsHandle: timeUs   = %d\n", ccbCtx->ctxAlgAls.time_us);
         AMS_PORT_log_1( "ccb_alsHandle: gain     = %d\n", ccbCtx->ctxAlgAls.gain);
         AMS_PORT_log_1( "ccb_alsHandle: cpl      = %d\n", ccbCtx->ctxAlgAls.cpl);
-
+#endif
         ccbCtx->state = AMS_CCB_ALS_RGB;
-
-         //AMS_PORT_log_Msg_2(AMS_DEBUG, "ccb_alsHandle: prevgain %d, gain %d \n",ctx->ccbAlsCtx.ctxAlgAls.previousGain,ctx->ccbAlsCtx.ctxAlgAls.gain);
-#if !defined CONFIG_AMS_OPTICAL_SENSOR_3407
-        /* Software AGC */
-        if (ccbCtx->initData.autoGain == true)
-        {
-            uint64_t temp;
-            uint32_t recommendedGain;
-            uint32_t adcObjective = ctx->ccbAlsCtx.ctxAlgAls.saturation * 128;
-            adcObjective /= 160; /* about 80% (128 / 160) */
-
-            if (adcData.AdcClear == 0){
-                /* to avoid divide by zero */
-                adcData.AdcClear = 1;
-            }
-            temp = adcObjective * 2048; /* 2048 to avoid floating point operation later on */
-
-#ifdef __KERNEL__
-    do_div(temp, adcData.AdcClear);
-#else
-        temp /= adcData.AdcClear;
-#endif
-        temp *= ctx->ccbAlsCtx.ctxAlgAls.gain;
-#ifdef __KERNEL__
-    do_div(temp, 2048);
-#else
-        temp /= 2048;
-#endif
-
-        recommendedGain = temp & 0xffffffff;
-#if 0
-        AMS_PORT_log_Msg_4(AMS_DEBUG, "ccb_alsHandle: AMS_CCB_ALS_AUTOGAIN: sat=%u, objctv=%u, cur=%u, rec=%u\n"
-            , ctx->ccbAlsCtx.ctxAlgAls.saturation
-            , adcObjective
-            , ctx->ccbAlsCtx.ctxAlgAls.gain
-            , recommendedGain
-            );
-#endif
-#ifdef AMS_ALS_GAIN_V2
-            recommendedGain = alsGainToLevel(recommendedGain);
-            recommendedGain = alsLevelToGain(recommendedGain);
-#else
-            recommendedGain = alsGainToReg(recommendedGain);
-            recommendedGain = alsGain_conversion[recommendedGain];
-#endif
-            if (recommendedGain != ctx->ccbAlsCtx.ctxAlgAls.gain){
-                AMS_PORT_log_1( "ccb_alsHandle: AMS_CCB_ALS_AUTOGAIN: change gain to: %u\n", recommendedGain);
-                ctx->ccbAlsCtx.ctxAlgAls.gain = recommendedGain;
-                AMS_DISABLE_ALS();
-                AMS_SET_ALS_GAIN(ctx->ccbAlsCtx.ctxAlgAls.gain);
-                AMS_REENABLE_ALS();
-                if (ctx->ccbAlsCtx.ctxAlgAls.previousGain !=
-                    ctx->ccbAlsCtx.ctxAlgAls.gain) {
-                    ctx->updateAvailable |= (1 << AMS_ALS_RGB_GAIN_CHANGED);
-
-                    // run process data over copy just to detemine the new cpl value
-                    // in order to compute the next range but don't mess up with the current
-                    // measurement which was done over the previous gain.
-                    adcDataSet_t tmpAdcData;
-                    amsAlsContext_t tmp = ctx->ccbAlsCtx.ctxAlgAls;
-                    amsAlsDataSet_t tmpInputDataAls;
-                    tmpInputDataAls.status = ALS_STATUS_RDY;
-
-                    tmpInputDataAls.datasetArray = (alsData_t*)&tmpAdcData;
-                    // compute the ranges based on the max adc count value
-                    tmpAdcData.AdcClear = ctx->ccbAlsCtx.ctxAlgAls.saturation;
-                    tmpAdcData.AdcRed   = ctx->ccbAlsCtx.ctxAlgAls.saturation / 3; //divide by more reasonable coefficient
-                    tmpAdcData.AdcGreen = ctx->ccbAlsCtx.ctxAlgAls.saturation / 3;
-                    tmpAdcData.AdcBlue  = ctx->ccbAlsCtx.ctxAlgAls.saturation / 3;
-                    amsAlg_als_processData(&tmp, &tmpInputDataAls);
-                    ctx->ccbAlsCtx.ctxAlgAls.results.mMaxLux = tmp.results.mLux;
-                }
-            }
-            else
-              AMS_PORT_log_1( "ALS_AUTOGAIN: no change, gain=%u\n", ctx->ccbAlsCtx.ctxAlgAls.gain);
-
-          }
-#endif /*CONFIG_AMS_OPTICAL_SENSOR_3407*/
           break;
     }
 
@@ -611,7 +472,7 @@ void ccb_alsGetResult(void * dcbCtx, ams_ccb_als_result_t * exportData){
 
     /* export data */
     exportData->mLux = ccbCtx->ctxAlgAls.results.mLux;
-    exportData->colorTemp = ccbCtx->ctxAlgAls.results.CCT;
+    exportData->saturation = ccbCtx->ctxAlgAls.results.saturation;
     exportData->clear = ccbCtx->ctxAlgAls.results.irrClear;
     exportData->blue = ccbCtx->ctxAlgAls.results.irrBlue;
     exportData->green = ccbCtx->ctxAlgAls.results.irrGreen;
@@ -626,8 +487,218 @@ void ccb_alsGetResult(void * dcbCtx, ams_ccb_als_result_t * exportData){
 
 
 
-#ifdef AMS_SW_FLICKER
+#if defined ( AMS_BIN_2048_MODE1) ||defined ( AMS_BIN_2048_MODE2)
 
+ssize_t read_fifo( char *buf, int size)
+{
+	int len;
+	int kfifo_Len;
+
+       kfifo_Len =  kfifo_len(&ams_fifo);
+	   
+	if(kfifo_Len >=size){
+		len = kfifo_out(&ams_fifo,buf,size);
+		//len = kfifo_copy(&ams_fifo,buf,size);
+	}else{
+		len = 0;
+	}
+	AMS_PORT_log_2("read_fifo read size  %d , kfifo_Len =%d\n",len,kfifo_Len);
+	return len;
+}
+
+static void set_gain(void * dcbCtx , uint8_t gain)
+{
+
+	ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
+
+	AMS_PORT_log_1("set_gain  %d \n",gain);
+	ctx->flickerCtx.gain = gain;
+	ams_setField(ctx->portHndl, DEVREG_FD_CFG3,   (ctx->flickerCtx.gain<<3) ,       MASK_FD_GAIN);
+       ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
+
+}
+
+static int auto_gain_ctl(void * dcbCtx , uint16_t * data, int size)
+{
+	ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
+
+	uint8_t gain = ctx->flickerCtx.gain ;
+	int i;
+	int max =0 ;
+
+
+	for(i=0; i< size;++i){
+	//AMS_PORT_log_2("auto_gain_ctl: data[%d] = %d\n",i, data[i]);
+		if(data[i] > max){
+			max = data[i];
+		}
+	}
+
+	AMS_PORT_log_3("auto_gain_ctl: gain  %d , max %d ,sample /3 %d ,\n",gain, max,ctx->flickerCtx.sampling_time / 3 );
+
+
+	if((max < (ctx->flickerCtx.sampling_time / 3)) && gain < 12){
+		gain++;
+	}else if((max >= ctx->flickerCtx.sampling_time) && gain > 0 ){
+		gain--;
+	}else{
+	       AMS_PORT_log("auto_gain_ctl nothing do!!!\n");
+		return 0;
+	}
+	
+	set_gain(ctx,gain);
+	return 1;
+	
+}
+
+
+
+int get_fft(void * ctx, char *out)
+{
+
+	static int16_t buffer[2048] ;
+	ssize_t size = 0;
+	
+	memset(buffer,0x00,4096);
+	size = read_fifo((char*)buffer,4096);
+
+	if(size < 4096){
+		return 0;
+	}
+	kfifo_reset(&ams_fifo);	
+
+	if(!auto_gain_ctl(ctx,buffer,2048)){
+		ams_rfft(buffer, 2048);
+		ams_get_magnitude((int16_t*)buffer,(uint16_t*)out,1024);
+	}
+	return 1;
+
+
+}
+
+typedef struct _filicer_target {
+    int target_fre;
+    uint16_t min;// tolerrance -2.8%
+    uint16_t max;// tolerrance +2.8%
+}filicer_target;
+
+#define TARGET_NUM 7 
+
+filicer_target LG_TARGET[TARGET_NUM]={
+  {100,96,103},
+  {120,115,124},
+  {164,158,169},
+  {300,290,309},
+  {330,319,340},
+  {500,484,514},
+  {600,581,617},
+};
+static int Target_fre(uint16_t mhz)
+{
+  int i; 
+  
+  for(i =0; i < TARGET_NUM;i++)
+  {
+    if( mhz > LG_TARGET[i].min && mhz < LG_TARGET[i].max)
+    {
+        return LG_TARGET[i].target_fre;
+    }
+  }
+
+  return 0;
+  
+}
+
+bool  ccb_sw_bin4096_flicker_GetResult(void * dcbCtx)
+{
+  ams_deviceCtx_t * ctx = (ams_deviceCtx_t*)dcbCtx;
+  static uint16_t buf[1024] = {0,};
+  int max =0;
+
+  int i =0;
+  uint16_t mHz;  
+  uint16_t target_fre;  
+
+	if(get_fft(ctx,(char*)buf)){
+		buf[0] = 0;
+		for(i =0 ; i < 1024; ++i){			
+			if(buf[i] > buf[max]){
+				max = i;
+
+            	//AMS_PORT_log_1("ccb_sw_bin4096_flicker_GetResult: max  %d \n",max);					
+			}
+		}
+	}
+    mHz = ((max * (CLOCK_FREQ / ((ctx->flickerCtx.sampling_time + 1) * 2))) / 2048);
+
+    target_fre = Target_fre(mHz);
+
+    if(!target_fre)
+    {
+        //Round up to nearest multiple of 5
+        mHz = ((mHz+ 5) / 10) * 10;	
+    }
+    else
+    {
+        mHz = target_fre;
+    }
+      
+    ctx->flickerCtx.lastValid.mHzbysw = mHz;
+	 AMS_PORT_log_1("ccb_sw_bin4096_flicker_GetResult: sw_freq %u \n",ctx->flickerCtx.lastValid.mHzbysw);
+
+	 ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
+	 ctx->flickerCtx.flicker_finished = 0;
+    return true;
+}
+
+#else
+
+static uint32_t get_sqrt(uint32_t x)
+{
+    uint32_t result;
+    uint32_t tmp;
+
+    result = 0;
+    tmp = (1 << 30);
+    while (tmp > x) {
+        tmp >>= 2;
+    }
+    while (tmp != 0) {
+        if (x >= (result + tmp)) {
+            x -= result + tmp;
+            result += 2 * tmp;
+        }
+        result >>= 1;
+        tmp >>= 2;
+    }
+    //AMS_PORT_log_1("get_sqrt : result =  %u", result);
+	
+    return result;
+}
+
+static int get_stdev(uint16_t *buff, int mean, int size)
+{
+    int i;
+    uint32_t sum = 0;
+
+    for (i = 0; i < size; ++i) {
+        sum += ((buff[i] - mean) * (buff[i] - mean));
+    }
+    sum = sum / (size - 1);
+    return get_sqrt(sum);
+}
+
+static int get_mean(uint16_t *buff, int size)
+{
+    int i;
+    int sum = 0;
+
+    for (i = 0; i < size; ++i) {
+        sum += buff[i];
+    }
+    //AMS_PORT_log_1("get_mean : sum/ size =  %u", sum / size);
+    return sum / size;
+}
 bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 {
 
@@ -636,9 +707,14 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
     uint8_t fd_cfg3,astatus;
 
 
-       int i;
+       int i,j;
 //	int div;
-//	s32 magRt;
+//	s32 magRt[FFT_BIN_HALF];
+	uint16_t magRt[FFT_BIN_HALF];
+
+       int mean;
+       int stdev;
+
 	int minG;
 	int maxG;
 	int midMaxMinG;
@@ -647,7 +723,7 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 	int minGScaled;
 	int wbSum;
 	
-      uint16_t mHz;
+      s16 mHz = -1;
       s32 max32;
       s32 magSq;
       s16 imag;
@@ -657,7 +733,10 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 	int max;
 	uint32_t sampleFreq;
 	uint32_t freqStep;	
-       uint8_t si =0;
+    uint8_t si =0;
+	uint8_t pre_si =0;
+    uint16_t sampling_time = 0;
+					 
    /*
 	** 1. find min and max of input data
 	** 2. scale data down
@@ -666,15 +745,11 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
     ams_getByte(ctx->portHndl, DEVREG_FD_CFG3, &fd_cfg3);	
     ams_getByte(ctx->portHndl, DEVREG_ASTATUS, &astatus);	
 	
-     if(fifodata[0]==0 ){
-              AMS_PORT_log_2("ccb_sw_flicker_GetResult : no fifo data %d, flag %d",fifodata[0],ctx->flickerCtx.flicker_finished );
-		return false;
-     	}
-
+     
 
 	// find min and max of input data
 	minG  = maxG  = wbSum = fifodata[0];
-	for (i = 1; i < FLICKER_SAMPLES; i++)
+	for (i = 1; i < FLICKER_SAMPLES ; i++)
 	{
 		if (fifodata[i] > maxG)
 			maxG = fifodata[i];
@@ -718,7 +793,7 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 
 	for (i = 0; i < FFT_BIN_COUNT; i++)
 	{
-		FlickerSampleData[i] = (int16_t) (((int16_t) fifodata[i % FLICKER_SAMPLES] - minGScaled) << shiftFactor);
+		FlickerSampleData[i] = (int16_t) (((int16_t) fifodata[i % (FLICKER_SAMPLES )] - minGScaled) << shiftFactor);
 
 	}
 
@@ -734,23 +809,30 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 	//div = (chip->flicker.mode == 3) ? 4 : chip->flicker.mode;
 
 	// Mul the sampleFreq by 1000
-	ctx->ccbAlsCtx.initData.configData.uSecTime  = 1000;
-	sampleFreq = 1000000000 / (1000) ;	 // 2500us and 160us
+	//ctx->ccbAlsCtx.initData.configData.uSecTime  = 1000;
+	if (ctx->flickerCtx.sampling_time == 179)
+       sampling_time = 500;
+	if (ctx->flickerCtx.sampling_time == 359)
+       sampling_time = 1000;
+	
+	sampleFreq = 1000000000 / (sampling_time) ;	 // 2k(500usec) sampling 
 	freqStep   = sampleFreq / FFT_BIN_COUNT;
 
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : minG %u", minG);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : maxG %u", maxG);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : midMaxMinG %u", midMaxMinG);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : maxGScaled %u", maxGScaled);	 
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : shiftFactor %u", shiftFactor);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : freqStep %u", freqStep);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : fd_gain 0x%x", fd_cfg3);
-     AMS_PORT_log_1("ccb_sw_flicker_GetResult : astatus 0x%x", astatus);
+    /*AMS_PORT_msg_1("ccb_sw_flicker_GetResult : minG %u", minG);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : maxG %u", maxG);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : midMaxMinG %u", midMaxMinG);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : maxGScaled %u", maxGScaled);	 
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : shiftFactor %u", shiftFactor);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : freqStep %u", freqStep);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : fd_gain 0x%x", fd_cfg3);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : astatus 0x%x", astatus);
+     AMS_PORT_msg_1("ccb_sw_flicker_GetResult : fd_gain 0x%x, sampleFreq %d , freqStep %d", fd_cfg3,sampleFreq,freqStep);    
+     */
 	 
-       max = -1;
-	max32 = -1;
-	idx = 0;
-	idx2 = 0;
+    max = -1;
+    max32 = -1;
+    idx = 0;
+    idx2 = 0;
 
 	// Result from FFt is in dataSamples[].
 	// The values are complex numbers
@@ -758,37 +840,46 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 	// magnitude = sqrt(real^2 + imaginary^2)
 	// Since we are only interested in the magnitude,
 	// we can use real^2 + imaginary^2
-	for (i = (20 * 2); i < FFT_BIN_COUNT - 40; i += 2)
+	//for (i = (20 * 2); i < FFT_BIN_COUNT - 40; i += 2)
+	for (i = 2, j =0; i < FFT_BIN_COUNT ; i += 2, j++)
 	{
 		real = FlickerSampleData[i + 0];
 		imag = FlickerSampleData[i + 1];
-		magSq = (u32) (((u32) real * real) + ((u32) imag * imag));
-		// magRt = (u16)ams_isqrt(magSq);
+		magSq = (u32) (((u32) (real * real)) + ((u32)( imag * imag)));
+		magRt[j] = (u16)ams_isqrt(magSq);
 
-     //AMS_PORT_log_2("ccb_sw_flicker_GetResult : magSq[%d]	\t%d\n", i/2, magSq);
+     //AMS_PORT_msg_2("ccb_sw_flicker_GetResult : magSq[%d]	\t%d\n", i/2, magSq);
 
-#if 0
-		if (magRt > max) {
-			max = magRt;
-			idx = i/2;
-		}
-#endif
-
-		if (magSq > max32)
-		{
-			max32 = magSq;
+		if (magRt[j] > max) {
+			max = magRt[j];
 			idx2 = i/2;
+                     //AMS_PORT_log_2("ccb_sw_flicker_GetResult : andy_magSq[%d]=%d\n", idx2, magRt[j]);
+
 		}
+		
 	}
 
-	// The frequency is the bin index times the frequency step
-	mHz = idx2 * freqStep / 1000;
+        mean = get_mean(magRt, FFT_BIN_HALF);
+        stdev = get_stdev(magRt, mean, FFT_BIN_HALF);
+		
+		
+        if (max> (mean + (stdev * 6))) {
+		// The frequency is the bin index times the frequency step
+		mHz = idx2 * freqStep / 1000;
 
 	// Round up to nearest multiple of 5
-	mHz = ((mHz+ 5) / 10) * 10;	
-	ctx->flickerCtx.mHzbysw = mHz;
+	/*mHz = ((mHz+ 5) / 10) * 10;	*/
+	ctx->flickerCtx.lastValid.mHzbysw = mHz; 
+		if(((maxG -minG) < 2) || (idx2 <=4 )){
+               ctx->flickerCtx.lastValid.mHzbysw = 0;
+        	}
+        } else{
+               ctx->flickerCtx.lastValid.mHzbysw = 0;
+        }
 	ctx->flickerCtx.flicker_finished = 0;
        //ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
+
+      
 
 	// If the frequency is not 100 or 120, report back ZERO.
 	// If you want to report back the measured frequency,
@@ -797,7 +888,7 @@ bool  ccb_sw_flicker_GetResult(void * dcbCtx)
 	{
 		chip->flicker.freq = 0;
 	}*/
-AMS_PORT_log_1("ccb_sw_flicker_GetResult:sw_freq= %u \n",ctx->flickerCtx.mHzbysw  );
+AMS_PORT_msg_2("ccb_sw_flicker_GetResult:idx2 %d , sw_freq= %u \n",idx2 ,mHz  );
 	
 #if 0
          ctx->shadowIntenabReg = 0;
@@ -806,26 +897,53 @@ AMS_PORT_log_1("ccb_sw_flicker_GetResult:sw_freq= %u \n",ctx->flickerCtx.mHzbysw
          mdelay(2);
          ams_setByte(ctx->portHndl, DEVREG_ENABLE, ctx->shadowEnableReg);
 #endif
-	//si = astatus = (astatus & 0x0F);
-	si = astatus = ((fd_cfg3 >>3)& 0x1F);
+#if 1
+	//si = astatus = (astatus & MASK_AGAIN);
+	si = astatus = ((fd_cfg3 >>3)& MASK_AGAIN);
+	pre_si = si;
+			   
 
-	if(wbSum <=6931){
-		astatus = MIN(10,++si);
+	if(sampling_time == 1000){
+		if((wbSum <=6912)&& (si<12)){ /*0.15 %*/
+			astatus = MIN(12,++si);
+		}
+		if(wbSum > 34560){ /*0.8*/
+			if(si == 0){
+				astatus = MAX(0, si);
+			}else{
+				astatus = MAX(0,--si);
+			}
+		}
 	}
-	if(wbSum > 34560){
-		astatus = MIN(0,--si);
+
+	if(sampling_time ==500){
+		if((wbSum <=3475)&& (si<12)){ /*0.15 %*/
+			astatus = MIN(12,++si);
+		}
+		if(wbSum > 18534){ /*0.8*/
+			if(si == 0){
+				astatus = MAX(0, si);
+			}else{
+				astatus = MAX(0,--si);
+			}
+		}
 	}
 	
     //ams_setField(ctx->portHndl, DEVREG_FD_CFG3, 0x08, 0x08);
 
     //ams_setByte(ctx->portHndl, DEVREG_CFG1, (((FD_GAIN_16)<<3) | (1<<0)));
-    AMS_SET_FLICKER_INDEX_TO_FDGAIN(si);
+    if(pre_si != si){
+       AMS_PORT_msg_4("ccb_sw_flicker_GetResult: wbSum %d , changed gain astatus= %d  si %d , pre_si %d\n", wbSum , astatus , si ,pre_si);
+    	//AMS_SET_FLICKER_INDEX_TO_FDGAIN(si);
+    	ams_setField(ctx->portHndl, DEVREG_FD_CFG3,   (si<<3) ,       MASK_FD_GAIN);
+    }
+    //AMS_SET_ALS_INDEX_TO_GAIN(si);
+#endif	
     ams_setByte(ctx->portHndl, DEVREG_CONTROL, 0x02); //FIFO Buffer , FINT, FIFO_OV, FIFO_LVL all clear
 	
 #endif	
 return true;
 }
 #endif
-
 
 

@@ -21,4 +21,5 @@
 
 void touch_msleep(unsigned int msecs);
 void touch_interrupt_control(struct device *dev, int on_off);
+int touch_snprintf(char *buf, int size, const char *fmt, ...);
 #endif /* LGE_TOUCH_CORE_H */

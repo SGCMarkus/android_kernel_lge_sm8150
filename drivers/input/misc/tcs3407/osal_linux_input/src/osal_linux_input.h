@@ -24,6 +24,8 @@
 *****************************************************************************
 */
 
+#include <linux/input.h>    //shmoon_190604
+
 /*
  * AMS generic device driver
  */
@@ -48,13 +50,14 @@ struct amsDriver_chip {
        u8 debug_mode;	
        u8 sw_flicker_mode;	
 	   
-	struct input_dev *als_idev;	
+	//struct input_dev *als_idev;	
 	struct input_dev *flicker_idev;
 
        struct workqueue_struct *wq;
 	struct work_struct work_light1;
        struct hrtimer timer;
 	ktime_t light_poll_delay;
+    bool sensor_enable;
 
 };
 
@@ -62,6 +65,10 @@ struct amsDriver_chip {
 #define AMSDRIVER_ALS_DISABLE 0
 #define AMSDRIVER_FLICKER_ENABLE 1
 #define AMSDRIVER_FLICKER_DISABLE 0
+
+// shmoon_190604
+int osal_flicker_idev_open(struct input_dev *idev);
+void osal_flicker_idev_close(struct input_dev *idev);
 
 
 #endif /*__OSAL_LINUX_INPUT_H */

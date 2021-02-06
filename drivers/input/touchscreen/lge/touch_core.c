@@ -80,9 +80,6 @@ static void touch_report_event(struct touch_core_data *ts)
 	u16 release_mask = 0;
 	u16 change_mask = 0;
 	int i;
-	bool hide_lockscreen_coord =
-		((atomic_read(&ts->state.lockscreen) == LOCKSCREEN_LOCK) &&
-		 (ts->role.hide_coordinate));
 
 	TOUCH_TRACE();
 
@@ -149,12 +146,16 @@ void touch_report_all_event(struct touch_core_data *ts)
 	TOUCH_TRACE();
 
 	ts->is_cancel = 1;
+	if (ts->role.use_synaptics_touchcomm)
+		mutex_lock(&ts->finger_mask_lock);
 	if (ts->old_mask) {
 		ts->new_mask = 0;
 		touch_report_event(ts);
 		ts->tcount = 0;
 		memset(ts->tdata, 0, sizeof(struct touch_data) * MAX_FINGER);
 	}
+	if (ts->role.use_synaptics_touchcomm)
+		mutex_unlock(&ts->finger_mask_lock);
 	ts->is_cancel = 0;
 }
 
@@ -194,14 +195,22 @@ irqreturn_t touch_irq_thread(int irq, void *dev_id)
 		return IRQ_HANDLED;
     }
 #endif
-	mutex_lock(&ts->lock);
+	if (ts->role.use_synaptics_touchcomm)
+		mutex_lock(&ts->irq_lock);
+	else
+		mutex_lock(&ts->lock);
 
 	ts->intr_status = 0;
+	if (ts->role.use_synaptics_touchcomm)
+		mutex_lock(&ts->finger_mask_lock);
 	ret = ts->driver->irq_handler(ts->dev);
 
 	if (ret >= 0) {
 		if (ts->intr_status & TOUCH_IRQ_FINGER)
 			touch_report_event(ts);
+
+		if (ts->role.use_synaptics_touchcomm)
+			mutex_unlock(&ts->finger_mask_lock);
 
 		if (ts->intr_status & TOUCH_IRQ_KNOCK)
 			touch_send_uevent(ts, TOUCH_UEVENT_KNOCK);
@@ -239,7 +248,25 @@ irqreturn_t touch_irq_thread(int irq, void *dev_id)
 		if (ts->intr_status & TOUCH_IRQ_SWIPE_RIGHT2)
 			touch_send_uevent(ts, TOUCH_UEVENT_SWIPE_RIGHT2);
 
+		if (ts->intr_status & TOUCH_IRQ_LPWG_LONGPRESS_DOWN)
+			touch_send_uevent(ts, TOUCH_UEVENT_LPWG_LONGPRESS_DOWN);
+
+		if (ts->intr_status & TOUCH_IRQ_LPWG_LONGPRESS_UP)
+			touch_send_uevent(ts, TOUCH_UEVENT_LPWG_LONGPRESS_UP);
+
+		if (ts->intr_status & TOUCH_IRQ_LPWG_SINGLE_WAKEUP)
+			touch_send_uevent(ts, TOUCH_UEVENT_LPWG_SINGLE_WAKEUP);
+
+		if (ts->intr_status & TOUCH_IRQ_LPWG_LONGPRESS_DOWN_AROUND)
+			touch_send_uevent(ts, TOUCH_UEVENT_LPWG_LONGPRESS_DOWN_AROUND);
+
+		if (ts->intr_status & TOUCH_IRQ_LPWG_LONGPRESS_UP_AROUND)
+			touch_send_uevent(ts, TOUCH_UEVENT_LPWG_LONGPRESS_UP_AROUND);
+
 	} else {
+		if (ts->role.use_synaptics_touchcomm)
+			mutex_unlock(&ts->finger_mask_lock);
+	
 		if (ret == -EGLOBALRESET) {
 			queue_delayed_work(ts->wq, &ts->panel_reset_work, 0);
 		} else if (ret == -EHWRESET_ASYNC) {
@@ -254,8 +281,11 @@ irqreturn_t touch_irq_thread(int irq, void *dev_id)
 		}
 	}
 
-	mutex_unlock(&ts->lock);
-    pm_qos_update_request(&ts->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+	if (ts->role.use_synaptics_touchcomm)
+		mutex_unlock(&ts->irq_lock);
+	else
+		mutex_unlock(&ts->lock);
+	pm_qos_update_request(&ts->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 
 	return IRQ_HANDLED;
 }
@@ -411,6 +441,8 @@ static void touch_init_locks(struct touch_core_data *ts)
 	TOUCH_TRACE();
 
 	mutex_init(&ts->lock);
+	mutex_init(&ts->irq_lock);
+	mutex_init(&ts->finger_mask_lock);
 	device_init_wakeup(ts->dev, true);
 }
 
@@ -707,6 +739,11 @@ char *uevent_str[TOUCH_UEVENT_SIZE][2] = {
 	{"TOUCH_GESTURE_WAKEUP=WATER_MODE_OFF", NULL},
 	{"TOUCH_GESTURE_WAKEUP=AI_BUTTON", NULL},
 	{"TOUCH_GESTURE_WAKEUP=AI_PICK", NULL},
+	{"TOUCH_GESTURE_WAKEUP=LONG_DOWN", NULL},
+	{"TOUCH_GESTURE_WAKEUP=LONG_UP", NULL},
+	{"TOUCH_GESTURE_WAKEUP=SINGLE_WAKEUP", NULL},
+	{"TOUCH_GESTURE_WAKEUP=LONG_DOWN_AROUND", NULL},
+	{"TOUCH_GESTURE_WAKEUP=LONG_UP_AROUND", NULL},
 };
 
 void touch_send_uevent(struct touch_core_data *ts, int type)
@@ -724,6 +761,11 @@ void touch_send_uevent(struct touch_core_data *ts, int type)
 		kobject_uevent_env(&device_uevent_touch.kobj,
 				KOBJ_CHANGE, uevent_str[type]);
 		TOUCH_I("%s\n",  uevent_str[type][0]);
+		touch_report_all_event(ts);
+	} else if (type == TOUCH_UEVENT_LPWG_LONGPRESS_UP) {
+		kobject_uevent_env(&device_uevent_touch.kobj,
+				KOBJ_CHANGE, uevent_str[type]);
+		TOUCH_I("%s  (before store_lpwg_data pm_relax)\n", uevent_str[type][0]);
 		touch_report_all_event(ts);
 	}
 	switch (type) {
@@ -854,6 +896,11 @@ static int touch_notify(struct touch_core_data *ts,
 
 		case NOTIFY_EARJACK:
 			atomic_set(&ts->state.earjack, *(int *)data);
+			ret = ts->driver->notify(ts->dev, event, data);
+			break;
+
+		case NOTIFY_DUALSCREEN_STATE:
+			atomic_set(&ts->state.dualscreen, *(int *)data);
 			ret = ts->driver->notify(ts->dev, event, data);
 			break;
 
@@ -1209,6 +1256,15 @@ static int touch_core_probe_normal(struct platform_device *pdev)
 	if (ret < 0) {
 		TOUCH_E("failed to initialize platform_data\n");
 		return -EINVAL;
+	}
+
+	/* Supporting code for Synaptics TouchComm packet-based data protocol
+	 * Need to change to code using DTS (After changing the slave address / Next model) */
+	if (is_ddic_name("r66456") || is_ddic_name("r66456a")) {
+		TOUCH_I("Use Synaptics TouchComm packet-based data protocol\n");
+		ts->role.use_synaptics_touchcomm = 1;
+	} else {
+		ts->role.use_synaptics_touchcomm = 0;
 	}
 
 	ret = ts->driver->probe(ts->dev);

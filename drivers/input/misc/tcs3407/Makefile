@@ -10,6 +10,7 @@ ccflags-$(CONFIG_SENSORS_TCS3407)	:= -DCONFIG_AMS_OPTICAL_SENSOR_3407
 
 #ifeq ($(CONFIG_TCS3407_AMS_DEBUG_LOG), y)
 ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DCONFIG_AMS_DEBUG_LOG
+#ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DCONFIG_AMS_CORE_LOG
 #endif
 
 #ifeq ($(CONFIG_TCS3407_AMS_OPTICAL_SENSOR_ALS), y)
@@ -23,6 +24,9 @@ ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DCONFIG_AMS_OPTICAL_SENSOR_ALS_RGB
 #ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DALS_AUTOGAIN
 #ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DAMS_SW_FLICKER
 
+ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DAMS_BIN_2048_MODE1
+#ccflags-$(CONFIG_SENSORS_TCS3407)	+= -DAMS_BIN_2048_MODE2
+ 
 
 #
 # Include Paths
@@ -45,7 +49,10 @@ obj-y	+= osal_linux_input/src/osal_linux_input_als.o
 obj-y	+= tcs3407_dev_ctrl_block/src/ams_device_control_block.o
 obj-y	+= tcs3407_dev_ctrl_block/src/ams_device_control_block_init.o
 obj-y	+= dev_com_iface/src/ams_device_com_interface.o
-obj-y	+= ams_fft.o
+
+obj-y	+= ams_fft_2048.o
+#obj-y	+= ams_fft.o
+
 
 #ifeq ($(CONFIG_TCS3407_AMS_OPTICAL_SENSOR_ALS), y)
 obj-y	+= algorithm_als/src/ams_als_API_config.o

@@ -20,3 +20,8 @@ config FINGERPRINT_GOODIX_GF3208
         tristate "Goodix GF3208 fingerprint drvier support"
 	help
           Say Y here to enable goodix fingerprint driver support
+
+config BBK_ET713
+	tristate "Egis ET713 fingerprint drvier support"
+	help
+	  Say Y here to enable et713 fingerprint driver support!

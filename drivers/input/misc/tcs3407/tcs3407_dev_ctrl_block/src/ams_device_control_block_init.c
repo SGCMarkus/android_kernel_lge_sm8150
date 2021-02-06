@@ -178,6 +178,7 @@ bool _3407_flickerInit(ams_deviceCtx_t * ctx){
     flickerCtx->lastValid.freq100Hz = NOT_VALID;
     flickerCtx->lastValid.freq120Hz = NOT_VALID;
     flickerCtx->lastValid.mHz = 0;
+    //ctx->valid_flickerhz_count = 0;
 
 //    AMS_DISABLE_FLICKER_AUTOGAIN(HIGH);/*Disable flicker autogain */
 //    ams_setByte(ctx->portHndl, DEVREG_FD_CFG0, ((FD_SAMPLES_256) | (FD_COMPARE_4_32NDS)));
@@ -201,7 +202,7 @@ static void ams_deviceSoftReset(ams_deviceCtx_t * ctx)
 
     // Need 1 msec delay
     // sns_busy_wait(sns_convert_ns_to_ticks(1 * 1000 * 1000));
-    mdelay(10);
+    mdelay(1);
 
     // Recover the previous enable setting
     ams_setByte(ctx->portHndl, DEVREG_ENABLE, ctx->shadowEnableReg);

@@ -53,7 +53,7 @@ int amsAlg_als_getResult(amsAlsContext_t * ctx, amsAlsResult_t * outData){
     outData->irrWideband = ctx->results.irrWideband;
     outData->mLux_ave  = ctx->results.mLux_ave / AMS_LUX_AVERAGE_COUNT;
     outData->IR  = ctx->results.IR;
-    outData->CCT = ctx->results.CCT;
+    outData->saturation = ctx->results.saturation;
     outData->adaptive = ctx->results.adaptive;
     if (ctx->notStableMeasurement) {
         ctx->notStableMeasurement = false;

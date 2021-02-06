@@ -40,10 +40,8 @@ static void als_getDefaultCalibrationData(ams_ccb_als_calibration_t * data)
 {
     if (data != NULL) {
 #ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB
-#ifdef CONFIG_AMS_ALS_CRGBW
         data->Wbc = AMS_ALS_Wbc;
         data->C_coef = AMS_ALS_C_COEF;
-#endif
         data->R_coef = AMS_ALS_R_COEF;
         data->G_coef = AMS_ALS_G_COEF;
         data->B_coef = AMS_ALS_B_COEF;

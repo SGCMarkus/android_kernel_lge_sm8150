@@ -37,43 +37,7 @@
 
 #define CPU_FRIENDLY_FACTOR_1024        1
 #define AMS_ALS_GAIN_FACTOR             1000
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_CLEAR
-#define AMS_ALS_FACTOR                  1000
-#define AMS_ALS_D_FACTOR                (101)
-#define AMS_ALS_L1_FACTOR               (1.75 * AMS_ALS_FACTOR)
-#define AMS_ALS_L2_FACTOR               (0.63 * AMS_ALS_FACTOR)
-#define AMS_ALS_L3_FACTOR               (1 * AMS_ALS_FACTOR)
-#endif
 
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_ALS_RGB
-#ifdef CONFIG_AMS_OPTICAL_SENSOR_399x
-#define AMS_ALS_Cc                      (31.94 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_Rc                      (30.33 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_Gc                      (46.38 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_Bc                      (48.63 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_R_COEF                  (195)
-#define AMS_ALS_G_COEF                  (1000)
-#define AMS_ALS_B_COEF                  (-293)
-#define AMS_ALS_D_FACTOR                (436)
-#define AMS_ALS_CT_COEF                 (4417)
-#define AMS_ALS_CT_OFFSET               (1053)
-#elif defined(CONFIG_AMS_ALS_CRGBW) /* TODO:  GET APPLICABLE VALUES (THEY'RE CURRENTLY TBD) */
-#define AMS_ALS_FACTOR                  1000
-#define AMS_ALS_Cc                      (111 * CPU_FRIENDLY_FACTOR_1024)
-//#define AMS_ALS_Cc                      (118 * CPU_FRIENDLY_FACTOR_1024)
-
-#define AMS_ALS_Rc                      (112 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_Gc                      (172 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_Bc                      (180 * CPU_FRIENDLY_FACTOR_1024)
-#define AMS_ALS_C_COEF                  (1000)
-#define AMS_ALS_R_COEF                  (500)
-#define AMS_ALS_G_COEF                  (400)
-#define AMS_ALS_B_COEF                  (-100)
-#define AMS_ALS_D_FACTOR                (436)
-#define AMS_ALS_CT_COEF                 (4417)
-#define AMS_ALS_CT_OFFSET               (1053)
-#define AMS_ALS_Wbc                     (111 * CPU_FRIENDLY_FACTOR_1024) /* actual value is TBD */
-#else
 #define AMS_ALS_Cc                      (111 * CPU_FRIENDLY_FACTOR_1024)
 //#define AMS_ALS_Cc                      (118 * CPU_FRIENDLY_FACTOR_1024)
 
@@ -81,20 +45,19 @@
 #define AMS_ALS_Gc                      (172 * CPU_FRIENDLY_FACTOR_1024)
 #define AMS_ALS_Bc                      (180 * CPU_FRIENDLY_FACTOR_1024)
 #define AMS_ALS_R_COEF                  (195)
+#define AMS_ALS_C_COEF                  (195)
 #define AMS_ALS_G_COEF                  (1000)
 #define AMS_ALS_B_COEF                  (-293)
 #define AMS_ALS_D_FACTOR                (436)
 #define AMS_ALS_CT_COEF                 (4417)
 #define AMS_ALS_CT_OFFSET               (1053)
-#endif
-#endif
-#ifdef CONFIG_AMS_ALS_CRWBI
+
+
 #define AMS_WIDEBAND_SCALE_FACTOR       1000
 #define AMS_ALS_Wbc                     (111 * CPU_FRIENDLY_FACTOR_1024) /* actual value is TBD */
 #define AMS_ALS_WB_C_FACTOR             (0.79 * AMS_WIDEBAND_SCALE_FACTOR)
 #define AMS_ALS_WB_R_FACTOR             (0.54 * AMS_WIDEBAND_SCALE_FACTOR)
 #define AMS_ALS_WB_B_FACTOR             (0.39 * AMS_WIDEBAND_SCALE_FACTOR)
-#endif
 
 #define AMS_ALS_TIMEBASE                (2780) /* in uSec, see data sheet */
 #define AMS_ALS_ADC_MAX_COUNT           (1024) /* see data sheet */
@@ -102,6 +65,9 @@
 #define AMS_ALS_THRESHOLD_HIGH          (5) /* in % */
 
 #define AMS_ALS_ATIME                   (50000)
+#define AMS_ALS_STEP_TIME                   (999)/*2.78msec*/
+
+
 
 
 #ifdef NOT_IMPLEMENTED

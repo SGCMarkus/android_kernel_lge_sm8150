@@ -7,7 +7,9 @@
 # Touch Core Driver Common Header Code..!!
 ccflags-y += -I$(srctree)/drivers/input/touchscreen/lge/
 
+obj-$(CONFIG_LGE_TOUCH_SYNAPTICS_S3618)		+= s3618/
 obj-$(CONFIG_LGE_TOUCH_SYNAPTICS_S3706)		+= s3706/
+obj-$(CONFIG_LGE_TOUCH_SYNAPTICS_S3706_MH2)	+= s3706_mh2/
 
 obj-$(CONFIG_LGE_TOUCH_SYNAPTICS_S3707)		+= touch_s3707.o
 obj-$(CONFIG_LGE_TOUCH_SYNAPTICS_S3707)		+= touch_s3707_fw_upgrade.o
