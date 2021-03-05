@@ -311,7 +311,7 @@ endif
 ifdef CONFIG_RETPOLINE
   objtool_args += --retpoline
 endif
-
+endif
 
 ifdef CONFIG_MODVERSIONS
 objtool_o = $(@D)/.tmp_$(@F)
