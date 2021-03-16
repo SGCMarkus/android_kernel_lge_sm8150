@@ -266,6 +266,7 @@ static void log_file_size_check(struct device *dev)
 
 	switch (boot_mode) {
 	case TOUCH_NORMAL_BOOT:
+	case TOUCH_RECOVERY_MODE:
 		fname = "/data/vendor/touch/touch_self_test.txt";
 		break;
 	case TOUCH_MINIOS_AAT:
@@ -362,6 +363,7 @@ static void write_file(struct device *dev, char *data, int write_time)
 
 	switch (boot_mode) {
 	case TOUCH_NORMAL_BOOT:
+	case TOUCH_RECOVERY_MODE:
 		fname = "/data/vendor/touch/touch_self_test.txt";
 		break;
 	case TOUCH_MINIOS_AAT:
