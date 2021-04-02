@@ -4897,8 +4897,10 @@ static int ext4_commit_super(struct super_block *sb, int sync)
 	}
 #endif
 
-	if (!sbh || block_device_ejected(sb))
-		return error;
+	if (!sbh)
+		return -EINVAL;
+	if (block_device_ejected(sb))
+		return -ENODEV;
 
 	/*
 	 * If the file system is mounted read-only, don't update the
