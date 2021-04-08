@@ -1,0 +1,9 @@
+#替换volte图标
+sudo cp ./lge-res.apk ./system_m/system/framework/lge-res/
+#替换桌面
+sudo mv  ./system_m/system/priv-app/LGHome/* ./app
+sudo cp ./LGHome.apk ./system_m/system/priv-app/LGHome/
+#更改权限
+sudo chmod 0755
+#OP分区修改
+sudo mv totc.cfg OP
