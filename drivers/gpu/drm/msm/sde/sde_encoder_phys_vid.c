@@ -950,7 +950,7 @@ static void sde_encoder_phys_vid_get_hw_resources(
 static int _sde_encoder_phys_vid_wait_for_vblank(
 		struct sde_encoder_phys *phys_enc, bool notify)
 {
-	struct sde_encoder_wait_info wait_info = {0, };
+	struct sde_encoder_wait_info wait_info;
 	int ret = 0;
 	u32 event = 0;
 	u32 event_helper = 0;
@@ -998,12 +998,14 @@ end:
 		phys_enc->parent_ops.handle_frame_done(
 				phys_enc->parent, phys_enc,
 				event);
+
 #if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
 	if (ret == -ETIMEDOUT) {
 		pr_err("%s : CoverDisplay unexpected error happens\n", __func__);
 		set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_OFF);
 	}
 #endif
+
 	return ret;
 }
 
