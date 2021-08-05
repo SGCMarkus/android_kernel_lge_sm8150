@@ -611,6 +611,15 @@ static int uart_write(struct tty_struct *tty,
 		return 0;
 	}
 
+#ifdef CONFIG_LGE_USB_DEBUGGER
+	if (port) {
+		if (uart_console(port) && tty_port_suspended(tty->port)) {
+			uart_port_unlock(port, flags);
+			return -ENODEV;
+		}
+	}
+#endif
+
 	while (port) {
 		c = CIRC_SPACE_TO_END(circ->head, circ->tail, UART_XMIT_SIZE);
 		if (count < c)
@@ -2139,6 +2148,13 @@ int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
 	/* Nothing to do if the console is not suspending */
 	if (!console_suspend_enabled && uart_console(uport))
 		goto unlock;
+
+#ifdef CONFIG_LGE_USB_DEBUGGER
+	if (uart_console(uport)) {
+		disable_irq(uport->irq);
+		console_stop(uport->cons);
+	}
+#endif
 
 	uport->suspended = 1;
 

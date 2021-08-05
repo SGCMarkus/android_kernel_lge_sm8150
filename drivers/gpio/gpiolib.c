@@ -27,6 +27,9 @@
 #include <linux/poll.h>
 #include <linux/timekeeping.h>
 #include <uapi/linux/gpio.h>
+#ifdef CONFIG_PROC_FS
+#include <linux/proc_fs.h>
+#endif
 
 #include "gpiolib.h"
 
@@ -3671,7 +3674,7 @@ static int __init gpiolib_dev_init(void)
 }
 core_initcall(gpiolib_dev_init);
 
-#ifdef CONFIG_DEBUG_FS
+#if defined(CONFIG_DEBUG_FS) || defined(CONFIG_PROC_FS)
 
 static void gpiolib_dbg_show(struct seq_file *s, struct gpio_device *gdev)
 {
@@ -3806,6 +3809,9 @@ static int __init gpiolib_debugfs_init(void)
 	/* /sys/kernel/debug/gpio */
 	(void) debugfs_create_file("gpio", S_IFREG | S_IRUGO,
 				NULL, NULL, &gpiolib_operations);
+#ifdef CONFIG_PROC_FS
+	proc_create("gpio", 0444, NULL, &gpiolib_operations);
+#endif
 	return 0;
 }
 subsys_initcall(gpiolib_debugfs_init);

@@ -34,6 +34,38 @@
 
 #include "peripheral-loader.h"
 
+// LGE_ModemBSP_S, [LDB]
+#include <soc/qcom/smem_type.h>
+// LGE_ModemBSP_E, [LDB]
+
+// LGE_ModemBSP_S, [LDB]
+/* Added getting MSM chip version info, 2014-12-21, secheol.pyo@lge.com*/
+#define FEATURE_LGE_MODEM_LDB_EXCEPTION
+#define FEATURE_LGE_MODEM_CHIPVER_INFO
+
+#ifdef FEATURE_LGE_MODEM_LDB_EXCEPTION
+#define LEN_EXCEP_MSG	100
+#define EXCEPTION_STR   19
+#endif /* FEATURE_LGE_MODEM_LDB_EXCEPTION */
+
+#ifdef FEATURE_LGE_MODEM_CHIPVER_INFO
+typedef struct modem_chip_info {
+	uint32_t chip_version;
+	uint32_t chip_id;
+	uint32_t chip_family;
+} lg_chip_info;
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO */
+
+/* FEATURE_LGE_MODEM_DEBUG_INFO, 2014-08-18, jin.park@lge.com */
+#define FEATURE_LGE_MODEM_DEBUG_INFO
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+#include <asm/uaccess.h>
+#include <linux/syscalls.h>
+
+#define MAX_WRITE_SSR   2
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+// LGE_ModemBSP_E, [LDB]
+
 #define XO_FREQ			19200000
 #define PROXY_TIMEOUT_MS	10000
 #define MAX_SSR_REASON_LEN	256U
@@ -170,6 +202,205 @@ static struct msm_bus_scale_pdata scm_pas_bus_pdata = {
 static uint32_t scm_perf_client;
 static int scm_pas_bw_count;
 static DEFINE_MUTEX(scm_pas_bw_mutex);
+
+// LGE_ModemBSP_S, [LDB]
+struct lge_hw_smem_id2_type {
+			uint32_t sbl_log_meta_info;
+			uint32_t sbl_delta_time;
+			uint32_t lcd_maker;
+			uint32_t secure_auth;
+			uint32_t build_info;			   /* build type user:0 userdebug:1 eng:2 */
+			int modem_reset;
+#ifdef FEATURE_LGE_MODEM_CHIPVER_INFO
+			uint32_t mChipVersion;
+			uint32_t mChipId;
+			uint32_t mChipFamily;
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO */
+#ifdef FEATURE_LGE_MODEM_LDB_EXCEPTION
+    char lge_excep_msg[LEN_EXCEP_MSG];
+#endif /* FEATURE_LGE_MODEM_LDB_EXCEPTION */
+};
+
+
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+enum modem_ssr_event {
+    MODEM_SSR_ERR_FATAL = 0x01,
+    MODEM_SSR_WATCHDOG_BITE,
+    MODEM_SSR_UNEXPECTED_RESET1,
+    MODEM_SSR_UNEXPECTED_RESET2,
+};
+
+struct modem_debug_info {
+    char save_ssr_reason[MAX_SSR_REASON_LEN];
+#ifdef FEATURE_LGE_MODEM_CHIPVER_INFO
+    char save_msm_chip_info[MAX_SSR_REASON_LEN];
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO */
+#ifdef FEATURE_LGE_MODEM_LDB_EXCEPTION
+    char save_excep_reason[LEN_EXCEP_MSG];
+#endif /* FEATURE_LGE_MODEM_LDB_EXCEPTION */
+    int modem_ssr_event;
+    int modem_ssr_level;
+    struct workqueue_struct *modem_ssr_queue;
+    struct work_struct modem_ssr_report_work;
+};
+struct modem_debug_info modem_debug;
+
+static void modem_ssr_report_work_fn(struct work_struct *work)
+{
+
+    int fd, ret = 0;
+    char report_index = 0;
+    char index_to_write = 0;
+    char path_prefix[]="/data/logger/modem_ssr_report";
+    char index_file_path[]="/data/logger/modem_ssr_index";
+    char report_file_path[128];
+#if defined (FEATURE_LGE_MODEM_CHIPVER_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION)
+    int i = 0;
+    char chip_info_path[]="/data/logger/modem_chip_info";
+    struct timespec time;
+    struct tm tmresult;
+    char time_stamp[128];
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION */
+    char watchdog_bite[]="Watchdog bite received from modem software!";
+    char unexpected_reset1[]="unexpected reset external modem";
+    char unexpected_reset2[]="MDM2AP_STATUS did not go high";
+
+    mm_segment_t oldfs;
+
+    oldfs = get_fs();
+    set_fs(get_ds());
+
+    fd = sys_open(index_file_path, O_RDONLY, 0664);
+    if (fd < 0) {
+        printk("%s : can't open the index file\n", __func__);
+        report_index = '0';
+    } else {
+        ret = sys_read(fd, &report_index, 1);
+        if (ret < 0) {
+            printk("%s : can't read the index file\n", __func__);
+            report_index = '0';
+        }
+        sys_close(fd);
+    }
+
+    if (report_index == '9') {
+        index_to_write = '0';
+    } else if (report_index >= '0' && report_index <= '8') {
+        index_to_write = report_index + 1;
+    } else {
+        index_to_write = '1';
+        report_index = '0';
+    }
+
+    fd = sys_open(index_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+    if (fd < 0) {
+        printk("%s : can't open the index file\n", __func__);
+        return;
+    }
+
+    ret = sys_write(fd, &index_to_write, 1);
+    if (ret < 0) {
+        printk("%s : can't write the index file\n", __func__);
+        return;
+    }
+
+    ret = sys_close(fd);
+    if (ret < 0) {
+        printk("%s : can't close the index file\n", __func__);
+        return;
+    }
+
+#if defined(FEATURE_LGE_MODEM_CHIPVER_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION)
+	time = __current_kernel_time();
+	time_to_tm(time.tv_sec, sys_tz.tz_minuteswest * 60 * (-1),
+				&tmresult);
+
+	sprintf(time_stamp, "[%02d-%02d %02d:%02d:%02d.%03lu] ",
+		tmresult.tm_mon+1,tmresult.tm_mday,tmresult.tm_hour,
+		tmresult.tm_min,tmresult.tm_sec,(unsigned long) time.tv_nsec/1000000);
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION */
+    for (i = 0; i < MAX_WRITE_SSR; i++){
+        if (i == 0){
+			sprintf(report_file_path, "%s%c", path_prefix, report_index);
+			fd = sys_open(report_file_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+        }
+        else if (i == 1){
+			fd = sys_open(path_prefix, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+        }
+
+		if (fd < 0) {
+			printk("%s : can't open the report file\n", __func__);
+			return;
+		}
+
+#if defined (FEATURE_LGE_MODEM_CHIPVER_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION)
+		ret = sys_write(fd, time_stamp, strlen(time_stamp));
+
+		if (ret < 0) {
+			printk("%s : can't write the report file\n", __func__);
+			return;
+		}
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION */
+		switch (modem_debug.modem_ssr_event) {
+			case MODEM_SSR_ERR_FATAL:
+				ret = sys_write(fd, modem_debug.save_ssr_reason, strlen(modem_debug.save_ssr_reason));
+                                ret = sys_write(fd, "\nException Cause:  ", EXCEPTION_STR);
+                                if (modem_debug.save_excep_reason != NULL)
+                                    ret = sys_write(fd, modem_debug.save_excep_reason, strlen(modem_debug.save_excep_reason));
+				break;
+			case MODEM_SSR_WATCHDOG_BITE:
+				ret = sys_write(fd, watchdog_bite, sizeof(watchdog_bite) - 1);
+				break;
+			case MODEM_SSR_UNEXPECTED_RESET1:
+				ret = sys_write(fd, unexpected_reset1, sizeof(unexpected_reset1) - 1);
+				break;
+			case MODEM_SSR_UNEXPECTED_RESET2:
+				ret = sys_write(fd, unexpected_reset2, sizeof(unexpected_reset2) - 1);
+				break;
+			default:
+				printk("%s : modem_ssr_event error %d\n", __func__, modem_debug.modem_ssr_event);
+				break;
+		}
+
+		if (ret < 0) {
+			printk("%s : can't write the report file\n", __func__);
+			return;
+		}
+
+		ret = sys_close(fd);
+
+		if (ret < 0) {
+			printk("%s : can't close the report file\n", __func__);
+			return;
+		}
+    }
+
+#ifdef FEATURE_LGE_MODEM_CHIPVER_INFO
+	fd = sys_open(chip_info_path, O_WRONLY | O_CREAT | O_TRUNC, 0664);
+	if (fd < 0) {
+		pr_err("can't open the report file\n");
+		return;
+	}
+
+	ret = sys_write(fd, modem_debug.save_msm_chip_info, strlen(modem_debug.save_msm_chip_info));
+	if (ret < 0) {
+		pr_err("can't write the report file\n");
+		return;
+    }
+
+    ret = sys_close(fd);
+    if (ret < 0) {
+        printk("%s : can't close the report file\n", __func__);
+        return;
+    }
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO */
+
+    sys_sync();
+    set_fs(oldfs);
+
+}
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+// LGE_ModemBSP_E, [LDB]
 
 static int scm_pas_enable_bw(void)
 {
@@ -846,12 +1077,22 @@ static struct pil_reset_ops pil_ops_trusted = {
 	.deinit_image = pil_deinit_image_trusted,
 };
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+int qct_wcnss_crash;
+#endif
+
 static void log_failure_reason(const struct pil_tz_data *d)
 {
 	size_t size;
 	char *smem_reason, reason[MAX_SSR_REASON_LEN];
 	const char *name = d->subsys_desc.name;
 
+// LGE_ModemBSP_S, [LDB]
+#if defined(FEATURE_LGE_MODEM_CHIPVER_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION)
+	struct lge_hw_smem_id2_type *chip_info_str;
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION */
+// LGE_ModemBSP_E, [LDB]	
+	
 	if (d->smem_id == -1)
 		return;
 
@@ -868,6 +1109,52 @@ static void log_failure_reason(const struct pil_tz_data *d)
 
 	strlcpy(reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
 	pr_err("%s subsystem failure reason: %s.\n", name, reason);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	if(strstr(name, "modem") && strstr(reason, "wlan_process:1"))
+		qct_wcnss_crash = 1;
+#endif
+
+// LGE_ModemBSP_S, [LDB]
+if(strstr(name, "modem")) {
+#if defined(FEATURE_LGE_MODEM_CHIPVER_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION)
+        chip_info_str = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_ID_VENDOR2, &size);
+        if (!chip_info_str || !size) {
+            pr_err("%s SFR: (unknown, qcom_smem_get failed).\n", name);
+	    return;
+	}
+        pr_err("[LGE] MSM Chip version : %d, Family : %d, Id : %d\n", chip_info_str->mChipVersion,chip_info_str->mChipFamily, chip_info_str->mChipId);
+#endif /* FEATURE_LGE_MODEM_CHIPVER_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION */
+
+#if defined(FEATURE_LGE_MODEM_DEBUG_INFO) && defined(FEATURE_LGE_MODEM_LDB_EXCEPTION) && defined(FEATURE_LGE_MODEM_CHIPVER_INFO)
+    if (modem_debug.modem_ssr_level != RESET_SOC) {
+        strlcpy(modem_debug.save_ssr_reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
+
+        snprintf(modem_debug.save_msm_chip_info,
+                  MAX_SSR_REASON_LEN,
+                  "[LGE] MSM Chip version : %d, Family : %d, Id : %d\n",
+                  chip_info_str->mChipVersion,
+                  chip_info_str->mChipFamily,
+                  chip_info_str->mChipId);
+        if (chip_info_str->lge_excep_msg 
+		!= NULL)
+        {
+            strlcpy(modem_debug.save_excep_reason,
+                 chip_info_str->lge_excep_msg,
+                 LEN_EXCEP_MSG);
+        }
+        modem_debug.modem_ssr_event = MODEM_SSR_ERR_FATAL;
+        queue_work(modem_debug.modem_ssr_queue, &modem_debug.modem_ssr_report_work);
+    }
+
+    chip_info_str->lge_excep_msg[0] = '\0';
+
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO && FEATURE_LGE_MODEM_LDB_EXCEPTION && FEATURE_LGE_MODEM_CHIPVER_INFO */
+	smem_reason[0] = '\0';
+	wmb();
+}
+// LGE_ModemBSP_E, [LDB]
+
 }
 
 static int subsys_shutdown(const struct subsys_desc *subsys, bool force_stop)
@@ -951,6 +1238,15 @@ static irqreturn_t subsys_err_fatal_intr_handler (int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 	subsys_set_crash_status(d->subsys, CRASH_STATUS_ERR_FATAL);
+	
+// LGE_ModemBSP_S, [LDB] //restart_modem
+if(strstr(d->subsys_desc.name, "modem")) {
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+    modem_debug.modem_ssr_level = subsys_get_restart_level(d->subsys);
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+}
+// LGE_ModemBSP_E, [LDB]
+	
 	log_failure_reason(d);
 	subsystem_restart_dev(d->subsys);
 
@@ -971,6 +1267,18 @@ static irqreturn_t subsys_wdog_bite_irq_handler(int irq, void *dev_id)
 	subsys_set_crash_status(d->subsys, CRASH_STATUS_WDOG_BITE);
 	log_failure_reason(d);
 	subsystem_restart_dev(d->subsys);
+	
+// LGE_ModemBSP_S, [LDB]
+if(strstr(d->subsys_desc.name, "modem")) { 
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+        modem_debug.modem_ssr_level = subsys_get_restart_level(d->subsys);
+        if (modem_debug.modem_ssr_level != RESET_SOC) {
+            modem_debug.modem_ssr_event = MODEM_SSR_WATCHDOG_BITE;
+            queue_work(modem_debug.modem_ssr_queue, &modem_debug.modem_ssr_report_work);
+        }
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+}
+// LGE_ModemBSP_E, [LDB]
 
 	return IRQ_HANDLED;
 }
@@ -1163,6 +1471,21 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 
 	init_completion(&d->stop_ack);
 
+// LGE_ModemBSP_S, [LDB]
+if(strstr(d->desc.name, "modem")) {
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+        modem_debug.modem_ssr_queue = alloc_workqueue("modem_ssr_queue", 0, 0);
+        if (!modem_debug.modem_ssr_queue) {
+            printk("could not create modem_ssr_queue\n");
+        }
+        modem_debug.modem_ssr_event = 0;
+        modem_debug.modem_ssr_level = RESET_SOC;
+        INIT_WORK(&modem_debug.modem_ssr_report_work, modem_ssr_report_work_fn);
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+}
+// LGE_ModemBSP_E, [LDB]
+
+
 	d->subsys_desc.name = d->desc.name;
 	d->subsys_desc.owner = THIS_MODULE;
 	d->subsys_desc.dev = &pdev->dev;
@@ -1306,6 +1629,17 @@ static int pil_tz_driver_exit(struct platform_device *pdev)
 	destroy_ramdump_device(d->minidump_dev);
 #endif
 	pil_desc_release(&d->desc);
+
+// LGE_ModemBSP_S, [LDB]
+if(strstr(d->desc.name, "modem")) { 
+#ifdef FEATURE_LGE_MODEM_DEBUG_INFO
+    if (modem_debug.modem_ssr_queue) {
+            destroy_workqueue(modem_debug.modem_ssr_queue);
+            modem_debug.modem_ssr_queue = NULL;
+    }
+#endif /* FEATURE_LGE_MODEM_DEBUG_INFO */
+}
+// LGE_ModemBSP_E, [LDB]
 
 	return 0;
 }

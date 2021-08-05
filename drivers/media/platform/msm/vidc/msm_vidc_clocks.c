@@ -491,6 +491,19 @@ static unsigned long msm_vidc_max_freq(struct msm_vidc_core *core)
 	return freq;
 }
 
+#ifdef CONFIG_MACH_LGE
+static unsigned long msm_vidc_higher_freq(struct msm_vidc_inst *inst)
+{
+	struct clock_data *dcvs = NULL;
+	unsigned long freq = 0;
+
+	dcvs = &inst->clk_data;
+	freq = dcvs->load_higher;
+	dprintk(VIDC_PROF, "Higher rate = %lu\n", freq);
+	return freq;
+}
+#endif
+
 void msm_comm_free_freq_table(struct msm_vidc_inst *inst)
 {
 	struct vidc_freq_data *temp, *next;
@@ -732,6 +745,10 @@ static unsigned long msm_vidc_calc_freq(struct msm_vidc_inst *inst,
 		allowed_clks_tbl[i+1].clock_rate : dcvs->load_norm;
 	dcvs->load_high = i > 0 ? allowed_clks_tbl[i-1].clock_rate :
 		dcvs->load_norm;
+#ifdef CONFIG_MACH_LGE
+	dcvs->load_higher = i > 1 ? allowed_clks_tbl[i-2].clock_rate :
+		dcvs->load_high;
+#endif
 
 	dprintk(VIDC_PROF,
 		"%s: inst %pK: %x : filled len %d required freq %lu load_norm %d\n",
@@ -979,7 +996,14 @@ int msm_comm_scale_clocks(struct msm_vidc_inst *inst)
 
 	if (inst->clk_data.buffer_counter < DCVS_FTB_WINDOW || is_turbo ||
 		msm_vidc_clock_voting) {
+#ifdef CONFIG_MACH_LGE
+		if (is_turbo)
+			inst->clk_data.min_freq = msm_vidc_higher_freq(inst);
+		else
+			inst->clk_data.min_freq = msm_vidc_max_freq(inst->core);
+#else
 		inst->clk_data.min_freq = msm_vidc_max_freq(inst->core);
+#endif
 		inst->clk_data.dcvs_flags = 0;
 	}
 

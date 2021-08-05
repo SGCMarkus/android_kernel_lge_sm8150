@@ -2589,7 +2589,7 @@ static int cam_ife_mgr_config_hw(void *hw_mgr_priv,
 		if (cfg->init_packet) {
 			rc = wait_for_completion_timeout(
 				&ctx->config_done_complete,
-				msecs_to_jiffies(30));
+				msecs_to_jiffies(200)); //CST, 30->200
 			if (rc <= 0) {
 				CAM_ERR(CAM_ISP,
 					"config done completion timeout for req_id=%llu rc=%d ctx_index %d",
@@ -2739,10 +2739,14 @@ static int cam_ife_mgr_pause_hw(struct cam_ife_hw_mgr_ctx *ctx)
 	return cam_ife_mgr_bw_control(ctx, CAM_VFE_BW_CONTROL_EXCLUDE);
 }
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 static int cam_ife_mgr_resume_hw(struct cam_ife_hw_mgr_ctx *ctx)
 {
 	return cam_ife_mgr_bw_control(ctx, CAM_VFE_BW_CONTROL_INCLUDE);
 }
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 /* entry function: stop_hw */
 static int cam_ife_mgr_stop_hw(void *hw_mgr_priv, void *stop_hw_args)
@@ -3119,8 +3123,12 @@ start_only:
 
 	CAM_DBG(CAM_ISP, "START IFE OUT ... in ctx id:%d",
 		ctx->ctx_index);
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 	if (start_isp->start_only)
 		cam_ife_mgr_resume_hw(ctx);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 	/* start the IFE out devices */
 	for (i = 0; i < CAM_IFE_HW_OUT_RES_MAX; i++) {
@@ -3237,6 +3245,8 @@ static int cam_ife_mgr_write(void *hw_mgr_priv, void *write_args)
 	return -EPERM;
 }
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 static int cam_ife_mgr_reset(void *hw_mgr_priv, void *hw_reset_args)
 {
 	struct cam_ife_hw_mgr            *hw_mgr       = hw_mgr_priv;
@@ -3274,6 +3284,8 @@ static int cam_ife_mgr_reset(void *hw_mgr_priv, void *hw_reset_args)
 end:
 	return rc;
 }
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 static int cam_ife_mgr_release_hw(void *hw_mgr_priv,
 					void *release_hw_args)
@@ -4428,6 +4440,14 @@ end:
 	return rc;
 }
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+static int cam_ife_mgr_resume_hw(struct cam_ife_hw_mgr_ctx *ctx)
+{
+	return cam_ife_mgr_bw_control(ctx, CAM_VFE_BW_CONTROL_INCLUDE);
+}
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 static int cam_ife_mgr_sof_irq_debug(
 	struct cam_ife_hw_mgr_ctx *ctx,
@@ -6466,7 +6486,11 @@ int cam_ife_hw_mgr_init(struct cam_hw_mgr_intf *hw_mgr_intf, int *iommu_hdl)
 	hw_mgr_intf->hw_prepare_update = cam_ife_mgr_prepare_hw_update;
 	hw_mgr_intf->hw_config = cam_ife_mgr_config_hw;
 	hw_mgr_intf->hw_cmd = cam_ife_mgr_cmd;
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 0
 	hw_mgr_intf->hw_reset = cam_ife_mgr_reset;
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 	hw_mgr_intf->hw_dump = cam_ife_mgr_dump;
 
 	if (iommu_hdl)

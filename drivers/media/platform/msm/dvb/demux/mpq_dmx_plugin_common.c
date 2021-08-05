@@ -1727,6 +1727,12 @@ static int mpq_sdmx_alloc_data_buf(struct mpq_feed *mpq_feed, size_t size)
 	dvb_ringbuffer_init(&mpq_feed->sdmx_buf, desc->virt_base, size);
 	mpq_feed->sdmx_dma_buff.va = desc->virt_base;
 
+//[S][LGDTV][dmb-fwk@lge.com] Modified the code for CMA alloc fail
+//CR Number : 2510991, Case Number : 04126063
+//http://mlm.lge.com/di/browse/MASSFIVEG-2804
+	mpq_feed->sdmx_dma_buff.va = desc->virt_base;
+//[E][LGDTV][dmb-fwk@lge.com] Modified the code for CMA alloc fail
+
 	return 0;
 }
 

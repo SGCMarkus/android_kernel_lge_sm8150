@@ -15,6 +15,7 @@
 #include <linux/interrupt.h>
 #include <linux/list.h>
 #include <linux/ratelimit.h>
+#include <uapi/linux/sched/types.h>
 #include "cam_tasklet_util.h"
 #include "cam_irq_controller.h"
 #include "cam_debug_util.h"
@@ -296,9 +297,28 @@ int cam_tasklet_start(void  *tasklet_info)
 	return 0;
 }
 
+static bool cam_is_rt_policy(unsigned int policy)
+{
+	return policy == SCHED_FIFO || policy == SCHED_RR;
+}
+
 void cam_tasklet_stop(void  *tasklet_info)
 {
 	struct cam_tasklet_info  *tasklet = tasklet_info;
+	unsigned int policy = current->policy;
+	unsigned int rt_priority = current->rt_priority;
+
+	/*
+	* LGE_CHANGE: camera-stability@lge.com 2018-12-19
+	* If the caller task calls the tasklet_kill when it has the rt policy,
+	* the task_kill function can cause an infinite wait state.
+	*/
+	if (cam_is_rt_policy(policy)) {
+		//If task has the rt policy, set the sched policy to normal
+		struct sched_param param = { .sched_priority = 0 };
+		sched_setscheduler_nocheck(current, SCHED_NORMAL, &param);
+		CAM_WARN(CAM_ISP, "task policy was changed to normal.");
+	}
 
 	if (!atomic_read(&tasklet->tasklet_active))
 		return;
@@ -307,6 +327,14 @@ void cam_tasklet_stop(void  *tasklet_info)
 	tasklet_kill(&tasklet->tasklet);
 	tasklet_disable(&tasklet->tasklet);
 	cam_tasklet_flush(tasklet);
+
+	if (cam_is_rt_policy(policy)) {
+		//If task had the rt policy, set the sched policy to rt
+		struct sched_param param = { .sched_priority = rt_priority };
+		sched_setscheduler_nocheck(current, policy, &param);
+		CAM_WARN(CAM_ISP, "task policy was changed to rt.");
+	}
+
 }
 
 /*

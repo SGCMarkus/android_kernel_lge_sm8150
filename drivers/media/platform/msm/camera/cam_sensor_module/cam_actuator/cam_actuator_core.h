@@ -70,4 +70,10 @@ int32_t cam_actuator_driver_cmd(struct cam_actuator_ctrl_t *a_ctrl, void *arg);
  */
 void cam_actuator_shutdown(struct cam_actuator_ctrl_t *a_ctrl);
 
+#ifdef CONFIG_MACH_LGE /*LGE_CHANGE, Enable Lens Temp. Correction Function, 2018-08-17, hongs.lee@lge.com */
+int32_t act_i2c_e2p_read(struct cam_actuator_ctrl_t *a_ctrl, uint32_t e2p_addr, uint16_t *e2p_data, enum camera_sensor_i2c_type data_type);
+int32_t act_i2c_read(struct cam_actuator_ctrl_t *a_ctrl, uint32_t RamAddr, uint16_t *RamData, enum camera_sensor_i2c_type data_type);
+int32_t act_i2c_write(struct cam_actuator_ctrl_t *a_ctrl, uint32_t RamAddr, uint32_t RamData, enum camera_sensor_i2c_type data_type);
+#endif
+
 #endif /* _CAM_ACTUATOR_CORE_H_ */

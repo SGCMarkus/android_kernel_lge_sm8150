@@ -117,6 +117,9 @@ enum fg_debug_flag {
 	FG_CAP_LEARN		= BIT(7), /* Show capacity learning */
 	FG_TTF			= BIT(8), /* Show time to full */
 	FG_FVSS			= BIT(9), /* Show FVSS */
+#ifdef CONFIG_LGE_PM
+	FG_LGE			= BIT(10),
+#endif
 };
 
 enum awake_reasons {
@@ -202,6 +205,9 @@ enum fg_sram_param_id {
 	FG_SRAM_TIMEBASE,
 	/* Entries below here are configurable during initialization */
 	FG_SRAM_CUTOFF_VOLT,
+#ifdef CONFIG_LGE_PM
+	FG_SRAM_CUTOFF_KI_COEFF,
+#endif
 	FG_SRAM_EMPTY_VOLT,
 	FG_SRAM_VBATT_LOW,
 	FG_SRAM_FLOAT_VOLT,

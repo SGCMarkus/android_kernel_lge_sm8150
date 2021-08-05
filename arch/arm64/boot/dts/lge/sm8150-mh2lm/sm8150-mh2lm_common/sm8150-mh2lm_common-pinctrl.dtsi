@@ -1,0 +1,294 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&qupv3_se12_2uart {
+	status = "ok";
+};
+
+&qupv3_se13_4uart {
+	status = "ok";
+};
+
+&qupv3_se3_spi {
+	status = "ok";
+};
+
+&qupv3_se4_i2c {
+	status = "ok";
+};
+
+&tlmm {
+	lge,access-denied-gpios = <4 5 6 7 83 84 85 86 92 93 94 95 98 99 100 101>;
+
+	pmx_sde: pmx_sde {
+		sde_dsi_active: sde_dsi_active {
+			mux {
+				pins = "gpio6";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio6";
+				drive-strength = <8>;   /* 8 mA */
+				bias-disable = <0>;   /* no pull */
+			};
+		};
+
+		sde_dsi_suspend: sde_dsi_suspend {
+			mux {
+				pins = "gpio6";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio6";
+				drive-strength = <2>;   /* 2 mA */
+				bias-pull-down;         /* PULL DOWN */
+			};
+		};
+	};
+
+	pmx_sde_te {
+		sde_te_active: sde_te_active {
+			mux {
+				pins = "gpio8";
+				function = "mdp_vsync";
+			};
+
+			config {
+				pins = "gpio8";
+				drive-strength = <2>;   /* 2 mA */
+				bias-pull-down;         /* PULL DOWN */
+			};
+		};
+
+		sde_te_suspend: sde_te_suspend {
+			mux {
+				pins = "gpio8";
+				function = "mdp_vsync";
+			};
+
+			config {
+				pins = "gpio8";
+				drive-strength = <2>;   /* 2 mA */
+				bias-pull-down;         /* PULL DOWN */
+			};
+		};
+	};
+
+	pmx_ts_reset {
+		ts_reset_active: ts_reset_active {
+			mux {
+				pins = "gpio54";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio54";
+				drive-strength = <6>;
+				bias-pull-up;
+			};
+		};
+
+		ts_reset_suspend: ts_reset_suspend {
+			mux {
+				pins = "gpio54";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio54";
+				drive-strength = <6>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	pmx_ts_int {
+		ts_int_active: ts_int_active {
+			mux {
+				pins = "gpio122";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio122";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+
+		ts_int_suspend: ts_int_suspend {
+			mux {
+				pins = "gpio122";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio122";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	pmx_ts_vdd_en {
+		ts_ftm4_vdd_en_active: ts_ftm4_vdd_en_active {
+			mux {
+				pins = "gpio59";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio59";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+
+		ts_ftm4_vdd_en_suspend: ts_ftm4_vdd_en_suspend {
+			mux {
+				pins = "gpio59";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio59";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	ds2_smart_cover_gpio {
+		 ds2_smartcover_gpio_default: ds2_smartcover_gpio_default {
+			pins = "gpio3";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+			};
+	};
+	ds2_cover_display_back_gpio {
+		 ds2_cover_display_back_gpio_default: ds2_cover_display_back_gpio_default {
+			pins = "gpio121";
+			function = "normal";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+			};
+	};
+
+	pmx_ts_vio_en {
+		ts_ftm4_vio_en_active: ts_ftm4_vio_en_active {
+			mux {
+				pins = "gpio152";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio152";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+
+		ts_ftm4_vio_en_suspend: ts_ftm4_vio_en_suspend {
+			mux {
+				pins = "gpio152";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio152";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	/* pin ctrl for Touch module */
+	mod_ts_int {
+		mod_ts_int_active: mod_ts_int_active {
+			mux {
+				pins = "gpio132";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio132";
+				drive-strength = <2>;
+				bias-pull-up;
+			};
+		};
+
+		mod_ts_int_suspend: mod_ts_int_suspend {
+			mux {
+				pins = "gpio132";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio132";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+	/* pin set for LUKE */
+	luke_gpio {
+		luke_gpio_default: luke_gpio_default {
+			pins = "gpio37";
+			function = "gpio";
+			input-enable;
+			bias-pull-up;
+			power-source = <0>;
+		};
+	};
+
+	/* pin set for DP_HPD */
+	dp_hpd_gpio {
+		dp_hpd_gpio_default: dp_hpd_gpio_default {
+			pins = "gpio114";
+			function = "gpio";
+			input-enable;
+			power-source = <0>;
+		};
+	};
+
+	display_panel_avdd_eldo_default {
+		config {
+			status = "disabled";
+		};
+		mux {
+			status = "disabled";
+		};
+	};
+
+	sde_dp_aux_active:sde_dp_aux_active {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-disable = <0>;
+			driver-strength = <8>;
+		};
+	};
+
+	sde_dp_aux_suspend:sde_dp_aux_suspend {
+		mux {
+			pins = "gpio42", "gpio148";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio42", "gpio148";
+			bias-pull-down;
+			driver-strength = <8>;
+		};
+	};
+};

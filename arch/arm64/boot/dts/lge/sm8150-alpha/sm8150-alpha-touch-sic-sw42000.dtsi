@@ -1,0 +1,65 @@
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&qupv3_se17_i2c {
+	sw42000@28 {
+		status = "disable";
+		compatible = "lge,sw42000";
+
+		reg = <0x28>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <122 0x2008>;
+		irqflags = <0x00000002>;
+
+		vdd-gpio = <&tlmm 152 0x00>;
+		vcl-gpio = <&tlmm 59 0x00>;
+		reset-gpio = <&tlmm 54 0x00>;
+		irq-gpio = <&tlmm 122 0x2008>;
+
+		/* Caps */
+		max_x = <1439>;
+		max_y = <3119>;
+		max_pressure = <0xff>;
+		max_width_major = <3119>;
+		max_width_minor = <3119>;
+		max_orientation = <90>;
+		max_id = <10>;
+		hw_reset_delay = <40>;
+		sw_reset_delay = <40>;
+
+		/* Role */
+		use_lpwg = <1>;
+		use_lpwg_test = <1>;
+		hide_coordinate = <1>;
+		use_film_status = <1>;
+
+		/* Firmware */
+		fw_image = "touch/judyp/L0W60ALPHA_v0.01_20180531_0.img";
+		panel_spec = "touch/judyp/alpha_siw_limit.txt";
+		panel_spec_mfts_folder = "touch/judyp/alpha_siw_limit_mfts.txt";
+
+		/* Performance Test */
+		use_perf_test = <1>;
+		test_delay = <8>;
+		test_pressure = <50>;
+		test_width = <100>;
+		click_test_x = <180>;
+		click_test_y = <838>;
+		v_drag_test_x = <144>;
+		v_drag_test_start_y = <2103>;
+		v_drag_test_end_y = <1216>;
+		h_drag_test_start_x = <1163>;
+		h_drag_test_end_x = <276>;
+		h_drag_test_y = <2284>;
+	};
+};
+

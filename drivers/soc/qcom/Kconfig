@@ -949,6 +949,9 @@ config QMP_DEBUGFS_CLIENT
 	  This options enables a driver which allows clients to send messages
 	  to Alway On processor using QMP transport.
 
+
+source "drivers/soc/qcom/lge/Kconfig"
+
 config QCOM_QHEE_ENABLE_MEM_PROTECTION
 	bool "QHEE enable kernel memory protection"
 	depends on QCOM_SCM
@@ -1103,3 +1106,4 @@ config RENAME_BLOCK_DEVICE
 	  to a name that is needed.
 
 source "drivers/soc/qcom/wcnss/Kconfig"
+source "drivers/soc/qcom/lge/Kconfig"

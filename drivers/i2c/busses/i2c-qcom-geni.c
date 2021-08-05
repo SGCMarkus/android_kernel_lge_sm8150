@@ -274,7 +274,7 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 
 	if ((m_stat & M_CMD_FAILURE_EN) ||
 		    (dm_rx_st & (DM_I2C_CB_ERR)) ||
-		    (m_stat & M_CMD_CANCEL_EN) ||
+			(m_stat & M_CMD_CANCEL_EN) ||
 		    (m_stat & M_CMD_ABORT_EN)) {
 
 		if (m_stat & M_GP_IRQ_1_EN)
@@ -367,11 +367,10 @@ irqret:
 				       SE_DMA_RX_IRQ_CLR);
 		/* Ensure all writes are done before returning from ISR. */
 		wmb();
-
 		if ((dm_tx_st & TX_DMA_DONE) || (dm_rx_st & RX_DMA_DONE))
 			gi2c->cmd_done = true;
-	}
 
+	}
 	else if (m_stat & M_CMD_DONE_EN)
 		gi2c->cmd_done = true;
 

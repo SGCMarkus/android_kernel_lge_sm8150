@@ -1,0 +1,39 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-nfc.dtsi"
+
+
+&qupv3_se9_i2c { /* QUP_9 (NFC) */
+        qcom,clk-freq-out = <400000>;
+        status = "ok";
+        nq@28 {
+                status = "disabled";
+        };
+        cxd22xx-i2c@28 {
+                compatible = "sony,cxd22xx-i2c";
+                reg = <0x28>;
+                status = "ok";
+                sony,gpio_sda = <&tlmm 39 0x00>;
+                sony,gpio_scl = <&tlmm 40 0x00>;
+                sony,gpio_irq = <&tlmm 47 0x00>;
+                sony,gpio_hvdd = <&tlmm 93 0x00>;
+                sony,gpio_xrst = <&tlmm 94 0x00>;
+                sony,gpio_mode = <&tlmm 41 0x00>;
+                sony,i2c-pull-up = <1>;
+                qcom,clk-src = "BBCLK2";
+                interrupt-parent = <&tlmm>;
+                interrupts = <47 0>;
+                interrupt-names = "nfc_irq";
+        };
+};

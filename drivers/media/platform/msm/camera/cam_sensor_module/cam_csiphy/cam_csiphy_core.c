@@ -134,6 +134,14 @@ int32_t cam_csiphy_update_secure_info(
 		CAM_ERR(CAM_CSIPHY, "Invalid offset");
 		return -EINVAL;
 	}
+	/* LGE_CHANGE, CST, update secure mode in case config dev */
+	if (cam_cmd_csiphy_info->secure_mode != CAM_SECURE_MODE_SECURE)
+	{
+		csiphy_dev->csiphy_info.secure_mode[offset] =
+			CAM_SECURE_MODE_NON_SECURE;
+		csiphy_dev->csiphy_cpas_cp_reg_mask[offset] = 0;
+		return 0;
+	}
 
 	if (cam_cmd_csiphy_info->combo_mode)
 		clock_lane =
@@ -166,13 +174,13 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	struct cam_config_dev_cmd *cfg_dev)
 {
 	int32_t                 rc = 0;
-	uintptr_t                generic_ptr;
-	uintptr_t                generic_pkt_ptr;
+	uintptr_t                generic_ptr;  //LGE STATIC_ANALYSIS (#285808)
+	uintptr_t                generic_pkt_ptr = 0; //LGE STATIC_ANALYSIS (#285807)
 	struct cam_packet       *csl_packet = NULL;
 	struct cam_cmd_buf_desc *cmd_desc = NULL;
 	uint32_t                *cmd_buf = NULL;
 	struct cam_csiphy_info  *cam_cmd_csiphy_info = NULL;
-	size_t                  len;
+	size_t                  len = 0; //LGE STATIC_ANALYSIS (#285806)
 	size_t                  remain_len;
 
 	if (!cfg_dev || !csiphy_dev) {
@@ -251,9 +259,15 @@ int32_t cam_cmd_buf_parser(struct csiphy_device *csiphy_dev,
 	}
 
 
+/* LGE_CHANGE, CST, update secure mode in case config dev */
+#if 0 //qct-orig
 	if (cam_cmd_csiphy_info->secure_mode == 1)
 		cam_csiphy_update_secure_info(csiphy_dev,
 			cam_cmd_csiphy_info, cfg_dev);
+#else
+	cam_csiphy_update_secure_info(csiphy_dev,
+		cam_cmd_csiphy_info, cfg_dev);
+#endif
 
 	if (cam_mem_put_cpu_buf(cmd_desc->mem_handle))
 		CAM_WARN(CAM_CSIPHY, "Failed to put cmd buffer: 0x%x",

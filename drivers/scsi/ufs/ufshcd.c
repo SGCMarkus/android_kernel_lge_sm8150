@@ -51,6 +51,9 @@
 #include "ufs-debugfs.h"
 #include "ufs-qcom.h"
 
+#ifdef CONFIG_MACH_LGE
+#include "ufsdbg-print.h"
+#endif
 #ifdef CONFIG_DEBUG_FS
 
 static int ufshcd_tag_req_type(struct request *rq)
@@ -404,6 +407,14 @@ static inline bool ufshcd_is_valid_pm_lvl(int lvl)
 
 static struct ufs_dev_fix ufs_fixups[] = {
 	/* UFS cards deviations table */
+#ifdef CONFIG_MACH_LGE
+	/* Toshiba recommend that we should not use FASTAUTO in Toshiba-UFS-Gen3.
+	 */
+	UFS_FIX(UFS_VENDOR_TOSHIBA, "THGLF2G8J4LBATR", UFS_DEVICE_NO_FASTAUTO),
+	/* HOST got numerous NAC on some SAMSUNG UFS */
+	UFS_FIX(UFS_VENDOR_SAMSUNG, UFS_ANY_MODEL,
+		UFS_DEVICE_QUIRK_RECOVERY_FROM_DL_NAC_ERRORS),
+#endif
 	UFS_FIX(UFS_VENDOR_SAMSUNG, UFS_ANY_MODEL,
 		UFS_DEVICE_QUIRK_DELAY_BEFORE_LPM),
 	UFS_FIX(UFS_VENDOR_SAMSUNG, UFS_ANY_MODEL,
@@ -421,9 +432,19 @@ static struct ufs_dev_fix ufs_fixups[] = {
 		UFS_DEVICE_QUIRK_PA_TACTIVATE),
 	UFS_FIX(UFS_VENDOR_TOSHIBA, "THGLF2G9D8KBADG",
 		UFS_DEVICE_QUIRK_PA_TACTIVATE),
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+	UFS_FIX(UFS_VENDOR_TOSHIBA, UFS_ANY_MODEL,
+		UFS_DEVICE_QUIRK_CMD_ORDERED),
+#endif
 	UFS_FIX(UFS_VENDOR_SKHYNIX, UFS_ANY_MODEL, UFS_DEVICE_NO_VCCQ),
+#ifdef CONFIG_MACH_LGE
+	UFS_FIX(UFS_ANY_VENDOR, UFS_ANY_MODEL,
+		UFS_DEVICE_QUIRK_HOST_PA_SAVECONFIGTIME),
+#else
 	UFS_FIX(UFS_VENDOR_SKHYNIX, UFS_ANY_MODEL,
 		UFS_DEVICE_QUIRK_HOST_PA_SAVECONFIGTIME),
+#endif
+
 	UFS_FIX(UFS_VENDOR_SKHYNIX, UFS_ANY_MODEL,
 		UFS_DEVICE_QUIRK_WAIT_AFTER_REF_CLK_UNGATE),
 	UFS_FIX(UFS_VENDOR_SKHYNIX, "hB8aL1",
@@ -875,8 +896,14 @@ static void ufshcd_print_uic_err_hist(struct ufs_hba *hba,
 
 		if (err_hist->reg[p] == 0)
 			continue;
+
+#ifdef CONFIG_MACH_LGE
+		print_ufs_error_spec(hba, err_name, err_hist->reg[p],
+			ktime_to_us(err_hist->tstamp[p]), i);
+#else
 		dev_err(hba->dev, "%s[%d] = 0x%x at %lld us\n", err_name, i,
 			err_hist->reg[p], ktime_to_us(err_hist->tstamp[p]));
+#endif
 	}
 }
 
@@ -3568,6 +3595,17 @@ static int ufshcd_comp_scsi_upiu(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 	if (likely(lrbp->cmd)) {
 		ret = ufshcd_prepare_req_desc_hdr(hba, lrbp,
 				&upiu_flags, lrbp->cmd->sc_data_direction);
+
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+		if (hba->dev_info.quirks & UFS_DEVICE_QUIRK_CMD_ORDERED) {
+			if ( (req_op(lrbp->cmd->request) == REQ_OP_WRITE) &&
+				 (lrbp->cmd->request->bio) &&
+				 (lrbp->cmd->request->bio->bi_excontrol & REQ_EX_ORDERED)) {
+				upiu_flags |= UPIU_TASK_ATTR_ORDERED;
+			}
+		}
+#endif
+
 		ufshcd_prepare_utp_scsi_cmd_upiu(lrbp, upiu_flags);
 	} else {
 		ret = -EINVAL;
@@ -4606,17 +4644,53 @@ static inline int ufshcd_read_desc(struct ufs_hba *hba,
 	return ufshcd_read_desc_param(hba, desc_id, desc_index, 0, buf, size);
 }
 
+#ifdef CONFIG_UFS_LGE_FEATURE
+int ufshcd_read_power_desc(struct ufs_hba *hba,
+					 u8 *buf,
+					 u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_POWER, 0, buf, size);
+}
+#else
 static inline int ufshcd_read_power_desc(struct ufs_hba *hba,
 					 u8 *buf,
 					 u32 size)
 {
 	return ufshcd_read_desc(hba, QUERY_DESC_IDN_POWER, 0, buf, size);
 }
+#endif
 
 int ufshcd_read_device_desc(struct ufs_hba *hba, u8 *buf, u32 size)
 {
 	return ufshcd_read_desc(hba, QUERY_DESC_IDN_DEVICE, 0, buf, size);
 }
+
+#ifdef CONFIG_UFS_LGE_FEATURE
+int ufshcd_read_geo_desc(struct ufs_hba *hba, u8 *buf, u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_GEOMETRY, 0, buf, size);
+}
+
+int ufshcd_read_config_desc(struct ufs_hba *hba, u8 *buf, u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_CONFIGURATION, 0, buf, size);
+}
+
+int ufshcd_read_unit_desc(struct ufs_hba *hba, int u_index, u8 *buf, u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_UNIT, u_index, buf, size);
+}
+
+int ufshcd_read_inter_desc(struct ufs_hba *hba, u8 *buf, u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_INTERCONNECT, 0, buf, size);
+}
+
+int ufshcd_read_health_desc(struct ufs_hba *hba, u8 *buf, u32 size)
+{
+	return ufshcd_read_desc(hba, QUERY_DESC_IDN_HEALTH, 0, buf, size);
+}
+#endif
 
 /**
  * ufshcd_read_string_desc - read string descriptor
@@ -4628,8 +4702,7 @@ int ufshcd_read_device_desc(struct ufs_hba *hba, u8 *buf, u32 size)
  *
  * Return 0 in case of success, non-zero otherwise
  */
-#define ASCII_STD true
-static int ufshcd_read_string_desc(struct ufs_hba *hba, int desc_index,
+int ufshcd_read_string_desc(struct ufs_hba *hba, int desc_index,
 				   u8 *buf, u32 size, bool ascii)
 {
 	int err = 0;
@@ -7284,7 +7357,17 @@ static irqreturn_t ufshcd_update_uic_error(struct ufs_hba *hba)
 						__func__, reg);
 					hba->full_init_linereset = true;
 				}
+#ifdef CONFIG_MACH_LGE
+                else{
+                  dev_err(hba->dev, "%s: LINERESET during cmd=0x%x, reg 0x%x\n",__func__, cmd->command, reg);
+                }
+#endif
 			}
+#ifdef CONFIG_MACH_LGE
+            else{
+              dev_err(hba->dev, "%s: LINERESET during cmd=NULL, reg 0x%x\n", __func__, reg);
+            }
+#endif
 			if (!hba->full_init_linereset)
 				schedule_work(&hba->rls_work);
 		}
@@ -7959,6 +8042,9 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 	int err = 0;
 	int retries = MAX_HOST_RESET_RETRIES;
 
+#ifdef CONFIG_MACH_LGE
+	dev_err(hba->dev, "%s: [LGE] start reset to restore host and device\n", __func__);
+#endif
 	ufshcd_enable_irq(hba);
 
 	do {
@@ -8349,7 +8435,14 @@ static void ufs_fixup_device_setup(struct ufs_hba *hba,
 		     f->w_manufacturer_id == UFS_ANY_VENDOR) &&
 		    (STR_PRFX_EQUAL(f->model, dev_desc->model) ||
 		     !strcmp(f->model, UFS_ANY_MODEL)))
+#ifdef CONFIG_MACH_LGE
+			{
+				dev_err(hba->dev, "[LGE][UFS] update quirks, manufacturerid:%d, model:%s, quirk:0x%x\n", f->w_manufacturer_id, f->model, f->quirk);
+				hba->dev_info.quirks |= f->quirk;
+			}
+#else
 			hba->dev_info.quirks |= f->quirk;
+#endif
 	}
 }
 
@@ -9240,6 +9333,9 @@ static int ufshcd_query_ioctl(struct ufs_hba *hba, u8 lun, void __user *buffer)
 		case QUERY_FLAG_IDN_PURGE_ENABLE:
 		case QUERY_FLAG_IDN_FPHYRESOURCEREMOVAL:
 		case QUERY_FLAG_IDN_BUSY_RTC:
+#ifdef CONFIG_UFS_LGE_FEATURE
+		case QUERY_FLAG_IDN_PERMANENT_DIS_FWUPT:
+#endif
 			break;
 		default:
 			goto out_einval;
@@ -10847,6 +10943,50 @@ static void ufshcd_remove_desc_sysfs_nodes(struct device *dev)
 {
 	sysfs_remove_groups(&dev->kobj, ufs_sysfs_groups);
 }
+#ifdef CONFIG_UFSDBG_SYSFS_COMMON
+static ssize_t ufsdbg_health_desc_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	int err = 0;
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	int curr_len = 0;
+	int buff_len = QUERY_DESC_HEALTH_DEF_SIZE;
+	u8 desc_buf[QUERY_DESC_HEALTH_DEF_SIZE];
+
+	pm_runtime_get_sync(hba->dev);
+	err = ufshcd_read_health_desc(hba, desc_buf, buff_len);
+	pm_runtime_put_sync(hba->dev);
+
+	if (!err) {
+		curr_len = sprintf(buf, "bLength %d bDescriptorIDN %d bPreEOLInfo %d bDeviceLifeTimeEstA %d bDeviceLifeTimeEstB %d\n",
+			desc_buf[0], desc_buf[1], desc_buf[2], desc_buf[3], desc_buf[4]);
+	}
+
+	return curr_len;
+}
+
+static ssize_t ufsdbg_health_desc_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	return 0;
+}
+
+static void ufsdbg_add_health_desc_sysfs_node(struct ufs_hba *hba)
+{
+	hba->health_desc_attr.show = ufsdbg_health_desc_show;
+	hba->health_desc_attr.store = ufsdbg_health_desc_store;
+	sysfs_attr_init(&hba->health_desc_attr.attr);
+	hba->health_desc_attr.attr.name = "health_desc";
+	hba->health_desc_attr.attr.mode = S_IRUGO;
+	if (device_create_file(hba->dev, &hba->health_desc_attr))
+		dev_err(hba->dev, "Failed to create sysfs for health_desc_attr\n");
+}
+
+static void ufsdbg_add_sysfs_nodes(struct ufs_hba *hba)
+{
+	ufsdbg_add_health_desc_sysfs_node(hba);
+}
+#endif
 
 static inline void ufshcd_add_sysfs_nodes(struct ufs_hba *hba)
 {
@@ -11085,6 +11225,45 @@ out_error:
 	return err;
 }
 EXPORT_SYMBOL(ufshcd_alloc_host);
+#ifdef CONFIG_UFSDBG_SYSFS_COMMON
+#include <linux/proc_fs.h>
+static struct proc_dir_entry*	procfs_root;
+
+bool ufsdbg_procfs_create(struct ufs_hba* hba)
+{
+	#define UFSDBG_PROCFS_ROOT    "storage"	/* /proc/storage/ufs */
+	struct proc_dir_entry*	root;
+	char name[64];
+
+	if (!hba)
+		return false;
+
+	root = proc_mkdir(UFSDBG_PROCFS_ROOT, NULL);
+	if (NULL != root) {
+		sprintf(name, "/sys/devices/platform/soc/%s", dev_name(hba->dev));
+		if (!proc_symlink("ufs", root, name)) {
+			return false;
+		}
+	}
+
+	procfs_root = root;
+	return true;
+}
+
+bool ufsdbg_procfs_destroy(struct ufs_hba* hba)
+{
+	if (procfs_root)
+		proc_remove(procfs_root);
+
+	return true;
+}
+#endif
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+#define IMPORT_TO_UFSHCD
+#include "ufsdbg-tunables.c"
+#undef IMPORT_TO_UFSHCD
+#endif
 
 /**
  * ufshcd_init - Driver initialization routine
@@ -11163,6 +11342,10 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	host->set_dbd_for_caching = 1;
 
 	hba->max_pwr_info.is_valid = false;
+
+#ifdef CONFIG_SCSI_DEVICE_IDENTIFIER
+	host->by_ufs = 1;
+#endif
 
 	/* Initailize wait queue for task management */
 	init_waitqueue_head(&hba->tm_wq);
@@ -11295,6 +11478,16 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	ufsdbg_add_debugfs(hba);
 
 	ufshcd_add_sysfs_nodes(hba);
+
+#ifdef CONFIG_UFSDBG_SYSFS_COMMON
+	ufsdbg_add_sysfs_nodes(hba);
+	ufsdbg_procfs_create(hba);
+#endif
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+	ufsdbg_tunables_add_debugfs(hba, hba->debugfs_files.debugfs_root);
+#endif
+
 
 	return 0;
 

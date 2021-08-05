@@ -32,6 +32,10 @@
 #include <trace/events/exception.h>
 #include <soc/qcom/minidump.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
+
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
 
@@ -144,6 +148,15 @@ void panic(const char *fmt, ...)
 
 	trace_kernel_panic(0);
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	lge_pet_watchdog();
+#endif
+	/*
+	 * Locks debug should be disabled to avoid reporting bad unlock
+	 * balance when panic() is not being callled from OOPS.
+	 */
+	debug_locks_off();
+
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop
 	 * from deadlocking the first cpu that invokes the panic, since
@@ -175,6 +188,9 @@ void panic(const char *fmt, ...)
 		panic_smp_self_stop();
 
 	console_verbose();
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	resume_console();
+#endif
 	bust_spinlocks(1);
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
@@ -189,6 +205,9 @@ void panic(const char *fmt, ...)
 		dump_stack();
 #endif
 
+#ifdef CONFIG_MACH_LGE
+	console_uart_disable();
+#endif
 	/*
 	 * If we have crashed and we have a crash kernel loaded let it handle
 	 * everything else.
@@ -215,6 +234,10 @@ void panic(const char *fmt, ...)
 		 */
 		crash_smp_send_stop();
 	}
+
+#ifdef CONFIG_MACH_LGE
+	console_uart_enable();
+#endif
 
 	/*
 	 * Run any panic handlers, including those that might need to
@@ -247,11 +270,8 @@ void panic(const char *fmt, ...)
 	 * We may have ended up stopping the CPU holding the lock (in
 	 * smp_send_stop()) while still having some valuable data in the console
 	 * buffer.  Try to acquire the lock then release it regardless of the
-	 * result.  The release will also print the buffers out.  Locks debug
-	 * should be disabled to avoid reporting bad unlock balance when
-	 * panic() is not being callled from OOPS.
+	 * result.  The release will also print the buffers out.
 	 */
-	debug_locks_off();
 	console_flush_on_panic();
 
 	if (!panic_blink)

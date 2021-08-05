@@ -26,6 +26,11 @@
 #include <linux/regmap.h>
 #include <linux/types.h>
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+#include <linux/module.h>
+#include "leds-qpnp-pattern.h"
+#endif
+
 #define TRILED_REG_TYPE			0x04
 #define TRILED_REG_SUBTYPE		0x05
 #define TRILED_REG_EN_CTL		0x46
@@ -43,6 +48,7 @@
 
 #define PWM_PERIOD_DEFAULT_NS		1000000
 
+#ifndef CONFIG_LEDS_LGE_EMOTIONAL
 struct pwm_setting {
 	u64	pre_period_ns;
 	u64	period_ns;
@@ -82,6 +88,14 @@ struct qpnp_tri_led_chip {
 	u8			subtype;
 	u8			bitmap;
 };
+#endif
+
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+struct qpnp_led_dev*	qpnp_led_red	= NULL;
+struct qpnp_led_dev*	qpnp_led_green	= NULL;
+struct qpnp_led_dev*	qpnp_led_blue	= NULL;
+struct qpnp_tri_led_chip *qpnp_rgb_chip = NULL;
+#endif
 
 static int qpnp_tri_led_read(struct qpnp_tri_led_chip *chip, u16 addr, u8 *val)
 {
@@ -126,10 +140,13 @@ static int __tri_led_config_pwm(struct qpnp_led_dev *led,
 	pstate.duty_cycle = pwm->duty_ns;
 	pstate.output_type = led->led_setting.breath ?
 		PWM_OUTPUT_MODULATED : PWM_OUTPUT_FIXED;
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	pstate.output_pattern = led->pwm_dev->state.output_pattern;
+#else
 	/* Use default pattern in PWM device */
 	pstate.output_pattern = NULL;
+#endif
 	rc = pwm_apply_state(led->pwm_dev, &pstate);
-
 	if (rc < 0)
 		dev_err(led->chip->dev, "Apply PWM state for %s led failed, rc=%d\n",
 					led->cdev.name, rc);
@@ -216,7 +233,11 @@ static int __tri_led_set(struct qpnp_led_dev *led)
 	return rc;
 }
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+int qpnp_tri_led_set(struct qpnp_led_dev *led)
+#else
 static int qpnp_tri_led_set(struct qpnp_led_dev *led)
+#endif
 {
 	u64 on_ms, off_ms, period_ns, duty_ns;
 	enum led_brightness brightness = led->led_setting.brightness;
@@ -244,6 +265,7 @@ static int qpnp_tri_led_set(struct qpnp_led_dev *led)
 		if (period_ns < duty_ns && duty_ns != 0)
 			period_ns = duty_ns + 1;
 	}
+
 	dev_dbg(led->chip->dev, "PWM settings for %s led: period = %lluns, duty = %lluns\n",
 				led->cdev.name, period_ns, duty_ns);
 
@@ -437,7 +459,21 @@ static int qpnp_tri_led_register(struct qpnp_tri_led_chip *chip)
 				goto err_out;
 			}
 		}
+
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+		if (!strncmp(led->cdev.name, "red", strlen("red"))) {
+			qpnp_led_red = &chip->leds[0];
+		} else if (!strncmp(led->cdev.name, "green", strlen("green"))) {
+			qpnp_led_green = &chip->leds[1];
+		} else if (!strncmp(led->cdev.name, "blue", strlen("blue"))) {
+			qpnp_led_blue = &chip->leds[2];
+		}
+#endif
 	}
+
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	qpnp_rgb_chip = chip;
+#endif
 
 	return 0;
 
@@ -568,6 +604,12 @@ static int qpnp_tri_led_parse_dt(struct qpnp_tri_led_chip *chip)
 	return rc;
 }
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+static void qpnp_leds_init(struct work_struct *work) {
+	qpnp_pattern_config();
+}
+#endif
+
 static int qpnp_tri_led_probe(struct platform_device *pdev)
 {
 	struct qpnp_tri_led_chip *chip;
@@ -599,6 +641,9 @@ static int qpnp_tri_led_probe(struct platform_device *pdev)
 		goto destroy;
 	}
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	INIT_DELAYED_WORK(&chip->init_leds, qpnp_leds_init);
+#endif
 	dev_set_drvdata(chip->dev, chip);
 	rc = qpnp_tri_led_register(chip);
 	if (rc < 0) {
@@ -609,6 +654,14 @@ static int qpnp_tri_led_probe(struct platform_device *pdev)
 
 	dev_dbg(chip->dev, "Tri-led module with subtype 0x%x is detected\n",
 					chip->subtype);
+
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+	if (qpnp_led_red && qpnp_led_green && qpnp_led_blue) {
+		schedule_delayed_work(&chip->init_leds,
+				msecs_to_jiffies(8000));
+	}
+#endif
+
 	return 0;
 destroy:
 	mutex_destroy(&chip->bus_lock);

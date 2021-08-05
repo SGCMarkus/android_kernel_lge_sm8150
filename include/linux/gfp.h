@@ -46,6 +46,9 @@ struct vm_area_struct;
 #define ___GFP_NOLOCKDEP	0
 #endif
 #define ___GFP_CMA		0x4000000u
+#ifdef CONFIG_MIGRATE_HIGHORDER
+#define ___GFP_HIGHORDER	0x8000000u
+#endif
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -60,6 +63,9 @@ struct vm_area_struct;
 #define __GFP_DMA32	((__force gfp_t)___GFP_DMA32)
 #define __GFP_MOVABLE	((__force gfp_t)___GFP_MOVABLE)  /* ZONE_MOVABLE allowed */
 #define __GFP_CMA	((__force gfp_t)___GFP_CMA)
+#ifdef CONFIG_MIGRATE_HIGHORDER
+#define __GFP_HIGHORDER	((__force gfp_t)___GFP_HIGHORDER)
+#endif
 #define GFP_ZONEMASK	(__GFP_DMA|__GFP_HIGHMEM|__GFP_DMA32|__GFP_MOVABLE)
 /*
  * Page mobility and placement hints
@@ -211,7 +217,11 @@ struct vm_area_struct;
 #define __GFP_NOLOCKDEP ((__force gfp_t)___GFP_NOLOCKDEP)
 
 /* Room for N __GFP_FOO bits */
+#ifndef CONFIG_MIGRATE_HIGHORDER
 #define __GFP_BITS_SHIFT 27
+#else
+#define __GFP_BITS_SHIFT 28
+#endif
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /*

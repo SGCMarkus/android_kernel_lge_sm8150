@@ -1,0 +1,41 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include "sm8150-alpha_lao_ldu.dtsi"
+#include "sm8150-alpha_lao_ldu-sound_rev-b.dtsi"
+#include "../sm8150-camera/sm8150-alpha-camera_rev-c.dtsi"
+#include "../sm8150-alpha_common/sm8150-alpha_common-sar-atmf04.dtsi"
+
+/ {
+	model = "LG Electronics, Alpha_lao, rev_c";
+	compatible = "qcom,sm8150-mtp", "qcom,sm8150", "qcom,mtp";
+	qcom,board-id = <0x02080008 0>;
+};
+
+&usb_qmp_dp_phy {
+	vdd-supply = <&pm8150_l18>;
+	qcom,vdd-voltage-level = <0 912000 912000>;
+};
+&soc{
+	fingerprint@0 {
+		goodix,vddio-supply = <&pm8150l_l7>;
+		gf,vddio-uV = <3000000>;
+	};
+};
+
+&lge_sbu_switch {
+	lge,reverse-sbu-switch;
+};

@@ -83,6 +83,11 @@
 #define EXTCON_DISP_VGA		43	/* Video Graphics Array */
 #define EXTCON_DISP_DP		44	/* Display Port */
 #define EXTCON_DISP_HMD		45	/* Head-Mounted Display */
+#if defined (CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+#define EXTCON_DISP_DD		46	/* Dual Display */
+#define EXTCON_DISP_DS1		46	/* Dual Display */
+#define EXTCON_DISP_DS2		47	/* Dual Screen2 */
+#endif
 
 /* Miscellaneous external connector */
 #define EXTCON_DOCK		60

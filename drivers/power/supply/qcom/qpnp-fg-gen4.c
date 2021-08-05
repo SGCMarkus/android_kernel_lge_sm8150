@@ -36,9 +36,9 @@
 #define FG_MEM_IF_PM8150B		0x0D
 #define FG_ADC_RR_PM8150B		0x13
 
-#define SDAM_COOKIE_OFFSET		0x80
-#define SDAM_CYCLE_COUNT_OFFSET		0x81
-#define SDAM_CAP_LEARN_OFFSET		0x91
+#define SDAM_CYCLE_COUNT_OFFSET		0x80
+#define SDAM_CAP_LEARN_OFFSET		0x90
+#define SDAM_COOKIE_OFFSET		0x92
 #define SDAM_COOKIE			0xA5
 #define SDAM_FG_PARAM_LENGTH		20
 
@@ -84,6 +84,10 @@
 #define CUTOFF_CURR_OFFSET		0
 #define CUTOFF_VOLT_WORD		20
 #define CUTOFF_VOLT_OFFSET		0
+#ifdef CONFIG_LGE_PM
+#define CUTOFF_KI_COEFF_WORD	21
+#define CUTOFF_KI_COEFF_OFFSET	0
+#endif
 #define KI_COEFF_CUTOFF_WORD		21
 #define KI_COEFF_CUTOFF_OFFSET		0
 #define SYS_TERM_CURR_WORD		22
@@ -223,6 +227,10 @@ struct fg_dt_props {
 	bool	soc_hi_res;
 	bool	soc_scale_mode;
 	int	cutoff_volt_mv;
+#ifdef CONFIG_LGE_PM
+	int	cutoff_ki_coeff;
+	int	cutoff_lt_ki_coeff;
+#endif
 	int	empty_volt_mv;
 	int	sys_min_volt_mv;
 	int	cutoff_curr_ma;
@@ -269,6 +277,9 @@ struct fg_gen4_chip {
 	struct fg_dev		fg;
 	struct fg_dt_props	dt;
 	struct cycle_counter	*counter;
+#ifdef CONFIG_LGE_PM
+	u16	cyc_backup[BUCKET_COUNT];
+#endif
 	struct cap_learning	*cl;
 	struct ttf		*ttf;
 	struct soh_profile	*sp;
@@ -312,6 +323,9 @@ struct fg_gen4_chip {
 	int			calib_level;
 	bool			first_profile_load;
 	bool			ki_coeff_dischg_en;
+#ifdef CONFIG_LGE_PM
+	bool			cutoff_ki_coeff_en;
+#endif
 	bool			slope_limit_en;
 	bool			esr_fast_calib;
 	bool			esr_fast_calib_done;
@@ -386,6 +400,10 @@ static struct fg_sram_param pm8150b_v1_sram_params[] = {
 	/* Entries below here are configurable during initialization */
 	PARAM(CUTOFF_VOLT, CUTOFF_VOLT_WORD, CUTOFF_VOLT_OFFSET, 2, 1000000,
 		244141, 0, fg_encode_voltage, NULL),
+#ifdef CONFIG_LGE_PM
+	PARAM(CUTOFF_KI_COEFF, CUTOFF_KI_COEFF_WORD, CUTOFF_KI_COEFF_OFFSET, 1,
+		1000, 61035, 0, fg_encode_default, NULL),
+#endif
 	PARAM(VBATT_LOW, VBATT_LOW_WORD, VBATT_LOW_OFFSET, 1, 1000,
 		15625, -2000, fg_encode_voltage, NULL),
 	PARAM(VBATT_FULL, VBATT_FULL_WORD, VBATT_FULL_OFFSET, 2, 1000,
@@ -486,6 +504,10 @@ static struct fg_sram_param pm8150b_v2_sram_params[] = {
 	/* Entries below here are configurable during initialization */
 	PARAM(CUTOFF_VOLT, CUTOFF_VOLT_WORD, CUTOFF_VOLT_OFFSET, 2, 1000000,
 		244141, 0, fg_encode_voltage, NULL),
+#ifdef CONFIG_LGE_PM
+	PARAM(CUTOFF_KI_COEFF, CUTOFF_KI_COEFF_WORD, CUTOFF_KI_COEFF_OFFSET, 1,
+		1000, 61035, 0, fg_encode_default, NULL),
+#endif
 	PARAM(VBATT_LOW, VBATT_LOW_WORD, VBATT_LOW_OFFSET, 1, 1000,
 		15625, -2000, fg_encode_voltage, NULL),
 	PARAM(VBATT_FULL, VBATT_FULL_WORD, VBATT_FULL_OFFSET, 2, 1000,
@@ -568,14 +590,50 @@ struct bias_config id_table[3] = {
 	{0x75, 0x76, 30},
 };
 
+#ifdef CONFIG_LGE_PM
+/* =============================================
+     LGE Power Feature
+   ============================================= */
+#ifdef CONFIG_LGE_PM_VENEER_PSY
+static struct power_supply_desc fg_psy_desc_extension;
+static enum power_supply_property* extension_bms_properties(void);
+static size_t extension_bms_num_properties(void);
+static int extension_bms_get_property(struct power_supply *psy, enum power_supply_property prop, union power_supply_propval *val);
+static int extension_bms_set_property(struct power_supply *psy, enum power_supply_property prop, const union power_supply_propval *val);
+static int extension_bms_property_is_writeable(struct power_supply *psy, enum power_supply_property prop);
+static struct device_node* extension_get_batt_profile(struct fg_dev *fg, struct device_node* container, int resistance_id);
+#endif
+static int lge_get_ui_soc(struct fg_dev *fg, int msoc_raw);
+static int extension_get_batt_id(struct fg_dev *fg, int *batt_id);
+static int extension_fg_load_dt(void);
+static int extension_fg_load_dt_post(struct fg_dev *fg);
+static int extension_fg_gen4_adjust_cutoff_ki_coeff(struct fg_gen4_chip *chip, int batt_temp);
+static irqreturn_t extension_delta_batt_temp_irq_handler(int irq, void *data);
+static void wa_skip_batt_temp_on_bootup_trigger(int batt_temp);
+static int backup_from_cycle_counter(struct fg_dev *fg, struct cycle_counter *ori, u16 *backup);
+static int backup_to_cycle_counter(struct fg_dev *fg, struct cycle_counter *ori, u16 *backup);
+#endif
+
 #define MAX_BIAS_CODE	0x70E4
 static int fg_gen4_get_batt_id(struct fg_gen4_chip *chip)
 {
 	struct fg_dev *fg = &chip->fg;
+#ifdef CONFIG_LGE_PM
+	int batt_id = 0, rc = 0;
+#else
 	int i, rc, batt_id_kohms;
 	u16 tmp = 0, bias_code = 0, delta = 0;
 	u8 val, bias_id = 0;
+#endif
 
+#ifdef CONFIG_LGE_PM
+	rc = extension_get_batt_id(fg, &batt_id);
+	if (rc < 0) {
+		pr_err("Failed to read get_batt, rc = %d\n", rc);
+		return rc;
+	}
+	fg->batt_id_ohms = batt_id;
+#else
 	for (i = 0; i < ARRAY_SIZE(id_table); i++)  {
 		rc = fg_read(fg, fg->rradc_base + id_table[i].status_reg, &val,
 				1);
@@ -616,6 +674,8 @@ static int fg_gen4_get_batt_id(struct fg_gen4_chip *chip)
 	batt_id_kohms = (id_table[bias_id].bias_kohms * bias_code) * 10 /
 			(MAX_BIAS_CODE - bias_code);
 	fg->batt_id_ohms = (batt_id_kohms * 1000) / 10;
+#endif
+
 	return 0;
 }
 
@@ -1346,6 +1406,11 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 	struct fg_gen4_chip *chip = data;
 	int id, rc = 0;
 	u8 tmp[2];
+#ifdef CONFIG_LGE_PM
+	/* this function is called at boot time */
+	int total_count = 0;
+	struct fg_dev *fg = &chip->fg;
+#endif
 
 	if (!chip)
 		return -ENODEV;
@@ -1354,9 +1419,17 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 		return -EINVAL;
 
 	for (id = 0; id < length; id++) {
+#ifdef CONFIG_LGE_PM
+		if (chip->fg_nvmem) {
+			rc = nvmem_device_read(chip->fg_nvmem,
+				SDAM_CYCLE_COUNT_OFFSET + (id * 2), 2, tmp);
+			total_count += (tmp[0] | tmp[1] << 8);
+		}
+#else
 		if (chip->fg_nvmem)
 			rc = nvmem_device_read(chip->fg_nvmem,
 				SDAM_CYCLE_COUNT_OFFSET + (id * 2), 2, tmp);
+#endif
 		else
 			rc = fg_sram_read(&chip->fg, CYCLE_COUNT_WORD + id,
 					CYCLE_COUNT_OFFSET, (u8 *)tmp, 2,
@@ -1366,6 +1439,21 @@ static int fg_gen4_restore_count(void *data, u16 *buf, int length)
 		else
 			*buf++ = tmp[0] | tmp[1] << 8;
 	}
+
+#ifdef CONFIG_LGE_PM
+	if (total_count > (3000 * length)) {
+		memset(chip->counter->count, 0, sizeof(chip->counter->count));
+		memset(chip->counter->started, 0, sizeof(chip->counter->started));
+		memset(chip->counter->last_soc, 0, sizeof(chip->counter->last_soc));
+
+		nvmem_device_write(chip->fg_nvmem,
+			SDAM_CYCLE_COUNT_OFFSET, BUCKET_COUNT * 2, (u8 *)buf);
+
+		fg_dbg(fg, FG_LGE,
+			"total counter(%d) is over..clear FG SDAM cycle count\n",
+				total_count / length);
+	}
+#endif
 
 	return rc;
 }
@@ -1466,6 +1554,10 @@ static int fg_gen4_adjust_ki_coeff_full_soc(struct fg_gen4_chip *chip,
 	struct fg_dev *fg = &chip->fg;
 	int rc, ki_coeff_full_soc_norm = 0, ki_coeff_full_soc_low = 0;
 	u8 val;
+
+#ifdef CONFIG_LGE_PM
+	extension_fg_gen4_adjust_cutoff_ki_coeff(chip, batt_temp);
+#endif
 
 	if ((batt_temp < 0) ||
 		(fg->charge_status == POWER_SUPPLY_STATUS_DISCHARGING)) {
@@ -1705,6 +1797,14 @@ static int fg_gen4_get_batt_profile(struct fg_dev *fg)
 	else
 		profile_node = of_batterydata_get_best_profile(batt_node,
 					fg->batt_id_ohms / 1000, NULL);
+
+#ifdef CONFIG_LGE_PM_VENEER_PSY
+	profile_node = extension_get_batt_profile(fg, batt_node,
+				fg->batt_id_ohms / 1000);
+#else
+	profile_node = of_batterydata_get_best_profile(batt_node,
+				fg->batt_id_ohms / 1000, NULL);
+#endif
 	if (IS_ERR(profile_node))
 		return PTR_ERR(profile_node);
 
@@ -2135,7 +2235,11 @@ static bool is_profile_load_required(struct fg_gen4_chip *chip)
 		profiles_same = memcmp(chip->batt_profile, buf,
 					PROFILE_COMP_LEN) == 0;
 		if (profiles_same) {
+#ifdef CONFIG_LGE_PM
+			fg_dbg(fg, FG_LGE, "Battery profile is same, not loading it\n");
+#else
 			fg_dbg(fg, FG_STATUS, "Battery profile is same, not loading it\n");
+#endif
 			fg->profile_load_status = PROFILE_LOADED;
 			return false;
 		}
@@ -2153,8 +2257,11 @@ static bool is_profile_load_required(struct fg_gen4_chip *chip)
 			fg->profile_load_status = PROFILE_SKIPPED;
 			return false;
 		}
-
+#ifdef CONFIG_LGE_PM
+		fg_dbg(fg, FG_LGE, "Profiles are different, loading the correct one\n");
+#else
 		fg_dbg(fg, FG_STATUS, "Profiles are different, loading the correct one\n");
+#endif
 	} else {
 		fg_dbg(fg, FG_STATUS, "Profile integrity bit is not set\n");
 		if (fg_profile_dump) {
@@ -2383,7 +2490,11 @@ static void profile_load_work(struct work_struct *work)
 	rc = fg_gen4_get_batt_id(chip);
 	if (rc < 0) {
 		pr_err("Error in getting battery id, rc:%d\n", rc);
+#ifdef CONFIG_LGE_PM
+		goto retry_get_batt_id;
+#else
 		goto out;
+#endif
 	}
 
 	rc = fg_gen4_get_batt_profile(fg);
@@ -2400,13 +2511,20 @@ static void profile_load_work(struct work_struct *work)
 	if (!is_profile_load_required(chip))
 		goto done;
 
+#ifdef CONFIG_LGE_PM
+	backup_from_cycle_counter(fg, chip->counter, chip->cyc_backup);
+#endif
 	if (!chip->dt.multi_profile_load) {
 		clear_cycle_count(chip->counter);
 		if (chip->fg_nvmem && !is_sdam_cookie_set(chip))
 			fg_gen4_clear_sdam(chip);
 	}
 
+#ifdef CONFIG_LGE_PM
+	fg_dbg(fg, FG_LGE, "profile loading started\n");
+#else
 	fg_dbg(fg, FG_STATUS, "profile loading started\n");
+#endif
 
 	if (chip->dt.multi_profile_load &&
 		chip->batt_age_level != chip->last_batt_age_level) {
@@ -2422,7 +2540,11 @@ static void profile_load_work(struct work_struct *work)
 	if (rc < 0)
 		goto out;
 
+#ifdef CONFIG_LGE_PM
+	fg_dbg(fg, FG_LGE, "SOC is ready\n");
+#else
 	fg_dbg(fg, FG_STATUS, "SOC is ready\n");
+#endif
 	fg->profile_load_status = PROFILE_LOADED;
 
 	if (fg->wa_flags & PM8150B_V1_DMA_WA)
@@ -2449,6 +2571,9 @@ static void profile_load_work(struct work_struct *work)
 					rc);
 		}
 	}
+#ifdef CONFIG_LGE_PM
+	backup_to_cycle_counter(fg, chip->counter, chip->cyc_backup);
+#endif
 done:
 	rc = fg_sram_read(fg, PROFILE_INTEGRITY_WORD,
 			PROFILE_INTEGRITY_OFFSET, &val, 1, FG_IMA_DEFAULT);
@@ -2476,7 +2601,11 @@ done:
 	fg_notify_charger(fg);
 
 	schedule_delayed_work(&chip->ttf->ttf_work, msecs_to_jiffies(10000));
+#ifdef CONFIG_LGE_PM
+	fg_dbg(fg, FG_STATUS, "profile loaded successfully..nom cap=%d\n", nom_cap_uah/1000);
+#else
 	fg_dbg(fg, FG_STATUS, "profile loaded successfully");
+#endif
 out:
 	if (!chip->esr_fast_calib || is_debug_batt_id(fg)) {
 		/* If it is debug battery, then disable ESR fast calibration */
@@ -2494,6 +2623,12 @@ out:
 		pm_stay_awake(fg->dev);
 		schedule_work(&fg->status_change_work);
 	}
+#ifdef CONFIG_LGE_PM
+	extension_fg_load_dt_post(fg);
+	return;
+retry_get_batt_id:
+	schedule_delayed_work(&fg->profile_load_work, msecs_to_jiffies(1000));
+#endif
 
 	rc = fg_gen4_validate_soc_scale_mode(chip);
 	if (rc < 0)
@@ -2509,7 +2644,11 @@ static void get_batt_psy_props(struct fg_dev *fg)
 	if (!batt_psy_initialized(fg))
 		return;
 
+#ifdef CONFIG_LGE_PM
+	rc = power_supply_get_property(fg->batt_psy, POWER_SUPPLY_PROP_STATUS_RAW,
+#else
 	rc = power_supply_get_property(fg->batt_psy, POWER_SUPPLY_PROP_STATUS,
+#endif
 			&prop);
 	if (rc < 0) {
 		pr_err("Error in getting charging status, rc=%d\n", rc);
@@ -2763,6 +2902,7 @@ static int fg_gen4_adjust_recharge_soc(struct fg_gen4_chip *chip)
 				if (fg->health != POWER_SUPPLY_HEALTH_GOOD)
 					return 0;
 
+#ifndef CONFIG_LGE_PM
 				/*
 				 * Device is out of JEITA. Restore back default
 				 * threshold.
@@ -2770,6 +2910,7 @@ static int fg_gen4_adjust_recharge_soc(struct fg_gen4_chip *chip)
 
 				new_recharge_soc = recharge_soc;
 				fg->recharge_soc_adjusted = false;
+#endif
 				chip->chg_term_good = false;
 			}
 		} else {
@@ -2850,6 +2991,9 @@ static int fg_gen4_charge_full_update(struct fg_dev *fg)
 		pr_err("Error in getting msoc_raw, rc=%d\n", rc);
 		goto out;
 	}
+#ifdef CONFIG_LGE_PM
+	lge_get_ui_soc(fg, msoc_raw);
+#endif
 	msoc = DIV_ROUND_CLOSEST(msoc_raw * FULL_CAPACITY, FULL_SOC_RAW);
 
 	fg_dbg(fg, FG_STATUS, "msoc: %d bsoc: %x health: %d status: %d full: %d\n",
@@ -3390,7 +3534,12 @@ static irqreturn_t fg_delta_esr_irq_handler(int irq, void *data)
 	if (rc < 0)
 		return IRQ_HANDLED;
 
+#ifdef CONFIG_LGE_PM
+	fg_dbg(fg, FG_IRQ, "irq %d triggered total resistance: %d.%d mohms\n",
+		irq, esr_uohms/1000, esr_uohms%1000);
+#else
 	fg_dbg(fg, FG_IRQ, "irq %d triggered esr_uohms: %d\n", irq, esr_uohms);
+#endif
 
 	if (chip->esr_fast_calib) {
 		vote(fg->awake_votable, ESR_CALIB, true, 0);
@@ -3590,6 +3739,7 @@ static irqreturn_t fg_delta_msoc_irq_handler(int irq, void *data)
 	bool input_present = is_input_present(fg);
 	u32 batt_soc_cp;
 
+	fg_dbg(fg, FG_LGE, "irq %d triggered\n", irq);
 	rc = fg_get_msoc_raw(fg, &msoc_raw);
 	if (!rc)
 		fg_dbg(fg, FG_IRQ, "irq %d triggered msoc_raw: %d\n", irq,
@@ -3671,6 +3821,11 @@ static irqreturn_t fg_empty_soc_irq_handler(int irq, void *data)
 	struct fg_dev *fg = data;
 
 	fg_dbg(fg, FG_IRQ, "irq %d triggered\n", irq);
+
+#ifdef CONFIG_LGE_PM
+	lge_get_ui_soc(fg, 0);
+#endif
+
 	if (batt_psy_initialized(fg))
 		power_supply_changed(fg->batt_psy);
 
@@ -3784,7 +3939,11 @@ static struct fg_irq_info fg_irqs[FG_GEN4_IRQ_MAX] = {
 	},
 	[BATT_TEMP_DELTA_IRQ] = {
 		.name		= "batt-temp-delta",
+#ifdef CONFIG_LGE_PM
+		.handler	= extension_delta_batt_temp_irq_handler,
+#else
 		.handler	= fg_delta_batt_temp_irq_handler,
+#endif
 		.wakeable	= true,
 	},
 	[BATT_ID_IRQ] = {
@@ -5413,6 +5572,9 @@ static int fg_parse_ki_coefficients(struct fg_dev *fg)
 		}
 	}
 
+#ifdef CONFIG_LGE_PM
+#else
+/* It move to profile_load_work */
 	chip->dt.ki_coeff_low_chg = 184;
 	of_property_read_u32(node, "qcom,ki-coeff-low-chg",
 		&chip->dt.ki_coeff_low_chg);
@@ -5424,6 +5586,7 @@ static int fg_parse_ki_coefficients(struct fg_dev *fg)
 	chip->dt.ki_coeff_hi_chg = 0;
 	of_property_read_u32(node, "qcom,ki-coeff-hi-chg",
 		&chip->dt.ki_coeff_hi_chg);
+#endif
 
 	chip->dt.ki_coeff_lo_med_chg_thr_ma = 500;
 	of_property_read_u32(node, "qcom,ki-coeff-chg-low-med-thresh-ma",
@@ -5842,6 +6005,11 @@ static int fg_gen4_parse_dt(struct fg_gen4_chip *chip)
 	else
 		chip->cl->dt.max_cap_limit = temp;
 
+#ifdef CONFIG_LGE_PM
+	rc = of_property_read_u32(node, "qcom,cl-skew", &temp);
+	if (!rc)
+		chip->cl->dt.skew_decipct = temp;
+#endif
 	of_property_read_u32(node, "qcom,cl-skew", &chip->cl->dt.skew_decipct);
 
 	if (of_property_read_bool(node, "qcom,cl-wt-enable")) {
@@ -6020,6 +6188,10 @@ static int fg_gen4_probe(struct platform_device *pdev)
 	struct power_supply_config fg_psy_cfg;
 	int rc, msoc, volt_uv, batt_temp;
 
+#ifdef CONFIG_LGE_PM_DEBUG
+	fg_gen4_debug_mask = FG_LGE | FG_IRQ;
+#endif
+
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip)
 		return -ENOMEM;
@@ -6116,6 +6288,10 @@ static int fg_gen4_probe(struct platform_device *pdev)
 		goto exit;
 	}
 
+#ifdef CONFIG_LGE_PM
+	extension_fg_load_dt();
+#endif
+
 	if (chip->esr_fast_calib) {
 		if (alarmtimer_get_rtcdev()) {
 			alarm_init(&chip->esr_fast_cal_timer, ALARM_BOOTTIME,
@@ -6158,8 +6334,23 @@ static int fg_gen4_probe(struct platform_device *pdev)
 	fg_psy_cfg.of_node = NULL;
 	fg_psy_cfg.supplied_to = NULL;
 	fg_psy_cfg.num_supplicants = 0;
+#ifdef CONFIG_LGE_PM_VENEER_PSY
+	fg_psy_desc_extension.name = fg_psy_desc.name;
+	fg_psy_desc_extension.type = fg_psy_desc.type;
+	fg_psy_desc_extension.external_power_changed = fg_psy_desc.external_power_changed;
+
+	fg_psy_desc_extension.properties = extension_bms_properties();
+	fg_psy_desc_extension.num_properties = extension_bms_num_properties();
+	fg_psy_desc_extension.get_property = extension_bms_get_property;
+	fg_psy_desc_extension.set_property = extension_bms_set_property;
+	fg_psy_desc_extension.property_is_writeable = extension_bms_property_is_writeable;
+
+	fg->fg_psy = devm_power_supply_register(fg->dev, &fg_psy_desc_extension,
+			&fg_psy_cfg);
+#else
 	fg->fg_psy = devm_power_supply_register(fg->dev, &fg_psy_desc,
 			&fg_psy_cfg);
+#endif
 	if (IS_ERR(fg->fg_psy)) {
 		pr_err("failed to register fg_psy rc = %ld\n",
 				PTR_ERR(fg->fg_psy));
@@ -6210,6 +6401,9 @@ static int fg_gen4_probe(struct platform_device *pdev)
 		fg->last_batt_temp = batt_temp;
 		pr_info("battery SOC:%d voltage: %duV temp: %d id: %d ohms\n",
 			msoc, volt_uv, batt_temp, fg->batt_id_ohms);
+#ifdef CONFIG_LGE_PM
+		wa_skip_batt_temp_on_bootup_trigger(batt_temp);
+#endif
 	}
 
 	fg->tz_dev = thermal_zone_of_sensor_register(fg->dev, 0, fg,
@@ -6227,7 +6421,11 @@ static int fg_gen4_probe(struct platform_device *pdev)
 
 	fg_gen4_post_init(chip);
 
+#ifdef CONFIG_LGE_PM
+	pr_info("FG GEN4 driver probed successfully\n");
+#else
 	pr_debug("FG GEN4 driver probed successfully\n");
+#endif
 	return 0;
 exit:
 	fg_gen4_cleanup(chip);
@@ -6329,6 +6527,10 @@ static struct platform_driver fg_gen4_driver = {
 	.remove		= fg_gen4_remove,
 	.shutdown	= fg_gen4_shutdown,
 };
+
+#ifdef CONFIG_LGE_PM_VENEER_PSY
+#include "../lge/extension-fg-gen4.c"
+#endif
 
 module_platform_driver(fg_gen4_driver);
 

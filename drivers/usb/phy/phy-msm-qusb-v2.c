@@ -125,7 +125,6 @@ struct qusb_phy {
 	u32			tune_val;
 	int			efuse_bit_pos;
 	int			efuse_num_of_bits;
-
 	bool			cable_connected;
 	bool			suspended;
 	bool			dpdm_enable;

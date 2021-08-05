@@ -274,9 +274,16 @@ static int format_corename(struct core_name *cn, struct coredump_params *cprm)
 				up_read(&uts_sem);
 				break;
 			/* executable */
-			case 'e':
-				err = cn_esc_printf(cn, "%s", current->comm);
+			case 'e': {
+                char task_name[TASK_COMM_LEN +1] = {0, };
+                char *p = NULL;
+                strncpy(task_name, current->comm, TASK_COMM_LEN);
+                for (p = task_name; (p = strchr(p, ':')) != NULL; p++) {
+                    *p = '_';
+                }
+                err = cn_esc_printf(cn, "%s", task_name);
 				break;
+            }
 			case 'E':
 				err = cn_print_exe_file(cn);
 				break;

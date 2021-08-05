@@ -246,6 +246,9 @@ struct sde_rotator_device {
 	struct kthread_worker rot_kw[MAX_ROT_OPEN_SESSION];
 	struct task_struct *rot_thread[MAX_ROT_OPEN_SESSION];
 	bool kthread_free[MAX_ROT_OPEN_SESSION];
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	struct notifier_block notifier;
+#endif
 };
 
 static inline

@@ -2019,3 +2019,20 @@ end:
 	mutex_unlock(&rm->rm_lock);
 	return ret;
 }
+
+int sde_rm_get_nmixer(struct sde_rm *rm,struct drm_encoder *enc){
+	struct sde_rm_rsvp * rsvp;
+
+	rsvp  = _sde_rm_get_rsvp(rm, enc);
+
+	if(rsvp == NULL)
+		goto invalid;
+
+	SDE_DEBUG("[ENC %d]topology %d num_lm %d\n",enc->base.id, rsvp->topology, rm->topology_tbl[rsvp->topology].num_lm);
+	return rm->topology_tbl[rsvp->topology].num_lm;
+
+invalid:
+	// return invalid mixer number.
+	SDE_DEBUG("Invaid rm or enc or rsvp\n");
+	return CRTC_DUAL_MIXERS+1;
+}

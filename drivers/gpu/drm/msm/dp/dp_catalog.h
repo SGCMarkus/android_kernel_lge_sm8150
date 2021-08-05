@@ -92,6 +92,10 @@ struct dp_catalog_aux {
 			struct dp_aux_cfg *aux_cfg);
 	void (*get_irq)(struct dp_catalog_aux *aux, bool cmd_busy);
 	void (*clear_hw_interrupts)(struct dp_catalog_aux *aux);
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+	void (*change_aux_cfg)(struct dp_catalog_aux *aux,
+		struct dp_aux_cfg *cfg, enum dp_phy_aux_config_type type, u32 index);
+#endif
 };
 
 struct dp_catalog_ctrl {

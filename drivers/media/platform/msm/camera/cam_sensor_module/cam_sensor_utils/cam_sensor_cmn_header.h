@@ -175,7 +175,8 @@ enum cam_eeprom_packet_opcodes {
 
 enum cam_ois_packet_opcodes {
 	CAM_OIS_PACKET_OPCODE_INIT,
-	CAM_OIS_PACKET_OPCODE_OIS_CONTROL
+	CAM_OIS_PACKET_OPCODE_OIS_CONTROL,
+	CAM_OIS_PACKET_OPCODE_OIS_USERDATA
 };
 
 enum msm_bus_perf_setting {
@@ -391,4 +392,29 @@ struct msm_camera_gpio_conf {
 	struct msm_camera_gpio_num_info *gpio_num_info;
 };
 
+#define MSM_OIS_DATA_BUFFER_SIZE 15
+struct msm_ois_readout {
+    int32_t ois_x_shift;
+    int32_t ois_y_shift;
+    int64_t x_readout_time;
+    int64_t y_readout_time;
+};
+
+struct msm_ois_readout_buffer {
+    struct msm_ois_readout buffer[MSM_OIS_DATA_BUFFER_SIZE];
+    int32_t buffer_head;
+    int32_t buffer_tail;
+};
+
+#define MSM_ACT_DATA_BUFFER_SIZE 15
+struct msm_act_readout {
+    int16_t act_hall;
+    int64_t hall_readout_time;
+};
+
+struct msm_act_readout_buffer {
+    struct msm_act_readout buffer[MSM_ACT_DATA_BUFFER_SIZE];
+    int32_t buffer_head;
+    int32_t buffer_tail;
+};
 #endif /* _CAM_SENSOR_CMN_HEADER_ */

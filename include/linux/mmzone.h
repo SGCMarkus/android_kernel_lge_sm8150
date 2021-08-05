@@ -61,6 +61,9 @@ enum migratetype {
 #ifdef CONFIG_MEMORY_ISOLATION
 	MIGRATE_ISOLATE,	/* can't allocate from here */
 #endif
+#ifdef CONFIG_MIGRATE_HIGHORDER
+	MIGRATE_HIGHORDER,
+#endif
 	MIGRATE_TYPES
 };
 
@@ -68,6 +71,7 @@ enum migratetype {
 extern char * const migratetype_names[MIGRATE_TYPES];
 
 #ifdef CONFIG_CMA
+bool is_cma_pageblock(struct page *page);
 #  define is_migrate_cma(migratetype) unlikely((migratetype) == MIGRATE_CMA)
 #  define is_migrate_cma_page(_page) (get_pageblock_migratetype(_page) == MIGRATE_CMA)
 #  define get_cma_migrate_type() MIGRATE_CMA
@@ -153,6 +157,10 @@ enum zone_stat_item {
 	NR_ZSPAGES,		/* allocated in zsmalloc */
 #endif
 	NR_FREE_CMA_PAGES,
+	NR_FREE_HIGHATOMIC_PAGES,
+#ifdef CONFIG_MIGRATE_HIGHORDER
+	NR_FREE_HIGHORDER_PAGES,
+#endif
 	NR_VM_ZONE_STAT_ITEMS };
 
 enum node_stat_item {
@@ -227,22 +235,21 @@ static inline int is_active_lru(enum lru_list lru)
 	return (lru == LRU_ACTIVE_ANON || lru == LRU_ACTIVE_FILE);
 }
 
-struct zone_reclaim_stat {
-	/*
-	 * The pageout code in vmscan.c keeps track of how many of the
-	 * mem/swap backed and file backed pages are referenced.
-	 * The higher the rotated/scanned ratio, the more valuable
-	 * that cache is.
-	 *
-	 * The anon LRU stats live in [0], file LRU stats in [1]
-	 */
-	unsigned long		recent_rotated[2];
-	unsigned long		recent_scanned[2];
+/*
+ * This tracks cost of reclaiming one LRU type - file or anon - over
+ * the other. As the observed cost of pressure on one type increases,
+ * the scan balance in vmscan.c tips toward the other type.
+ *
+ * The recorded cost for anon is in numer[0], file in numer[1].
+ */
+struct lru_cost {
+	unsigned long           numer[2];
+	unsigned long           denom;
 };
 
 struct lruvec {
 	struct list_head		lists[NR_LRU_LISTS];
-	struct zone_reclaim_stat	reclaim_stat;
+	struct lru_cost			balance;
 	/* Evictions & activations on the inactive file list */
 	atomic_long_t			inactive_age;
 	/* Refaults at the time of last reclaim cycle */

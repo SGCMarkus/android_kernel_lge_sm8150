@@ -155,18 +155,39 @@ static int cam_ipe_handle_pc(struct cam_hw_info *ipe_dev)
 		CAM_CPAS_REG_CPASTOP, hw_info->pwr_ctrl,
 		true, &pwr_ctrl);
 	if (!(pwr_ctrl & IPE_COLLAPSE_MASK)) {
-		cam_cpas_reg_read(core_info->cpas_handle,
-			CAM_CPAS_REG_CPASTOP, hw_info->pwr_status,
-			true, &pwr_status);
+		/* LGE_CHANGE: camera-stability@lge.com 2019-01-07
+		*  Modified to call cam_cpas_reg_read after calling cam_cpas_reg_write
+		*  because pwr_status is still in power-on status
+		*  before calling cam_cpas_reg_write. Calling cam_cpas_reg_write will
+		*  change the power status from power-on to power-collapse.
+		*/
+		CAM_ERR(CAM_ICP, "IPE pwr_ctrl set(%x) in cam_ipe_handle_pc", pwr_ctrl);
 		cam_cpas_reg_write(core_info->cpas_handle,
 			CAM_CPAS_REG_CPASTOP,
 			hw_info->pwr_ctrl, true, 0x1);
-
+		
 		if (pwr_status >> IPE_PWR_ON_MASK)
 			CAM_WARN(CAM_ICP, "BPS: pwr_status(%x):pwr_ctrl(%x)",
 				pwr_status, pwr_ctrl);
 
+		cam_cpas_reg_read(core_info->cpas_handle,
+			CAM_CPAS_REG_CPASTOP, hw_info->pwr_status,
+			true, &pwr_status);
+		if (pwr_status >> IPE_PWR_ON_MASK) {
+			cam_cpas_reg_read(core_info->cpas_handle,
+				CAM_CPAS_REG_CPASTOP, hw_info->pwr_ctrl,
+				true, &pwr_ctrl);
+			cam_cpas_reg_read(core_info->cpas_handle,
+				CAM_CPAS_REG_CPASTOP, hw_info->pwr_status,
+				true, &pwr_status);
+			CAM_ERR(CAM_ICP, "pwr_ctrl = %x pwr_status = %x",
+				pwr_ctrl, pwr_status);
+			CAM_ERR(CAM_ICP, "cam_ipe_get_gdsc_control is forced to call.");
+			cam_ipe_get_gdsc_control(soc_info);
+			return -EINVAL;
+		}
 	}
+
 	cam_ipe_get_gdsc_control(soc_info);
 	cam_cpas_reg_read(core_info->cpas_handle,
 		CAM_CPAS_REG_CPASTOP, hw_info->pwr_ctrl,

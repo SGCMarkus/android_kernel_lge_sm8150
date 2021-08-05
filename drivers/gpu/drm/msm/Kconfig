@@ -198,3 +198,33 @@ config DRM_SDE_RSC
 	  avoids the display core power collapse. A client can also register
 	  for display core power collapse events on rsc.
 
+config LGE_DISPLAY_COMMON
+	default y
+	bool "LGE DISPLAY COMMON"
+	help
+	The LGE DISPLAY COMMON feature.
+
+config LGE_DISPLAY_DIMMING_BOOT_SUPPORT
+    default y
+    bool "LGE DISPLAY DIMMING BOOT SUPPORT"
+    depends on LGE_DISPLAY_COMMON
+    ---help---
+    The LGE DISPLAY DIMMING BOOT SUPPORT feature.
+
+config LGE_DISPLAY_XLOG_ENABLED
+	bool "ENABLE DEBUG LOG LEVEL"
+	default n
+	---help---
+	This config is for debug log level to store memory and log
+
+config LGE_COVER_DISPLAY
+	default n
+	bool "LGE COVER DISPLAY"
+	help
+	The LGE Cover DISPLAY Support feature.
+
+config LGE_DD_TEMP_BRINGUP
+	default n
+	bool "LGE_DD_TEMP_BRINGUP"
+	help
+	TEMP DD bringup feature.

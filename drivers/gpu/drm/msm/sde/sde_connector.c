@@ -24,6 +24,15 @@
 #include "sde_crtc.h"
 #include "sde_rm.h"
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+#include "lge/brightness/lge_brightness.h"
+#include "lge/ambient/lge_backlight_ex.h"
+#endif
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+#include "lge/cover/lge_backlight_cover.h"
+#endif
+
 #define BL_NODE_NAME_SIZE 32
 
 /* Autorefresh will occur after FRAME_CNT frames. Large values are unlikely */
@@ -72,6 +81,10 @@ static int sde_backlight_device_update_status(struct backlight_device *bd)
 	int bl_lvl;
 	struct drm_event event;
 	int rc = 0;
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	return lge_backlight_device_update_status(bd);
+#endif
 
 	brightness = bd->props.brightness;
 
@@ -143,7 +156,11 @@ static int sde_backlight_setup(struct sde_connector *c_conn,
 	display = (struct dsi_display *) c_conn->display;
 	bl_config = &display->panel->bl_config;
 	props.max_brightness = bl_config->brightness_max_level;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	props.brightness = display->panel->lge.default_brightness;
+#else
 	props.brightness = bl_config->brightness_default_level;
+#endif
 	snprintf(bl_node_name, BL_NODE_NAME_SIZE, "panel%u-backlight",
 							display_count);
 	c_conn->bl_device = backlight_device_register(bl_node_name, dev->dev,
@@ -778,7 +795,16 @@ void sde_connector_destroy(struct drm_connector *connector)
 		drm_property_blob_put(c_conn->blob_mode_info);
 	if (c_conn->blob_ext_hdr)
 		drm_property_blob_put(c_conn->blob_ext_hdr);
-
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
+	    lge_backlight_ex_destroy(c_conn);
+	}
+#endif
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	if (c_conn->connector_type == DRM_MODE_CONNECTOR_DSI) {
+	    lge_backlight_cover_destroy(c_conn);
+	}
+#endif
 	if (c_conn->bl_device)
 		backlight_device_unregister(c_conn->bl_device);
 	drm_connector_unregister(connector);
@@ -1637,6 +1663,11 @@ static int sde_connector_init_debugfs(struct drm_connector *connector)
 		debugfs_create_u32("esd_status_interval", 0600,
 				connector->debugfs_entry,
 				&sde_connector->esd_status_interval);
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+		debugfs_create_u32("force_panel_dead", 0600,
+				connector->debugfs_entry,
+				&sde_connector->force_panel_dead);
+#endif
 	}
 
 	if (!debugfs_create_bool("fb_kmap", 0600, connector->debugfs_entry,
@@ -1933,6 +1964,14 @@ static void sde_connector_check_status_work(struct work_struct *work)
 	rc = conn->ops.check_status(&conn->base, conn->display, false);
 	mutex_unlock(&conn->lock);
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	if (conn->force_panel_dead) {
+		conn->force_panel_dead--;
+		if (!conn->force_panel_dead)
+			goto status_dead;
+	}
+#endif
+
 	if (rc > 0) {
 		u32 interval;
 
@@ -1947,6 +1986,9 @@ static void sde_connector_check_status_work(struct work_struct *work)
 		return;
 	}
 
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+status_dead:
+#endif
 	_sde_connector_report_panel_dead(conn, false);
 }
 
@@ -2229,6 +2271,14 @@ struct drm_connector *sde_connector_init(struct drm_device *dev,
 		SDE_ERROR("failed to setup backlight, rc=%d\n", rc);
 		goto error_cleanup_fence;
 	}
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	lge_backlight_ex_setup(c_conn, dev);
+#endif
+
+#if IS_ENABLED(CONFIG_LGE_COVER_DISPLAY)
+	lge_backlight_cover_setup(c_conn, dev);
+#endif
 
 	/* create properties */
 	msm_property_init(&c_conn->property_info, &c_conn->base.base, dev,

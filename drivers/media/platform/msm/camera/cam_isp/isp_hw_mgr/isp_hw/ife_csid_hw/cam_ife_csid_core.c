@@ -576,6 +576,14 @@ static int cam_ife_csid_path_reset(struct cam_ife_csid_hw *csid_hw,
 	init_completion(complete);
 	reset_strb_val = csid_reg->cmn_reg->path_rst_stb_all;
 
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+	/* Enable the Test gen before reset */
+	cam_io_w_mb(1,	csid_hw->hw_info->soc_info.reg_map[0].mem_base +
+		csid_reg->tpg_reg->csid_tpg_ctrl_addr);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+
 	/* Reset the corresponding ife csid path */
 	cam_io_w_mb(reset_strb_val, soc_info->reg_map[0].mem_base +
 				reset_strb_addr);
@@ -589,6 +597,14 @@ static int cam_ife_csid_path_reset(struct cam_ife_csid_hw *csid_hw,
 		if (rc == 0)
 			rc = -ETIMEDOUT;
 	}
+
+//LGE_UPDATE, revert the Handle wait and active list during flush all
+#if 1
+	/* Disable Test Gen after reset*/
+	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
+		csid_reg->tpg_reg->csid_tpg_ctrl_addr);
+#endif
+//LGE_UPDATE, revert the Handle wait and active list during flush all
 
 end:
 	return rc;
@@ -1987,7 +2003,9 @@ static int cam_ife_csid_disable_pxl_path(
 	enum cam_ife_csid_halt_cmd       stop_cmd)
 {
 	int rc = 0;
+#ifndef CONFIG_MACH_LGE
 	uint32_t val = 0;
+#endif
 	const struct cam_ife_csid_reg_offset       *csid_reg;
 	struct cam_hw_soc_info                     *soc_info;
 	struct cam_ife_csid_path_cfg               *path_data;
@@ -2048,6 +2066,7 @@ static int cam_ife_csid_disable_pxl_path(
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		pxl_reg->csid_pxl_irq_mask_addr);
 
+#ifndef CONFIG_MACH_LGE
 	if (path_data->sync_mode == CAM_ISP_HW_SYNC_MASTER ||
 		path_data->sync_mode == CAM_ISP_HW_SYNC_NONE) {
 		/* configure Halt */
@@ -2058,7 +2077,7 @@ static int cam_ife_csid_disable_pxl_path(
 		cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
 			pxl_reg->csid_pxl_ctrl_addr);
 	}
-
+#endif
 	return rc;
 }
 
@@ -2352,7 +2371,11 @@ static int cam_ife_csid_disable_rdi_path(
 	enum cam_ife_csid_halt_cmd                stop_cmd)
 {
 	int rc = 0;
+#ifdef CONFIG_MACH_LGE
+	uint32_t id;
+#else
 	uint32_t id, val = 0;
+#endif
 	const struct cam_ife_csid_reg_offset       *csid_reg;
 	struct cam_hw_soc_info                     *soc_info;
 
@@ -2397,6 +2420,7 @@ static int cam_ife_csid_disable_rdi_path(
 	cam_io_w_mb(0, soc_info->reg_map[0].mem_base +
 		csid_reg->rdi_reg[id]->csid_rdi_irq_mask_addr);
 
+#ifndef CONFIG_MACH_LGE
 	/* Halt the RDI path */
 	val = cam_io_r_mb(soc_info->reg_map[0].mem_base +
 		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
@@ -2404,10 +2428,12 @@ static int cam_ife_csid_disable_rdi_path(
 	val |= stop_cmd;
 	cam_io_w_mb(val, soc_info->reg_map[0].mem_base +
 		csid_reg->rdi_reg[id]->csid_rdi_ctrl_addr);
+#endif
 
 	return rc;
 }
 
+#ifndef CONFIG_MACH_LGE
 static int cam_ife_csid_poll_stop_status(
 	struct cam_ife_csid_hw          *csid_hw,
 	uint32_t                         res_mask)
@@ -2455,6 +2481,7 @@ static int cam_ife_csid_poll_stop_status(
 
 	return rc;
 }
+#endif
 
 static int cam_ife_csid_get_hbi_vbi(
 	struct cam_ife_csid_hw   *csid_hw,
@@ -2838,6 +2865,7 @@ static int cam_ife_csid_reset_retain_sw_reg(
 	const struct cam_ife_csid_reg_offset *csid_reg =
 		csid_hw->csid_info->csid_reg;
 	struct cam_hw_soc_info          *soc_info;
+	unsigned long flags;    /* LGE_CHANGE, CST, check reset hw state */
 
 	soc_info = &csid_hw->hw_info->soc_info;
 	/* clear the top interrupt first */
@@ -2859,7 +2887,7 @@ static int cam_ife_csid_reset_retain_sw_reg(
 	if (rc < 0) {
 		CAM_ERR(CAM_ISP, "CSID:%d csid_reset fail rc = %d",
 			  csid_hw->hw_intf->hw_idx, rc);
-		rc = -ETIMEDOUT;
+		rc=0;//-ETIMEDOUT;    /* LGE_CHANGE, workaround for timeout CN#03587321, 2018-7-28, jonghwan.ko@lge.com */
 	} else {
 		CAM_DBG(CAM_ISP, "CSID:%d hw reset completed %d",
 			csid_hw->hw_intf->hw_idx, rc);
@@ -2870,6 +2898,9 @@ static int cam_ife_csid_reset_retain_sw_reg(
 	cam_io_w_mb(1, soc_info->reg_map[0].mem_base +
 		csid_reg->cmn_reg->csid_irq_cmd_addr);
 
+	spin_lock_irqsave(&csid_hw->lock_state, flags);
+	csid_hw->device_enabled = 1;
+	spin_unlock_irqrestore(&csid_hw->lock_state, flags);
 	return rc;
 }
 
@@ -3086,7 +3117,9 @@ static int cam_ife_csid_stop(void *hw_priv,
 	struct cam_isp_resource_node         *res;
 	struct cam_csid_hw_stop_args         *csid_stop;
 	uint32_t  i;
+#ifndef CONFIG_MACH_LGE
 	uint32_t  res_mask = 0;
+#endif
 
 	if (!hw_priv || !stop_args ||
 		(arg_size != sizeof(struct cam_csid_hw_stop_args))) {
@@ -3118,7 +3151,9 @@ static int cam_ife_csid_stop(void *hw_priv,
 				rc = cam_ife_csid_tpg_stop(csid_hw, res);
 			break;
 		case CAM_ISP_RESOURCE_PIX_PATH:
+#ifndef CONFIG_MACH_LGE
 			res_mask |= (1 << res->res_id);
+#endif
 			if (res->res_id == CAM_IFE_PIX_PATH_RES_IPP ||
 				res->res_id == CAM_IFE_PIX_PATH_RES_PPP)
 				rc = cam_ife_csid_disable_pxl_path(csid_hw,
@@ -3136,8 +3171,10 @@ static int cam_ife_csid_stop(void *hw_priv,
 		}
 	}
 
+#ifndef CONFIG_MACH_LGE
 	if (res_mask)
 		rc = cam_ife_csid_poll_stop_status(csid_hw, res_mask);
+#endif
 
 	for (i = 0; i < csid_stop->num_res; i++) {
 		res = csid_stop->node_res[i];

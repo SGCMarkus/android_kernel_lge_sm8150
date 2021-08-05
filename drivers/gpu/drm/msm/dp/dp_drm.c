@@ -367,6 +367,10 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 		struct msm_mode_info *mode_info,
 		u32 max_mixer_width, void *display)
 {
+	//FIXME LGE Feature CR
+	const u32 dual_lm = 2;
+	const u32 single_lm = 1;
+
 	const u32 single_intf = 1;
 	const u32 no_enc = 0;
 	struct msm_display_topology *topology;
@@ -397,6 +401,12 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 		pr_err("error getting mixer count, rc:%d\n", rc);
 		return rc;
 	}
+	//FIXME LGE Feature CR
+	if (max_mixer_width <= drm_mode->hdisplay ||
+		max_mixer_width <= drm_mode->vdisplay)
+		topology->num_lm = dual_lm;
+	else
+		topology->num_lm = single_lm;
 
 	topology->num_enc = no_enc;
 	topology->num_intf = single_intf;

@@ -15,6 +15,9 @@
 #include <linux/reboot.h>
 #include <linux/of.h>
 #include <linux/esoc_client.h>
+#if defined (CONFIG_MACH_SM8150_FLASH) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
 #include "esoc.h"
 #include "esoc-mdm.h"
 #include "mdm-dbg.h"
@@ -130,7 +133,7 @@ static int esoc_msm_restart_handler(struct notifier_block *nb,
 		esoc_client_link_power_off(esoc_clink, ESOC_HOOK_MDM_DOWN);
 		esoc_mdm_log(
 			"Reboot notifier: Notifying esoc of cold reboot\n");
-		dev_dbg(&esoc_clink->dev, "Notifying esoc of cold reboot\n");
+		dev_err(&esoc_clink->dev, "Notifying esoc of cold reboot\n");
 		clink_ops->notify(ESOC_PRIMARY_REBOOT, esoc_clink);
 		mdm_drv->mode = PWR_OFF;
 		mutex_unlock(&mdm_drv->poff_lock);
@@ -220,7 +223,7 @@ static void esoc_client_link_power_on(struct esoc_clink *esoc_clink,
 	int i;
 	struct esoc_client_hook *client_hook;
 
-	dev_dbg(&esoc_clink->dev, "Calling power_on hooks\n");
+	dev_err(&esoc_clink->dev, "Calling power_on hooks\n");
 	esoc_mdm_log(
 	"Calling power_on hooks with flags: 0x%x\n", flags);
 
@@ -238,7 +241,7 @@ static void esoc_client_link_power_off(struct esoc_clink *esoc_clink,
 	int i;
 	struct esoc_client_hook *client_hook;
 
-	dev_dbg(&esoc_clink->dev, "Calling power_off hooks\n");
+	dev_err(&esoc_clink->dev, "Calling power_off hooks\n");
 	esoc_mdm_log(
 	"Calling power_off hooks with flags: 0x%x\n", flags);
 
@@ -336,7 +339,7 @@ static int mdm_subsys_shutdown(const struct subsys_desc *crashed_subsys,
 				 */
 				goto unlock;
 			}
-			dev_dbg(&esoc_clink->dev, "Sending sysmon-shutdown\n");
+			dev_err(&esoc_clink->dev, "Sending sysmon-shutdown\n");
 			esoc_mdm_log("Executing the ESOC_PWR_OFF command\n");
 			ret = clink_ops->cmd_exe(ESOC_PWR_OFF, esoc_clink);
 		}
@@ -413,6 +416,9 @@ static int mdm_handle_boot_fail(struct esoc_clink *esoc_clink, u8 *pon_trial)
 		break;
 	case BOOT_FAIL_ACTION_PANIC:
 		esoc_mdm_log("Calling panic!!\n");
+#if defined (CONFIG_MACH_SM8150_FLASH) || defined (CONFIG_MACH_SM8150_MH2LM_5G)
+		lge_set_subsys_crash_reason("esoc0", LGE_ERR_SUB_PWR);
+#endif
 		panic("Panic requested on external modem boot failure\n");
 		break;
 	case BOOT_FAIL_ACTION_NOP:
@@ -448,7 +454,7 @@ static int mdm_subsys_powerup(const struct subsys_desc *crashed_subsys)
 		if (!esoc_clink->auto_boot &&
 			!esoc_req_eng_enabled(esoc_clink)) {
 			esoc_mdm_log("Wait for req eng registration\n");
-			dev_dbg(&esoc_clink->dev,
+			dev_err(&esoc_clink->dev,
 					"Wait for req eng registration\n");
 			wait_for_completion(&mdm_drv->req_eng_wait);
 		}
@@ -596,7 +602,7 @@ int esoc_ssr_probe(struct esoc_clink *esoc_clink, struct esoc_drv *drv)
 		debug_init_done = false;
 		dev_err(&esoc_clink->dev, "dbg engine failure\n");
 	} else {
-		dev_dbg(&esoc_clink->dev, "dbg engine initialized\n");
+		dev_err(&esoc_clink->dev, "dbg engine initialized\n");
 		debug_init_done = true;
 	}
 

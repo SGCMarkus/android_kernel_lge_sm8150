@@ -397,11 +397,27 @@ int cam_hw_cdm_submit_gen_irq(struct cam_hw_info *cdm_hw,
 	node->userdata = req->data->userdata;
 	list_add_tail(&node->entry, &core->bl_request_list);
 	len = core->ops->cdm_required_size_genirq() * core->bl_tag;
-	core->ops->cdm_write_genirq(((uint32_t *)core->gen_irq.kmdvaddr + len),
-		core->bl_tag);
-	rc = cam_hw_cdm_bl_write(cdm_hw, (core->gen_irq.vaddr + (4*len)),
-		((4 * core->ops->cdm_required_size_genirq()) - 1),
-		core->bl_tag);
+
+	/*
+	*  LGE_CHANGE: camera-stability@lge.com 2018-12-19
+	*  If the cam_hw_cdm_submit_gen_irq function is called after gen_irq is released, kernel panic occurs.
+	*  Try to check if gen_irq.kmdvaddr is valid address.
+	*/
+	if (virt_addr_valid(core->gen_irq.kmdvaddr) || is_vmalloc_or_module_addr((const void *)core->gen_irq.kmdvaddr)) {
+		core->ops->cdm_write_genirq(((uint32_t *)core->gen_irq.kmdvaddr + len),
+			core->bl_tag);
+		rc = cam_hw_cdm_bl_write(cdm_hw, (core->gen_irq.vaddr + (4*len)),
+			((4 * core->ops->cdm_required_size_genirq()) - 1),
+			core->bl_tag);
+	} else {
+		CAM_ERR(CAM_CDM, "CDM hw bl write failed for gen irq bltag=%d because gen_irq had been released(kmdvaddr = %p).",
+			core->bl_tag, core->gen_irq.kmdvaddr);
+		list_del_init(&node->entry);
+		kfree(node);
+		rc = -EIO;
+		goto end;
+	}
+
 	if (rc) {
 		CAM_ERR(CAM_CDM, "CDM hw bl write failed for gen irq bltag=%d",
 			core->bl_tag);
@@ -616,6 +632,7 @@ static void cam_hw_cdm_work(struct work_struct *work)
 				}
 				kfree(node);
 			}
+
 			mutex_unlock(&cdm_hw->hw_mutex);
 		}
 
@@ -716,9 +733,9 @@ irqreturn_t cam_hw_cdm_irq(int irq_num, void *data)
 		if (cam_cdm_write_hw_reg(cdm_hw, CDM_IRQ_CLEAR,
 			payload->irq_status))
 			CAM_ERR(CAM_CDM, "Failed to Write CDM HW IRQ Clear");
+		work_status = queue_work(cdm_core->work_queue, &payload->work);
 		if (cam_cdm_write_hw_reg(cdm_hw, CDM_IRQ_CLEAR_CMD, 0x01))
 			CAM_ERR(CAM_CDM, "Failed to Write CDM HW IRQ cmd");
-		work_status = queue_work(cdm_core->work_queue, &payload->work);
 		if (work_status == false) {
 			CAM_ERR(CAM_CDM, "Failed to queue work for irq=0x%x",
 				payload->irq_status);
@@ -773,6 +790,16 @@ int cam_hw_cdm_release_genirq_mem(void *hw_priv)
 	cdm_core = (struct cam_cdm *)cdm_hw->core_info;
 	genirq_release_cmd.mem_handle = cdm_core->gen_irq.handle;
 	rc = cam_mem_mgr_release_mem(&genirq_release_cmd);
+
+	/*
+	*  LGE_CHANGE: camera-stability@lge.com 2018-12-19
+	*  After calling cam_mem_mgr_release_mem function,
+	*  the fields of gen_irq should be initialized.
+	*/
+	cdm_core->gen_irq.handle = -1;
+	cdm_core->gen_irq.vaddr = 0x0;
+	cdm_core->gen_irq.kmdvaddr = 0x0;
+	cdm_core->gen_irq.size = 0x0;
 	if (rc)
 		CAM_ERR(CAM_CDM, "Failed to put genirq cmd space for hw");
 

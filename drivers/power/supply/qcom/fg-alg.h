@@ -48,6 +48,9 @@ struct cl_params {
 	int	max_cap_dec;
 	int	max_cap_limit;
 	int	min_cap_limit;
+#ifdef CONFIG_LGE_PM
+	int skew_cc;
+#endif
 	int	skew_decipct;
 	int	min_delta_batt_soc;
 	int	ibat_flt_thr_ma;

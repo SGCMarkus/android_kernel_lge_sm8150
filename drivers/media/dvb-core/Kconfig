@@ -40,3 +40,10 @@ config DVB_DEMUX_SECTION_LOSS_LOG
 	  be very verbose.
 
 	  If you are unsure about this, say N here.
+
+config LGE_BROADCAST_ISDBT_JAPAN
+	bool "Japan full-seg Broadcast service"
+	depends on (MACH_SM8150_MH2LM_SB_JP)
+	default y
+	help
+	  Select this if you want to use Japanese FullSeg mobile broadcast service

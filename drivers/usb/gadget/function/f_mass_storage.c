@@ -225,6 +225,11 @@
 
 #include "configfs.h"
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+#include <linux/miscdevice.h>
+/* to get autorun user mode */
+#include "u_lgeusb.h"
+#endif
 
 /*------------------------------------------------------------------------*/
 
@@ -233,8 +238,140 @@
 
 static const char fsg_string_interface[] = "Mass Storage";
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+/* Belows are LGE-customized SCSI cmd and
+ * sub-cmd for autorun processing.
+ * 2011-03-09, hyunhui.park@lge.com
+ */
+#define SC_LGE_SPE              0xF1
+#define SUB_CODE_MODE_CHANGE    0x01
+#define SUB_CODE_GET_VALUE      0x02
+#define SUB_CODE_PROBE_DEV      0xff
+#define TYPE_MOD_CHG_TO_ACM     0x01
+#define TYPE_MOD_CHG_TO_UMS     0x02
+#define TYPE_MOD_CHG_TO_MTP     0x03
+#define TYPE_MOD_CHG_TO_ASK     0x05
+#define TYPE_MOD_CHG_TO_CGO     0x08
+#define TYPE_MOD_CHG_TO_TET     0x09
+#define TYPE_MOD_CHG_TO_FDG     0x0A
+#define TYPE_MOD_CHG_TO_PTP     0x0B
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+#define TYPE_MOD_CHG_TO_MUL     0x0C
+#endif
+#define TYPE_MOD_CHG_TO_MIDI    0x0D
+#define TYPE_MOD_CHG2_TO_ACM    0x81
+#define TYPE_MOD_CHG2_TO_UMS    0x82
+#define TYPE_MOD_CHG2_TO_MTP    0x83
+#define TYPE_MOD_CHG2_TO_ASK    0x85
+#define TYPE_MOD_CHG2_TO_CGO    0x86
+#define TYPE_MOD_CHG2_TO_TET    0x87
+#define TYPE_MOD_CHG2_TO_FDG    0x88
+#define TYPE_MOD_CHG2_TO_PTP    0x89
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+#define TYPE_MOD_CHG2_TO_MUL    0x8A
+#endif
+#define TYPE_MOD_CHG2_TO_MIDI   0x8B
+/* ACK TO SEND HOST PC */
+#define ACK_STATUS_TO_HOST      0x10
+#define ACK_SW_REV_TO_HOST      0x12
+#define ACK_MEID_TO_HOST        0x13
+#define ACK_MODEL_TO_HOST       0x14
+#define ACK_SUB_VER_TO_HOST     0x15
+#define SUB_ACK_STATUS_ACM      0x00
+#define SUB_ACK_STATUS_MTP      0x01
+#define SUB_ACK_STATUS_UMS      0x02
+#define SUB_ACK_STATUS_ASK      0x03
+#define SUB_ACK_STATUS_CGO      0x04
+#define SUB_ACK_STATUS_TET      0x05
+#define SUB_ACK_STATUS_PTP      0x06
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+/*For multiple configuration, but actually ISO don't know this.
+ *TODO : Need to clear this interface.
+ */
+#define SUB_ACK_STATUS_MUL      0x07
+#endif
+#define SUB_ACK_STATUS_MIDI     0x08
+#endif /* CONFIG_LGE_USB_GADGET_AUTORUN */
+
 #include "storage_common.h"
 #include "f_mass_storage.h"
+
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+/* Belows are uevent string to communicate with
+ * android framework and application.
+ * 2011-03-09, hyunhui.park@lge.com
+ */
+static char *envp_ack[2] = {"AUTORUN=ACK", NULL};
+#ifndef CONFIG_LGE_USB_GADGET_AUTORUN_VZW
+static char *envp_mode[2] = {"AUTORUN=change_mode", NULL};
+#else
+static char *envp_mode[][2] = {
+	{"AUTORUN=change_unknown", NULL},
+	{"AUTORUN=change_acm", NULL},
+	{"AUTORUN=change_mtp", NULL},
+	{"AUTORUN=change_ums", NULL},
+	{"AUTORUN=change_ask", NULL},
+	{"AUTORUN=change_charge", NULL},
+	{"AUTORUN=change_tether", NULL},
+	{"AUTORUN=change_fdg", NULL},
+	{"AUTORUN=change_ptp", NULL},
+	{"AUTORUN=query_value", NULL},
+	{"AUTORUN=device_info", NULL},
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+	{"AUTORUN=change_mul", NULL},
+#endif
+	{"AUTORUN=change_midi", NULL},
+};
+#endif
+
+enum chg_mode_state {
+	MODE_STATE_UNKNOWN = 0,
+	MODE_STATE_ACM,
+	MODE_STATE_MTP,
+	MODE_STATE_UMS,
+	MODE_STATE_ASK,
+	MODE_STATE_CGO,
+	MODE_STATE_TET,
+	MODE_STATE_FDG,
+	MODE_STATE_PTP,
+	MODE_STATE_GET_VALUE,
+	MODE_STATE_PROBE_DEV,
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+	MODE_STATE_MUL,
+#endif
+	MODE_STATE_MIDI,
+};
+
+enum check_mode_state {
+	ACK_STATUS_ACM = SUB_ACK_STATUS_ACM,
+	ACK_STATUS_MTP = SUB_ACK_STATUS_MTP,
+	ACK_STATUS_UMS = SUB_ACK_STATUS_UMS,
+	ACK_STATUS_ASK = SUB_ACK_STATUS_ASK,
+	ACK_STATUS_CGO = SUB_ACK_STATUS_CGO,
+	ACK_STATUS_TET = SUB_ACK_STATUS_TET,
+	ACK_STATUS_PTP = SUB_ACK_STATUS_PTP,
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+	ACK_STATUS_MUL = SUB_ACK_STATUS_MUL,
+#endif
+	ACK_STATUS_MIDI= SUB_ACK_STATUS_MIDI,
+	ACK_STATUS_ERR,
+};
+
+/* file operations for /dev/usb_autorun */
+static const struct file_operations autorun_fops = {
+	.owner = THIS_MODULE,
+};
+
+static struct miscdevice autorun_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "usb_autorun",
+	.fops = &autorun_fops,
+};
+
+static unsigned int user_mode;
+static unsigned int already_acked;
+DEFINE_MUTEX(autorun_lock);
+#endif
 
 /* Static strings, in UTF-8 (for simplicity we use only ASCII characters) */
 static struct usb_string		fsg_strings[] = {
@@ -316,6 +453,12 @@ struct fsg_common {
 	char inquiry_string[INQUIRY_STRING_LEN];
 
 	struct kref		ref;
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+	/* LGE-customized USB mode */
+	enum chg_mode_state	mode_state;
+
+	struct delayed_work	eject_w;
+#endif
 };
 
 struct fsg_dev {
@@ -334,6 +477,19 @@ struct fsg_dev {
 	struct usb_ep		*bulk_in;
 	struct usb_ep		*bulk_out;
 };
+
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+static void eject_work(struct work_struct *w)
+{
+	struct fsg_common *common = container_of(w, struct fsg_common,
+			eject_w.work);
+	struct usb_gadget_driver *gdriver =
+			&common->cdev->driver->gadget_driver;
+
+	if (gdriver->disconnect)
+		gdriver->disconnect(common->gadget);
+}
+#endif
 
 static inline int __fsg_is_set(struct fsg_common *common,
 			       const char *func, unsigned line)
@@ -1089,6 +1245,125 @@ static int do_inquiry(struct fsg_common *common, struct fsg_buffhd *bh)
 	return 36;
 }
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+/* Add function which handles LGE-customized command from PC.
+ * 2011-03-09, hyunhui.park@lge.com
+ */
+static int do_ack_status(struct fsg_common *common,
+			struct fsg_buffhd *bh, u8 ack)
+{
+	u8 *buf = (u8 *) bh->buf;
+
+	if (!common->curlun) {		/* Unsupported LUNs are okay */
+		common->bad_lun_okay = 1;
+		buf[0] = 0xf;
+		return 1;
+	}
+
+	buf[0] = ack;
+
+	/*
+	 * Old froyo version
+	 */
+	/*
+	if(ack == SUB_ACK_STATUS_ACM)
+		buf[0] = SUB_ACK_STATUS_ACM;
+	else if(ack == SUB_ACK_STATUS_MTP)
+		buf[0] = SUB_ACK_STATUS_MTP;
+	else if(ack == SUB_ACK_STATUS_UMS)
+		buf[0] = SUB_ACK_STATUS_UMS;
+	else if(ack == SUB_ACK_STATUS_ASK)
+		buf[0] = SUB_ACK_STATUS_ASK;
+	else if(ack == SUB_ACK_STATUS_CGO)
+		buf[0] = SUB_ACK_STATUS_CGO;
+	else if(ack == SUB_ACK_STATUS_TET)
+		buf[0] = SUB_ACK_STATUS_TET;
+	*/
+	return 1;
+}
+
+static int do_get_sw_ver(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	u8 *buf = (u8 *) bh->buf;
+	char sw_ver[10] = {0, };
+	int i;
+
+	/* msm_get_SW_VER_type(sw_ver); */
+	if (lgeusb_get_sw_ver(sw_ver, sizeof(sw_ver)) < 0)
+		strlcpy(sw_ver, "00000000", 9);
+	memset(buf, 0, 9);
+	for (i = 0; i < strlen(sw_ver); i++) {
+		if (sw_ver[i] >= 'a' && sw_ver[i] <= 'z')
+			sw_ver[i] -= 32;
+	}
+	strlcpy(buf, sw_ver, PAGE_SIZE);
+	pr_info("[AUTORUN] %s: sw_ver: %s\n", __func__, buf);
+	return 9;
+}
+
+static int do_get_serial(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	u8 *buf = (u8 *) bh->buf;
+	int i;
+	char imei_temp[15] = {0, };
+	u8 imei_hex[7];
+
+	/* msm_get_MEID_type(imei_temp); */
+	if (lgeusb_get_phone_id(imei_temp, sizeof(imei_temp)) < 0)
+		strlcpy(imei_temp, "00000000000000", 15);
+
+	if (hex2bin(imei_hex, imei_temp, 7) < 0)
+		pr_err("%s [AUTORUN] : Error on hex2bin\n", __func__);
+
+	for (i = 0; i < 7; i++)
+		buf[6-i] = imei_hex[i];
+
+	pr_info("[AUTORUN] %s: meid: %02x%02x%02x%02x%02x%02x%02x\n", __func__,
+			buf[0], buf[1], buf[2], buf[3],
+			buf[4], buf[5], buf[6]);
+	return 7;
+}
+
+static int do_get_model(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	u8 *buf = (u8 *) bh->buf;
+	char model[10] = {0, };
+
+	if (lgeusb_get_model_name(model, sizeof(model)) < 0)
+		strlcpy(buf, "VS930", PAGE_SIZE);
+	else
+		strlcpy(buf, model, PAGE_SIZE);
+	pr_info("[AUTORUN] %s: model: %s\n", __func__, buf);
+	return strlen(buf);
+}
+
+static int do_get_sub_ver(struct fsg_common *common, struct fsg_buffhd *bh)
+{
+	u8 *buf = (u8 *) bh->buf;
+	char sub_ver[3] = {0, };
+
+	/* msm_get_SUB_VER_type(sub_ver); */
+	if (lgeusb_get_sub_ver(sub_ver, sizeof(sub_ver)) < 0)
+		sub_ver[0] = '0';
+	if (strlen(sub_ver) > 1) {
+		if (sub_ver[0] == '0')
+			*buf = sub_ver[1] - '0';
+		else if (sub_ver[0] == '1')
+			*buf = 'a' + sub_ver[1] - '0' - 87;
+		else if (sub_ver[0] == '2')
+			*buf = 'k' + sub_ver[1] - '0' - 87;
+		else if (sub_ver[0] == '3' &&
+				(sub_ver[1] < '6' &&  sub_ver[1] >= '0'))
+			*buf = 'u' + sub_ver[1] - '0' - 87;
+		else
+			*buf = 0;
+	} else
+		*buf = sub_ver[0] - '0';
+	pr_info("[AUTORUN] %s: sub_ver: %d\n", __func__, (char)*buf);
+	return 1;
+}
+#endif
+
 static int do_request_sense(struct fsg_common *common, struct fsg_buffhd *bh)
 {
 	struct fsg_lun	*curlun = common->curlun;
@@ -1189,6 +1464,10 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	int		msf = common->cmnd[1] & 0x02;
 	int		start_track = common->cmnd[6];
 	u8		*buf = (u8 *)bh->buf;
+#ifdef CONFIG_LGE_USB_GADGET_CDROM_MAC_SUPPORT
+	u8		format;
+	int		ret;
+#endif
 
 	if ((common->cmnd[1] & ~0x02) != 0 ||	/* Mask away MSF */
 			start_track > 1) {
@@ -1196,6 +1475,23 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_LGE_USB_GADGET_CDROM_MAC_SUPPORT
+	format = common->cmnd[2] & 0xf;
+	/*
+	 * Check if CDB is old style SFF-8020i
+	 * i.e. format is in 2 MSBs of byte 9
+	 * Mac OS-X host sends us this.
+	 */
+	if (format == 0)
+		format = (common->cmnd[9] >> 6) & 0x3;
+
+	ret = fsg_get_toc(curlun, msf, format, buf);
+	if (ret < 0) {
+		curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
+		return -EINVAL;
+	}
+	return ret;
+#else /* original */
 	memset(buf, 0, 20);
 	buf[1] = (20-2);		/* TOC data length */
 	buf[2] = 1;			/* First track number */
@@ -1208,6 +1504,7 @@ static int do_read_toc(struct fsg_common *common, struct fsg_buffhd *bh)
 	buf[14] = 0xAA;			/* Lead-out track number */
 	store_cdrom_address(&buf[16], msf, curlun->num_sectors);
 	return 20;
+#endif
 }
 
 static int do_mode_sense(struct fsg_common *common, struct fsg_buffhd *bh)
@@ -1334,8 +1631,14 @@ static int do_start_stop(struct fsg_common *common)
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+	/* XXX: This feature is only for USB Autorun. Don't use it at other. */
+	if (!loej || curlun->cdrom)
+		return 0;
+#else
 	if (!loej)
 		return 0;
+#endif
 
 	up_read(&common->filesem);
 	down_write(&common->filesem);
@@ -1827,6 +2130,150 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_inquiry(common, bh);
 		break;
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+	case SC_LGE_SPE:
+		pr_info("%s: SC_LGE_SPE - %x %x %x\n", __func__,
+			  common->cmnd[0], common->cmnd[1], common->cmnd[2]);
+
+		common->mode_state = MODE_STATE_UNKNOWN;
+		switch (common->cmnd[1])	{
+		case SUB_CODE_MODE_CHANGE:
+			switch (common->cmnd[2]) {
+			case TYPE_MOD_CHG_TO_ACM:
+			case TYPE_MOD_CHG2_TO_ACM:
+				common->mode_state = MODE_STATE_ACM;
+				break;
+			case TYPE_MOD_CHG_TO_UMS:
+			case TYPE_MOD_CHG2_TO_UMS:
+				common->mode_state = MODE_STATE_UMS;
+				break;
+			case TYPE_MOD_CHG_TO_MTP:
+			case TYPE_MOD_CHG2_TO_MTP:
+				common->mode_state = MODE_STATE_MTP;
+				break;
+			case TYPE_MOD_CHG_TO_ASK:
+			case TYPE_MOD_CHG2_TO_ASK:
+				common->mode_state = MODE_STATE_ASK;
+				break;
+			case TYPE_MOD_CHG_TO_CGO:
+			case TYPE_MOD_CHG2_TO_CGO:
+				common->mode_state = MODE_STATE_CGO;
+				break;
+			case TYPE_MOD_CHG_TO_TET:
+			case TYPE_MOD_CHG2_TO_TET:
+				common->mode_state = MODE_STATE_TET;
+				break;
+			case TYPE_MOD_CHG_TO_FDG:
+			case TYPE_MOD_CHG2_TO_FDG:
+				common->mode_state = MODE_STATE_FDG;
+				break;
+			case TYPE_MOD_CHG_TO_PTP:
+			case TYPE_MOD_CHG2_TO_PTP:
+				common->mode_state = MODE_STATE_PTP;
+				break;
+#if defined(CONFIG_LGE_USB_GADGET_AUTORUN_VZW) && defined(CONFIG_LGE_USB_GADGET_MULTI_CONFIG)
+			case TYPE_MOD_CHG_TO_MUL:
+			case TYPE_MOD_CHG2_TO_MUL:
+				common->mode_state = MODE_STATE_MUL;
+				break;
+#endif
+			case TYPE_MOD_CHG_TO_MIDI:
+			case TYPE_MOD_CHG2_TO_MIDI:
+				common->mode_state = MODE_STATE_MIDI;
+				break;
+
+			default:
+				common->mode_state = MODE_STATE_UNKNOWN;
+			}
+			pr_info("%s: SC_LGE_MODE - %d\n", __func__,
+					common->mode_state);
+#ifndef CONFIG_LGE_USB_GADGET_AUTORUN_VZW
+			kobject_uevent_env(&autorun_device.this_device->kobj,
+					KOBJ_CHANGE, envp_mode);
+#else
+			kobject_uevent_env(&autorun_device.this_device->kobj,
+				KOBJ_CHANGE, (char **)(&envp_mode[common->mode_state]));
+#endif
+			schedule_delayed_work(&common->eject_w, msecs_to_jiffies(100));
+			already_acked = 0;
+			reply = 0;
+			break;
+		case SUB_CODE_GET_VALUE:
+			switch (common->cmnd[2])	{
+			case ACK_STATUS_TO_HOST:	/* 0xf1 0x02 0x10 */
+				/* If some error exists, we set default mode
+				   to ACM mode */
+				common->mode_state = MODE_STATE_GET_VALUE;
+				if (user_mode >= ACK_STATUS_ERR) {
+					pr_err("%s [AUTORUN] : Error on user mode setting, set default mode (ACM)\n"
+							, __func__);
+					user_mode = ACK_STATUS_ACM;
+				} else
+					pr_info("%s [AUTORUN] : send user mode to PC %d\n"
+							, __func__, user_mode);
+
+				common->data_size_from_cmnd = 1;
+				reply = check_command(common, 6,
+						DATA_DIR_TO_HOST,
+						(7<<1), 1, "ACK_STATUS");
+				if (reply == 0)
+					reply = do_ack_status(common,
+							bh, user_mode);
+				if (!already_acked) {
+					kobject_uevent_env(
+						&autorun_device.this_device->kobj,
+						KOBJ_CHANGE, envp_ack);
+					already_acked = 1;
+				}
+				break;
+			case ACK_SW_REV_TO_HOST:	/* 0xf1 0x02 0x12 */
+				common->data_size_from_cmnd = 9;
+				reply = check_command(common, 6,
+						DATA_DIR_TO_HOST,
+						(7<<1), 1, "ACK_SW_REV");
+				if (reply == 0)
+					reply = do_get_sw_ver(common, bh);
+				break;
+			case ACK_MEID_TO_HOST:		/* 0xf1 0x02 0x13 */
+				common->data_size_from_cmnd = 7;
+				reply = check_command(common, 6,
+						DATA_DIR_TO_HOST,
+						(7<<1), 1, "ACK_SERIAL");
+				if (reply == 0)
+					reply = do_get_serial(common, bh);
+				break;
+			case ACK_MODEL_TO_HOST:	/* 0xf1 0x02 0x14 */
+				common->data_size_from_cmnd = 7;
+				reply = check_command(common, 6,
+						DATA_DIR_TO_HOST,
+						(7<<1), 1, "ACK_MODEL_NAME");
+				if (reply == 0)
+					reply = do_get_model(common, bh);
+				break;
+			case ACK_SUB_VER_TO_HOST:	/* 0xf1 0x02 0x15 */
+				common->data_size_from_cmnd = 1;
+				reply = check_command(common, 6,
+						DATA_DIR_TO_HOST,
+						(7<<1), 1, "ACK_SUB_VERSION");
+				if (reply == 0)
+					reply = do_get_sub_ver(common, bh);
+				break;
+			default:
+				break;
+			}
+			break;
+		case SUB_CODE_PROBE_DEV:
+			common->mode_state = MODE_STATE_PROBE_DEV;
+			reply = 0;
+			break;
+		default:
+			common->mode_state = MODE_STATE_UNKNOWN;
+			reply = 0;
+			break;
+		} /* switch (common->cmnd[1]) */
+		break;
+#endif /* CONFIG_LGE_USB_GADGET_AUTORUN */
+
 	case MODE_SELECT:
 		common->data_size_from_cmnd = common->cmnd[4];
 		reply = check_command(common, 6, DATA_DIR_FROM_HOST,
@@ -1933,9 +2380,15 @@ static int do_scsi_command(struct fsg_common *common)
 			goto unknown_cmnd;
 		common->data_size_from_cmnd =
 			get_unaligned_be16(&common->cmnd[7]);
+#ifdef CONFIG_LGE_USB_GADGET_CDROM_MAC_SUPPORT
+		reply = check_command(common, 10, DATA_DIR_TO_HOST,
+				      (0xf<<6) | (1<<1), 1,
+				      "READ TOC");
+#else /* original */
 		reply = check_command(common, 10, DATA_DIR_TO_HOST,
 				      (7<<6) | (1<<1), 1,
 				      "READ TOC");
+#endif
 		if (reply == 0)
 			reply = do_read_toc(common, bh);
 		break;
@@ -1966,6 +2419,10 @@ static int do_scsi_command(struct fsg_common *common)
 				      "START-STOP UNIT");
 		if (reply == 0)
 			reply = do_start_stop(common);
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+		pr_info("%s: START_STOP\n", __func__);
+		schedule_delayed_work(&common->eject_w, msecs_to_jiffies(100));
+#endif
 		break;
 
 	case SYNCHRONIZE_CACHE:
@@ -2998,6 +3455,18 @@ static int fsg_bind(struct usb_configuration *c, struct usb_function *f)
 	if (ret)
 		goto autoconf_fail;
 
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+	/* if fsg common object is cdrom, register autorun misc device */
+	if (common->luns[common->lun]->cdrom) {
+		if (misc_register(&autorun_device)) {
+			pr_err("USB cdrom gadget driver failed to initialize\n");
+			goto autoconf_fail;
+		}
+	}
+
+	INIT_DELAYED_WORK(&common->eject_w, eject_work);
+#endif
+
 	return 0;
 
 autoconf_fail:
@@ -3027,6 +3496,14 @@ static void fsg_unbind(struct usb_configuration *c, struct usb_function *f)
 	}
 
 	usb_free_all_descriptors(&fsg->function);
+
+#ifdef CONFIG_LGE_USB_GADGET_AUTORUN
+	cancel_delayed_work(&common->eject_w);
+
+	/* if fsg common object is cdrom, deregister autorun misc device */
+	if (common->luns[common->lun]->cdrom)
+		misc_deregister(&autorun_device);
+#endif
 }
 
 static inline struct fsg_lun_opts *to_fsg_lun_opts(struct config_item *item)

@@ -159,12 +159,14 @@ static struct msm_vidc_codec_data sdm670_codec_data[] =  {
  * 3x3 transformation matrix coefficients in s4.9 fixed point format
  */
 static u32 vpe_csc_custom_matrix_coeff[HAL_MAX_MATRIX_COEFFS] = {
-	470, 8170, 8148, 0, 490, 50, 0, 34, 483
+	//470, 8170, 8148, 0, 490, 50, 0, 34, 483 //qct original
+	440, 8140, 8098, 0, 460, 52, 0, 34, 463 // /*QCT_PATCH,change the CSC coefficeint on video,2018-10-29,soyoung.baek@lge.com*/
 };
 
 /* offset coefficients in s9 fixed point format */
 static u32 vpe_csc_custom_bias_coeff[HAL_MAX_BIAS_COEFFS] = {
-	34, 0, 4
+	// 34, 0, 4//qct original
+	53, 0, 4 /*QCT_PATCH,change the CSC coefficeint on video,2018-10-29,soyoung.baek@lge.com*/
 };
 
 /* clamping value for Y/U/V([min,max] for Y/U/V) */

@@ -784,4 +784,70 @@ static inline void pwmchip_sysfs_unexport(struct pwm_chip *chip)
 }
 #endif /* CONFIG_PWM_SYSFS */
 
+#ifdef CONFIG_LEDS_LGE_EMOTIONAL
+struct lpg_ramp_config {
+	u16                     step_ms;
+	u8                      pause_hi_count;
+	u8                      pause_lo_count;
+	u8                      hi_idx;
+	u8                      lo_idx;
+	bool                    ramp_dir_low_to_hi;
+	bool                    pattern_repeat;
+	bool                    toggle;
+	u32                     *pattern;
+	u32                     pattern_length;
+};
+
+struct lpg_pwm_config {
+	u32     pwm_size;
+	u32     pwm_clk;
+	u32     prediv;
+	u32     clk_exp;
+	u16     pwm_value;
+	u64     best_period_ns;
+};
+
+struct qpnp_lpg_lut {
+	struct qpnp_lpg_chip    *chip;
+	struct mutex            lock;
+	u32                     reg_base;
+	u32                     *pattern; /* patterns in percentage */
+};
+
+struct qpnp_lpg_channel {
+	struct qpnp_lpg_chip            *chip;
+	struct lpg_pwm_config           pwm_config;
+	struct lpg_ramp_config          ramp_config;
+	u32                             lpg_idx;
+	u32                             reg_base;
+	u32                             max_pattern_length;
+	u32                             lpg_sdam_base;
+	u8                              src_sel;
+	u8                              subtype;
+	bool                            lut_written;
+	u64                             current_period_ns;
+	u64                             current_duty_ns;
+};
+
+struct qpnp_lpg_chip {
+	struct pwm_chip         pwm_chip;
+	struct regmap           *regmap;
+	struct device           *dev;
+	struct qpnp_lpg_channel *lpgs;
+	struct qpnp_lpg_lut     *lut;
+	struct mutex            bus_lock;
+	u32                     *lpg_group;
+	struct nvmem_device     *sdam_nvmem;
+	struct device_node      *pbs_dev_node;
+	u32                     num_lpgs;
+	unsigned long           pbs_en_bitmap;
+	bool                    use_sdam;
+};
+
+enum lpg_src {
+	LUT_PATTERN = 0,
+	PWM_VALUE,
+};
+#endif
+
 #endif /* __LINUX_PWM_H */

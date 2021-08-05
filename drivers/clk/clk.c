@@ -95,7 +95,7 @@ struct clk_core {
 	struct hlist_node	child_node;
 	struct hlist_head	clks;
 	unsigned int		notifier_count;
-#ifdef CONFIG_DEBUG_FS
+#if defined(CONFIG_DEBUG_FS) || defined(CONFIG_PROC_FS)
 	struct dentry		*dentry;
 	struct hlist_node	debug_node;
 #endif
@@ -2684,7 +2684,7 @@ EXPORT_SYMBOL_GPL(clk_set_flags);
 
 /***        debugfs support        ***/
 
-#ifdef CONFIG_DEBUG_FS
+#if defined(CONFIG_DEBUG_FS) || defined(CONFIG_PROC_FS)
 #include <linux/debugfs.h>
 
 static struct dentry *rootdir;
@@ -3449,9 +3449,10 @@ EXPORT_SYMBOL_GPL(clk_debugfs_add_file);
  */
 void clock_debug_print_enabled(bool print_parent)
 {
+/*
 	if (likely(!debug_suspend))
 		return;
-
+*/
 	if (print_parent)
 		clock_debug_print_enabled_clocks(NULL);
 	else

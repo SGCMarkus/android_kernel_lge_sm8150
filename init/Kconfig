@@ -321,6 +321,13 @@ config AUDIT
 	  logging of avc messages output). Does not do system-call
 	  auditing without CONFIG_AUDITSYSCALL.
 
+config AUDIT_NO_RATE_LIMIT_CMDLINE
+	bool
+	default y if AUDIT
+	help
+	  Disable rate limit of audit log for debugging.
+	  It should be enabled by userdebug build.
+
 config HAVE_ARCH_AUDITSYSCALL
 	bool
 

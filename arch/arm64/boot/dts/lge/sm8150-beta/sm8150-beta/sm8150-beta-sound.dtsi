@@ -1,0 +1,105 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-beta_common/sm8150-beta_common-sound.dtsi"
+#include "../sm8150-beta_common/sm8150-beta_common-sound-es9218.dtsi"
+#include "../sm8150-beta_common/sm8150-beta_common-sound-sma6101.dtsi"
+#include "../sm8150-beta_common/sm8150-beta_common-sound-tfa9872.dtsi"
+#include "../sm8150-beta_common/sm8150-beta_common-sound-vibrator.dtsi"
+
+&audio_apr {
+	sound-tavil {
+		pinctrl-names = "sec-mi2s-sleep", "sec-mi2s-active";
+		pinctrl-0 = <&sec_mi2s_sleep &sec_mi2s_sd0_sleep &sec_mi2s_sd1_sleep>;
+		pinctrl-1 = <&sec_mi2s_active &sec_mi2s_sd0_active &sec_mi2s_sd1_active>;
+
+		asoc-codec = <&stub_codec>,  <&ext_disp_audio_codec>, <&tfa98xx_spk1>, <&tfa98xx_spk2>;
+		asoc-codec-names = "msm-stub-codec.1",
+				"msm-ext-disp-audio-codec-rx",
+				"tfa98xx-codec.0-0034", "tfa98xx-codec.0-0035";
+	};
+};
+
+&tlmm {
+	sma_intr {
+		sma_intr_default: sma_intr_default {
+			mux {
+				pins = "gpio125";
+				function = "gpio";
+			};
+
+			config {
+				pins = "gpio125";
+				drive-strength = <2>; /* 2 mA */
+				bias-disable;  /* NO pull */
+			};
+		};
+	};
+};
+
+/* BETA Audio PM8150 Haptic on Rev0.1, RevA */
+/* BETA Audio DW7800 on RevB ~ */
+&qupv3_se4_i2c { /* QUPV3 SE4  */
+    status = "ok";
+    dw7800_vibrator_se4: dw7800@59 {
+        status = "ok";
+    };
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	status = "ok";
+	sma6101_amp_se4: sma6101_se4@1e {
+		pinctrl-names = "default";
+		pinctrl-0 = <&sma_intr_default>;
+
+		sm,reset-gpio = <&tlmm 135 0x0>;
+
+		sys-clk-id = <0x3>;
+		mclk-freq = <19200000>;
+		/* to use ln_bb_clk3 as MCLK in SMA6101 */
+		/* sys-clk-id = <0x2> */
+		/* enable SMA6101_MCLK in pm_pvc_config.c */
+		clock-names = "ln_bb_clk3";
+		clocks = <&clock_rpmh RPMH_LN_BB_CLK3>;
+
+		status = "disabled";
+	};
+};
+
+&qupv3_se4_i2c{ /* QUPV3 SE4  */
+	es9218_dac_se4: es9218-codec@48{
+		status = "disabled";
+	};
+};
+
+&soc {
+/* Comparator Regulator : VREG_BOB */
+        rpmh-regulator-bobc1 {
+                BOB: pm8150l_bob: regulator-pm8150l-bob {
+                        qcom,init-voltage = <3312000>;
+                };
+        };
+};
+
+/* FM Radio */
+/* lge,fmradio-lna-enable-gpio = DMB_FM_LNA_EN gpio (PON line on LNA circuit) */
+/* lna-supply = VCC line on LNA circuit */
+/* lge,fmradio-rf-ctrl-gpio = DMB_FM_SPDT (VCTL line on SPDT circuit) */
+/* spdt-supply = VDD line on SPDT circuit */
+/* SPDT circuit is removed on RevB*/
+&snd_934x {
+	lge,fmradio-lna-enable-gpio = <&tlmm 164 0x00>;
+	lna-supply = <&pm8150_l16>;
+	lge,fmradio-rf-ctrl-gpio = <&tlmm 163 0x00>;
+	spdt-supply = <&pm8150_l16>;
+};

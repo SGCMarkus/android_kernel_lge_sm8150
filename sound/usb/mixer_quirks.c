@@ -46,6 +46,10 @@
 #include "mixer_us16x08.h"
 #include "helper.h"
 
+#ifdef CONFIG_LGE_SND_USB_ESS014
+#include "mixer_ess014.h"
+#endif
+
 extern struct snd_kcontrol_new *snd_usb_feature_unit_ctl;
 
 struct std_mono_table {
@@ -1807,6 +1811,13 @@ int snd_usb_mixer_apply_create_quirk(struct usb_mixer_interface *mixer)
 	case USB_ID(0x1235, 0x800c): /* Focusrite Scarlett 18i20 */
 		err = snd_scarlett_controls_create(mixer);
 		break;
+
+#ifdef CONFIG_LGE_SND_USB_ESS014
+	case USB_ID(0x0495, 0x1042):
+	case USB_ID(0x0495, 0x1043):
+		err = snd_ess014_controls_create(mixer);
+		break;
+#endif
 	}
 
 	return err;

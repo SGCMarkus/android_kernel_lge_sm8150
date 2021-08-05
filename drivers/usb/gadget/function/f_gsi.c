@@ -3070,7 +3070,11 @@ static int gsi_bind(struct usb_configuration *c, struct usb_function *f)
 		 * for windows7/windows10 to avoid data stall issues
 		 */
 		if (gsi->rndis_id == RNDIS_ID_UNKNOWN)
+#ifdef CONFIG_LGE_USB_GADGET
+			gsi->rndis_id = WIRELESS_CONTROLLER_REMOTE_NDIS;
+#else
 			gsi->rndis_id = MISC_RNDIS_OVER_ETHERNET;
+#endif
 
 		switch (gsi->rndis_id) {
 		default:
@@ -3432,6 +3436,45 @@ static void gsi_free_func(struct usb_function *f)
 	log_event_dbg("%s\n", __func__);
 }
 
+#ifdef CONFIG_LGE_USB_GADGET
+static int gsi_set_mac_os(struct usb_function *f)
+{
+	struct usb_composite_dev *cdev = f->config->cdev;
+	struct usb_interface_assoc_descriptor *iad_desc;
+	struct usb_interface_descriptor *ctrl_desc;
+
+	iad_desc = (struct usb_interface_assoc_descriptor *)f->fs_descriptors[0];
+	ctrl_desc = (struct usb_interface_descriptor *)f->fs_descriptors[1];
+	iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+		USB_CLASS_WIRELESS_CONTROLLER;
+	iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+	iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+
+	if (f->hs_descriptors && gadget_is_dualspeed(cdev->gadget)) {
+		iad_desc = (struct usb_interface_assoc_descriptor *)f->hs_descriptors[0];
+		ctrl_desc = (struct usb_interface_descriptor *)f->hs_descriptors[1];
+		iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+			USB_CLASS_WIRELESS_CONTROLLER;
+		iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+		iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+	}
+
+	if (f->ss_descriptors && gadget_is_superspeed(cdev->gadget)) {
+		iad_desc = (struct usb_interface_assoc_descriptor *)f->ss_descriptors[0];
+		ctrl_desc = (struct usb_interface_descriptor *)f->ss_descriptors[1];
+		iad_desc->bFunctionClass = ctrl_desc->bInterfaceClass =
+			USB_CLASS_WIRELESS_CONTROLLER;
+		iad_desc->bFunctionSubClass = ctrl_desc->bInterfaceSubClass = 0x01;
+		iad_desc->bFunctionProtocol = ctrl_desc->bInterfaceProtocol = 0x03;
+	}
+
+	DBG(cdev, "MAC OS GSI class/subclass/proto change to %u/%u/%u\n",
+	    USB_CLASS_WIRELESS_CONTROLLER, 0x01, 0x03);
+
+	return 0;
+}
+#endif
+
 static int gsi_bind_config(struct f_gsi *gsi)
 {
 	int status = 0;
@@ -3483,6 +3526,9 @@ static int gsi_bind_config(struct f_gsi *gsi)
 	gsi->function.get_status = gsi_get_status;
 	gsi->function.func_suspend = gsi_func_suspend;
 	gsi->function.resume = gsi_resume;
+#ifdef CONFIG_LGE_USB_GADGET
+	gsi->function.set_mac_os = gsi_set_mac_os;
+#endif
 
 	INIT_WORK(&gsi->d_port.usb_ipa_w, ipa_work_handler);
 

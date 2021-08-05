@@ -11,6 +11,12 @@
 extern const char linux_banner[];
 extern const char linux_proc_banner[];
 
+#if defined(CONFIG_LEAVE_INITLOG) && defined(CONFIG_LGE_HANDLE_PANIC)
+extern char *boot_log_buf;
+extern unsigned int boot_log_buf_size;
+static bool block_overwrite;
+#endif
+
 #define PRINTK_MAX_SINGLE_HEADER_LEN 2
 
 static inline int printk_get_level(const char *buffer)

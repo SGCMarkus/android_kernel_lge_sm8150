@@ -72,6 +72,9 @@ struct wakeup_source {
 	unsigned long		expire_count;
 	unsigned long		wakeup_count;
 	struct device		*dev;
+#ifdef CONFIG_LGE_PM
+	unsigned long           pending_count;
+#endif
 	bool			active:1;
 	bool			autosleep_enabled:1;
 };

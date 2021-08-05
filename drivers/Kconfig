@@ -225,4 +225,12 @@ source "drivers/sensors/Kconfig"
 
 source "drivers/esoc/Kconfig"
 
+source "drivers/tspdrv/Kconfig"
+
+source "drivers/broadcast/Kconfig"
+
+source "drivers/ice40/Kconfig"
+
+source "drivers/gud/Kconfig"
+
 endmenu

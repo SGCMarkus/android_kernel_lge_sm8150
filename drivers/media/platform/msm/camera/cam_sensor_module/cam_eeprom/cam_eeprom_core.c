@@ -70,7 +70,12 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 			i2c_reg_settings.reg_setting = &i2c_reg_array;
 			rc = camera_io_dev_write(&e_ctrl->io_master_info,
 				&i2c_reg_settings);
+#ifndef CONFIG_MACH_LGE
 			if (rc) {
+#else
+/* i2c_transfer returns # of messages executed. */
+			if (rc < 0) {
+#endif
 				CAM_ERR(CAM_EEPROM, "page write failed rc %d",
 					rc);
 				return rc;
@@ -87,7 +92,12 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 			i2c_reg_settings.reg_setting = &i2c_reg_array;
 			rc = camera_io_dev_write(&e_ctrl->io_master_info,
 				&i2c_reg_settings);
+#ifndef CONFIG_MACH_LGE
 			if (rc) {
+#else
+/* i2c_transfer returns # of messages executed. */
+			if (rc < 0) {
+#endif
 				CAM_ERR(CAM_EEPROM, "page enable failed rc %d",
 					rc);
 				return rc;
@@ -113,7 +123,12 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 				emap[j].mem.addr_type,
 				emap[j].mem.data_type,
 				emap[j].mem.valid_size);
+#ifndef CONFIG_MACH_LGE
+			if (rc) {
+#else
+/* i2c_transfer returns # of messages executed. */
 			if (rc < 0) {
+#endif
 				CAM_ERR(CAM_EEPROM, "read failed rc %d",
 					rc);
 				return rc;
@@ -131,7 +146,12 @@ static int cam_eeprom_read_memory(struct cam_eeprom_ctrl_t *e_ctrl,
 			i2c_reg_settings.reg_setting = &i2c_reg_array;
 			rc = camera_io_dev_write(&e_ctrl->io_master_info,
 				&i2c_reg_settings);
+#ifndef CONFIG_MACH_LGE
 			if (rc) {
+#else
+/* i2c_transfer returns # of messages executed. */
+			if (rc < 0) {
+#endif
 				CAM_ERR(CAM_EEPROM,
 					"page disable failed rc %d",
 					rc);
@@ -526,6 +546,9 @@ static int32_t cam_eeprom_parse_memory_map(
 			map[*num_map - 1].mem.delay = i2c_uncond_wait->delay;
 			map[*num_map - 1].page.delay = i2c_uncond_wait->delay;
 			map[*num_map - 1].pageen.delay = i2c_uncond_wait->delay;
+#ifdef CONFIG_MACH_LGE
+			(*num_map)--;
+#endif
 		} else if (generic_op_code ==
 			CAMERA_SENSOR_WAIT_OP_COND) {
 			i2c_poll = (struct cam_cmd_conditional_wait *)cmd_buf;
@@ -890,7 +913,12 @@ static int32_t cam_eeprom_pkt_parse(struct cam_eeprom_ctrl_t *e_ctrl, void *arg)
 
 		e_ctrl->cam_eeprom_state = CAM_EEPROM_CONFIG;
 		rc = cam_eeprom_read_memory(e_ctrl, &e_ctrl->cal_data);
-		if (rc) {
+#ifndef CONFIG_MACH_LGE
+			if (rc) {
+#else
+/* i2c_transfer returns # of messages executed. */
+			if (rc < 0) {
+#endif
 			CAM_ERR(CAM_EEPROM,
 				"read_eeprom_memory failed");
 			goto power_down;

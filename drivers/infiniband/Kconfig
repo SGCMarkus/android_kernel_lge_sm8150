@@ -87,6 +87,10 @@ config INFINIBAND_ADDR_TRANS_CONFIGFS
 	  This allows the user to config the default GID type that the CM
 	  uses for each device, when initiaing new connections.
 
+# 2015-08-25 jewon.lee@lge.com, LGP_DATA_TCPIP_MPTCP [START]
+config LGP_DATA_TCPIP_MPTCP
+    bool "LG MPTCP feature"
+# 2015-08-25 jewon.lee@lge.com, LGP_DATA_TCPIP_MPTCP [END]
 source "drivers/infiniband/hw/mthca/Kconfig"
 source "drivers/infiniband/hw/qib/Kconfig"
 source "drivers/infiniband/hw/cxgb3/Kconfig"

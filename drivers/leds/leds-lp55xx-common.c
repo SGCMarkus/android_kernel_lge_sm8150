@@ -204,6 +204,11 @@ static void lp55xx_firmware_loaded(const struct firmware *fw, void *context)
 		return;
 	}
 
+	if (idx == LP55XX_ENGINE_INVALID) {
+		dev_err(dev, "idx value is invalid\n");
+		goto out;
+	}
+
 	/* handling firmware data is chip dependent */
 	mutex_lock(&chip->lock);
 
@@ -378,6 +383,7 @@ bool lp55xx_is_extclk_used(struct lp55xx_chip *chip)
 	return true;
 
 use_internal_clk:
+	devm_clk_put(&chip->cl->dev, clk);
 	dev_info(&chip->cl->dev, "internal clock used\n");
 	return false;
 }
@@ -583,6 +589,8 @@ struct lp55xx_platform_data *lp55xx_of_populate_pdata(struct device *dev,
 	of_property_read_u8(np, "clock-mode", &pdata->clock_mode);
 
 	pdata->enable_gpio = of_get_named_gpio(np, "enable-gpio", 0);
+	LED_I("num_channels = %d\n", pdata->num_channels);
+	LED_I("enable_gpio = %d\n", pdata->enable_gpio);
 
 	/* LP8501 specific */
 	of_property_read_u8(np, "pwr-sel", (u8 *)&pdata->pwr_sel);

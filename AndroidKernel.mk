@@ -51,6 +51,11 @@ KERNEL_CONFIG_OVERRIDE := CONFIG_ANDROID_BINDER_IPC_32BIT=y
 endif
 endif
 
+#LGE LDU RMV Build Option
+ifneq ($(LDU_RMV_BUILD), true)
+KERNEL_CONFIG_OVERRIDE := CONFIG_LDU_BLOCK_FAKE_SIZE=y
+endif
+
 TARGET_KERNEL_CROSS_COMPILE_PREFIX := $(strip $(TARGET_KERNEL_CROSS_COMPILE_PREFIX))
 ifeq ($(TARGET_KERNEL_CROSS_COMPILE_PREFIX),)
 KERNEL_CROSS_COMPILE := arm-eabi-
@@ -99,12 +104,25 @@ ifeq ($(TARGET_KERNEL),$(current_dir))
     KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/kernel/$(TARGET_KERNEL)
     KERNEL_SYMLINK := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
     KERNEL_USR := $(KERNEL_SYMLINK)/usr
+    KERNEL_HEADERS_TIMESTAMP := $(KERNEL_SYMLINK)/usr/build-timestamp
 else
     # Legacy style, kernel source directly under kernel
     KERNEL_LEGACY_DIR := true
     BUILD_ROOT_LOC := ../
     TARGET_KERNEL_SOURCE := kernel
     KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
+    KERNEL_HEADERS_TIMESTAMP := $(KERNEL_OUT)/usr/build-timestamp
+endif
+
+# Add RTIC DTB to dtb.img if RTIC MPGen is enabled.
+# Note: unfortunately we can't define RTIC DTS + DTB rule here as the
+# following variable/ tools (needed for DTS generation)
+# are missing - DTB_OBJS, OBJDUMP, KCONFIG_CONFIG, CC, DTC_FLAGS (the only available is DTC).
+# The existing RTIC kernel integration in scripts/link-vmlinux.sh generates RTIC MP DTS
+# that will be compiled with optional rule below.
+# To be safe, we check for MPGen enable.
+ifdef RTIC_MPGEN
+RTIC_DTB := $(KERNEL_SYMLINK)/rtic_mp.dtb
 endif
 
 # Add RTIC DTB to dtb.img if RTIC MPGen is enabled.
@@ -142,6 +160,7 @@ endif
 
 KERNEL_DEBUGFS := $(KERNEL_OUT)/tmp
 KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
+KERNEL_HEADERS_TIMESTAMP := $(KERNEL_HEADERS_INSTALL)/build-timestamp
 KERNEL_MODULES_INSTALL ?= system
 KERNEL_MODULES_OUT ?= $(PRODUCT_OUT)/$(KERNEL_MODULES_INSTALL)/lib/modules
 
@@ -176,12 +195,29 @@ $(KERNEL_USR): $(KERNEL_HEADERS_INSTALL)
 $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_USR)
 endif
 
+ifeq ($(INIT_BOOTCHART2), true)
+KERNEL_CONFIG_OVERRIDE_FILES := bootchart2_defconfig
+endif
+
+ifeq ($(TARGET_PRODUCT), mh2lm_5g)
+KERNEL_CONFIG_OVERRIDE_FILES += mh2lm_5g_defconfig
+endif
+
 $(KERNEL_CONFIG): $(KERNEL_OUT)
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) $(KERNEL_DEFCONFIG)
 	$(hide) if [ ! -z "$(KERNEL_CONFIG_OVERRIDE)" ]; then \
 			echo "Overriding kernel config with '$(KERNEL_CONFIG_OVERRIDE)'"; \
 			echo $(KERNEL_CONFIG_OVERRIDE) >> $(KERNEL_OUT)/.config; \
 			$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) oldconfig; fi
+	$(hide) if [ ! -z "$(KERNEL_CONFIG_OVERRIDE_FILES)" ]; then \
+			echo "Overriding kernel config with '$(KERNEL_CONFIG_OVERRIDE_FILES)'"; \
+			for override_file in $(KERNEL_CONFIG_OVERRIDE_FILES); \
+				do cat $(TARGET_KERNEL_SOURCE)/arch/$(KERNEL_ARCH)/configs/$$override_file >> $(KERNEL_OUT)/.config; done; \
+			$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) oldconfig; fi
+
+ifeq ($(PRODUCT_SUPPORT_EXFAT), y)
+sinclude ./device/lge/common/fs/tuxera.mk
+endif
 
 ifeq ($(TARGET_KERNEL_APPEND_DTB), true)
 TARGET_PREBUILT_INT_KERNEL_IMAGE := $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/Image
@@ -194,7 +230,7 @@ $(TARGET_PREBUILT_INT_KERNEL_IMAGE): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(mv-modules)
 	$(clean-module-folder)
 
-$(TARGET_PREBUILT_INT_KERNEL): $(TARGET_PREBUILT_INT_KERNEL_IMAGE)
+$(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL) $(KERNEL_SOURCE_FILES) | $(KERNEL_OUT)
 	$(hide) echo "Building kernel..."
 	$(hide) rm -rf $(KERNEL_OUT)/arch/$(KERNEL_ARCH)/boot/dts
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) $(KERNEL_CFLAGS)
@@ -205,9 +241,27 @@ $(TARGET_PREBUILT_INT_KERNEL): $(KERNEL_OUT) $(KERNEL_HEADERS_INSTALL)
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) $(KERNEL_CFLAGS)
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) $(KERNEL_CFLAGS) modules
 	$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) INSTALL_MOD_PATH=$(BUILD_ROOT_LOC)../$(KERNEL_MODULES_INSTALL) INSTALL_MOD_STRIP=1 $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) modules_install
+endif
+
+ifeq ($(PRODUCT_SUPPORT_EXFAT), y)
+	# Make directory dlkm
+	@mkdir -p ./$(KERNEL_MODULES_OUT)
+	@cp -f ./kernel/msm-4.14/tuxera_update.sh .
+	@sh tuxera_update.sh --target target/lg.d/sdm855-q --use-cache --latest --max-cache-entries 2 --source-dir ./kernel/msm-4.14 --output-dir ./$(KERNEL_OUT) $(SUPPORT_EXFAT_TUXERA)
+	@tar -xzf tuxera-exfat*.tgz
+	@mkdir -p $(TARGET_OUT_EXECUTABLES)
+	@cp ./tuxera-exfat*/exfat/kernel-module/texfat.ko ./$(KERNEL_MODULES_OUT)
+	@cp ./tuxera-exfat*/exfat/tools/* $(TARGET_OUT_EXECUTABLES)
+	@./$(KERNEL_OUT)/scripts/sign-file sha1 ./$(KERNEL_OUT)/certs/signing_key.pem ./$(KERNEL_OUT)/certs/signing_key.x509 ./$(KERNEL_MODULES_OUT)/texfat.ko
+	@rm -f kheaders*.tar.bz2
+	@rm -f tuxera-exfat*.tgz
+	@rm -rf tuxera-exfat*
+	@rm -f tuxera_update.sh
+endif
 	$(mv-modules)
 	$(clean-module-folder)
-endif
+
+$(KERNEL_HEADERS_TIMESTAMP): $(KERNEL_HEADERS_INSTALL)
 
 $(KERNEL_DEBUGFS):
 	KERNEL_DIR=$(TARGET_KERNEL_SOURCE) \
@@ -237,6 +291,19 @@ $(KERNEL_HEADERS_INSTALL): $(KERNEL_OUT)
 			echo "Overriding kernel config with '$(KERNEL_CONFIG_OVERRIDE)'"; \
 			echo $(KERNEL_CONFIG_OVERRIDE) >> $(KERNEL_OUT)/.config; \
 			$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) oldconfig; fi
+	$(hide) if [ ! -z "$(KERNEL_CONFIG_OVERRIDE_FILES)" ]; then \
+			echo "Overriding kernel config with '$(KERNEL_CONFIG_OVERRIDE_FILES)'"; \
+			for override_file in $(KERNEL_CONFIG_OVERRIDE_FILES); \
+				do cat $(TARGET_KERNEL_SOURCE)/arch/$(KERNEL_ARCH)/configs/$$override_file >> $(KERNEL_OUT)/.config; done; \
+			$(MAKE) -C $(TARGET_KERNEL_SOURCE) O=$(BUILD_ROOT_LOC)$(KERNEL_OUT) $(KERNEL_MAKE_ENV) ARCH=$(KERNEL_ARCH) CROSS_COMPILE=$(KERNEL_CROSS_COMPILE) $(real_cc) oldconfig; fi
+	$(hide) touch $@/build-timestamp
+
+# RTIC DTS to DTB (if MPGen enabled;
+# and make sure we don't break the build if rtic_mp.dts missing)
+$(RTIC_DTB): $(INSTALLED_KERNEL_TARGET)
+	stat $(KERNEL_SYMLINK)/rtic_mp.dts 2>/dev/null >&2 && \
+	$(DTC) -O dtb -o $(RTIC_DTB) -b 1 $(DTC_FLAGS) $(KERNEL_SYMLINK)/rtic_mp.dts || \
+	touch $(RTIC_DTB)
 
 # RTIC DTS to DTB (if MPGen enabled;
 # and make sure we don't break the build if rtic_mp.dts missing)

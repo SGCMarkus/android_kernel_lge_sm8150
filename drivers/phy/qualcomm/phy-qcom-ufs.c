@@ -689,6 +689,12 @@ int ufs_qcom_phy_calibrate_phy(struct phy *generic_phy, bool is_rate_B,
 				__func__, ret);
 	}
 
+#ifdef CONFIG_UFSDBG_TUNABLES
+	if (!ret && ufs_qcom_phy->phy_spec_ops->calibrate_phy_tunables) {
+		ufs_qcom_phy->phy_spec_ops->calibrate_phy_tunables(ufs_qcom_phy);
+	}
+#endif
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(ufs_qcom_phy_calibrate_phy);

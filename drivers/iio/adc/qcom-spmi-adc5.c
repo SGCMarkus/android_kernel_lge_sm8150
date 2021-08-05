@@ -737,12 +737,21 @@ static const struct adc_channels adc_chans_pmic5[ADC_MAX_CHANNEL] = {
 					SCALE_HW_CALIB_DEFAULT)
 	[ADC_XO_THERM_PU2]	= ADC_CHAN_TEMP("xo_therm", 1,
 					SCALE_HW_CALIB_XOTHERM)
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_BETA)
+	[ADC_BAT_THERM_PU2]	= ADC_CHAN_VOLT("bat_therm_pu2", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_BAT_THERM_PU1]	= ADC_CHAN_VOLT("bat_therm_pu1", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_BAT_THERM_PU3]	= ADC_CHAN_VOLT("bat_therm_pu3", 1,
+					SCALE_HW_CALIB_DEFAULT)
+#else
 	[ADC_BAT_THERM_PU2]	= ADC_CHAN_TEMP("bat_therm_pu2", 1,
 					SCALE_HW_CALIB_BATT_THERM_100K)
 	[ADC_BAT_THERM_PU1]	= ADC_CHAN_TEMP("bat_therm_pu1", 1,
 					SCALE_HW_CALIB_BATT_THERM_30K)
 	[ADC_BAT_THERM_PU3]	= ADC_CHAN_TEMP("bat_therm_pu3", 1,
 					SCALE_HW_CALIB_BATT_THERM_400K)
+#endif
 	[ADC_BAT_ID_PU2]	= ADC_CHAN_TEMP("bat_id", 1,
 					SCALE_HW_CALIB_DEFAULT)
 	[ADC_AMUX_THM1_PU2]	= ADC_CHAN_TEMP("amux_thm1_pu2", 1,
@@ -772,6 +781,49 @@ static const struct adc_channels adc_chans_pmic5[ADC_MAX_CHANNEL] = {
 	[ADC_GPIO4_PU2]	= ADC_CHAN_TEMP("gpio4_pu2", 1,
 					SCALE_HW_CALIB_THERM_100K_PULLUP)
 };
+
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
+/* For PM8150L/A ADC */
+static const struct adc_channels adc_chans_pmic5_pm8150l[ADC_MAX_CHANNEL] = {
+	[ADC_REF_GND]		= ADC_CHAN_VOLT("ref_gnd", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_1P25VREF]		= ADC_CHAN_VOLT("vref_1p25", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_VPH_PWR]		= ADC_CHAN_VOLT("vph_pwr", 3,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_VBAT_SNS]		= ADC_CHAN_VOLT("vbat_sns", 3,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_DIE_TEMP]		= ADC_CHAN_TEMP("die_temp", 1,
+					SCALE_HW_CALIB_PMIC_THERM)
+	[ADC_USB_IN_I]		= ADC_CHAN_VOLT("usb_in_i_uv", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_USB_IN_V_16]	= ADC_CHAN_VOLT("usb_in_v_div_16", 16,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_CHG_TEMP]		= ADC_CHAN_TEMP("chg_temp", 1,
+					SCALE_HW_CALIB_PM5_CHG_TEMP)
+	/* Charger prescales SBUx and MID_CHG to fit within 1.8V upper unit */
+	[ADC_SBUx]		= ADC_CHAN_VOLT("chg_sbux", 3,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_MID_CHG_DIV6]	= ADC_CHAN_VOLT("chg_mid_chg", 6,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_XO_THERM_PU2]	= ADC_CHAN_TEMP("xo_therm", 1,
+					SCALE_HW_CALIB_XOTHERM)
+	[ADC_AMUX_THM1_PU2]	= ADC_CHAN_VOLT("amux_thm1_pu2", 1,
+					SCALE_HW_CALIB_DEFAULT)
+	[ADC_AMUX_THM2_PU2]	= ADC_CHAN_TEMP("amux_thm2_pu2", 1,
+					SCALE_HW_CALIB_THERM_100K_PULLUP)
+	[ADC_AMUX_THM3_PU2]	= ADC_CHAN_TEMP("amux_thm3_pu2", 1,
+					SCALE_HW_CALIB_THERM_100K_PULLUP)
+	[ADC_INT_EXT_ISENSE_VBAT_VDATA]	= ADC_CHAN_POWER("int_ext_isense", 1,
+					SCALE_HW_CALIB_CUR)
+	[ADC_EXT_ISENSE_VBAT_VDATA]	= ADC_CHAN_POWER("ext_isense", 1,
+					SCALE_HW_CALIB_CUR)
+	[ADC_PARALLEL_ISENSE_VBAT_VDATA] = ADC_CHAN_POWER("parallel_isense", 1,
+					SCALE_HW_CALIB_CUR)
+	[ADC_AMUX_THM2]			= ADC_CHAN_VOLT("amux_thm2", 1,
+					SCALE_HW_CALIB_DEFAULT)
+};
+#endif
 
 static const struct adc_channels adc_chans_rev2[ADC_MAX_CHANNEL] = {
 	[ADC_REF_GND]		= ADC_CHAN_VOLT("ref_gnd", 1,
@@ -920,6 +972,19 @@ const struct adc_data data_pmic5 = {
 					800, 900, 1, 2, 4, 6, 8, 10},
 };
 
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
+/* For PM8150L/A ADC */
+const struct adc_data data_pmic5_pm8150l = {
+	.full_scale_code_volt = 0x70e4,
+	/* On PM8150B, IBAT LSB = 10A/32767 */
+	.full_scale_code_cur = 10000,
+	.adc_chans = adc_chans_pmic5_pm8150l,
+	.decimation = (unsigned int []) {250, 420, 840},
+	.hw_settle = (unsigned int []) {15, 100, 200, 300, 400, 500, 600, 700,
+					800, 900, 1, 2, 4, 6, 8, 10},
+};
+#endif
+
 const struct adc_data data_pmic_rev2 = {
 	.full_scale_code_volt = 0x4000,
 	.full_scale_code_cur = 0x1800,
@@ -934,6 +999,13 @@ static const struct of_device_id adc_match_table[] = {
 		.compatible = "qcom,spmi-adc5",
 		.data = &data_pmic5,
 	},
+#if defined(CONFIG_MACH_SM8150_ALPHA) || defined(CONFIG_MACH_SM8150_FLASH) || defined(CONFIG_MACH_SM8150_BETA) || defined(CONFIG_MACH_SM8150_MH2LM)
+	/* For PM8150L/A ADC */
+	{
+		.compatible = "qcom,spmi-adc5_pm8150l",
+		.data = &data_pmic5_pm8150l,
+	},
+#endif
 	{
 		.compatible = "qcom,spmi-adc-rev2",
 		.data = &data_pmic_rev2,

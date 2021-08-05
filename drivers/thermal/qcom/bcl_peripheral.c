@@ -207,6 +207,9 @@ static int bcl_set_ibat(void *data, int low, int high)
 	bat_data->trip_temp = ibat_ua;
 
 	if (bat_data->irq_num && !bat_data->irq_enabled) {
+#ifdef CONFIG_LGE_PM_DEBUG
+		pr_info_ratelimited("Ibat:%d irq enable\n", bat_data->irq_num);
+#endif
 		enable_irq(bat_data->irq_num);
 		bat_data->irq_enabled = true;
 	}
@@ -294,6 +297,9 @@ static int bcl_set_vbat(void *data, int low, int high)
 	}
 	bat_data->trip_temp = vbat_uv;
 	if (bat_data->irq_num && !bat_data->irq_enabled) {
+#ifdef CONFIG_LGE_PM_DEBUG
+		pr_info_ratelimited("vbat:%d irq enable\n", bat_data->irq_num);
+#endif
 		enable_irq(bat_data->irq_num);
 		bat_data->irq_enabled = true;
 	}
@@ -433,6 +439,9 @@ static irqreturn_t bcl_handle_ibat(int irq, void *data)
 		goto exit_intr;
 	}
 	mutex_unlock(&perph_data->state_trans_lock);
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("ibat interrupt:%d\n", irq);
+#endif
 	of_thermal_handle_trip(perph_data->tz_dev);
 
 	return IRQ_HANDLED;
@@ -455,6 +464,9 @@ static irqreturn_t bcl_handle_vbat(int irq, void *data)
 		goto exit_intr;
 	}
 	mutex_unlock(&perph_data->state_trans_lock);
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("vbat interrupt:%d\n", irq);
+#endif
 	of_thermal_handle_trip(perph_data->tz_dev);
 
 	return IRQ_HANDLED;

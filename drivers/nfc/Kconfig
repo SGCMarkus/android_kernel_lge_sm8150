@@ -4,10 +4,22 @@
 
 menu "Near Field Communication (NFC) devices"
 	depends on NFC
+endmenu
+
+config NFC_WILINK
+	tristate "Texas Instruments NFC WiLink driver"
+	depends on TI_ST && NFC_NCI
+	help
+	  This enables the NFC driver for Texas Instrument's BT/FM/GPS/NFC
+	  combo devices. This makes use of shared transport line discipline
+	  core driver to communicate with the NFC core of the combo chip.
+
+	  Say Y here to compile support for Texas Instrument's NFC WiLink driver
+	  into the kernel or say M to compile it as module.
 
 config NFC_TRF7970A
 	tristate "Texas Instruments TRF7970a NFC driver"
-	depends on SPI && NFC_DIGITAL && GPIOLIB
+	depends on SPI && NFC_DIGITAL
 	help
 	  This option enables the NFC driver for Texas Instruments' TRF7970a
 	  device. Such device supports 5 different protocols: ISO14443A,
@@ -48,17 +60,18 @@ config NFC_PORT100
 
 	  If unsure, say N.
 
-source "drivers/nfc/fdp/Kconfig"
-source "drivers/nfc/pn544/Kconfig"
-source "drivers/nfc/pn533/Kconfig"
-source "drivers/nfc/microread/Kconfig"
-source "drivers/nfc/nfcmrvl/Kconfig"
-source "drivers/nfc/st21nfca/Kconfig"
-source "drivers/nfc/st-nci/Kconfig"
-source "drivers/nfc/nxp-nci/Kconfig"
-source "drivers/nfc/s3fwrn5/Kconfig"
-source "drivers/nfc/st95hf/Kconfig"
-endmenu
+#source "drivers/nfc/fdp/Kconfig"
+#source "drivers/nfc/pn544/Kconfig"
+#source "drivers/nfc/pn533/Kconfig"
+#source "drivers/nfc/microread/Kconfig"
+#source "drivers/nfc/nfcmrvl/Kconfig"
+#source "drivers/nfc/st21nfca/Kconfig"
+#source "drivers/nfc/st-nci/Kconfig"
+#source "drivers/nfc/nxp-nci/Kconfig"
+#source "drivers/nfc/s3fwrn5/Kconfig"
+#source "drivers/nfc/st95hf/Kconfig"
+source "drivers/nfc/pn553/Kconfig"
+source "drivers/nfc/cxd22xx/Kconfig"
 
 config NFC_NQ
         tristate "QTI NCI based NFC Controller Driver for NQx"

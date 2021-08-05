@@ -91,8 +91,12 @@ static void end_report(unsigned long *flags)
 	pr_err("==================================================================\n");
 	add_taint(TAINT_BAD_PAGE, LOCKDEP_NOW_UNRELIABLE);
 	spin_unlock_irqrestore(&report_lock, *flags);
+#ifdef CONFIG_MACH_LGE
+	BUG_ON(1);
+#else
 	if (panic_on_warn)
 		panic("panic_on_warn set ...\n");
+#endif
 	kasan_enable_current();
 }
 

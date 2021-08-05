@@ -696,6 +696,10 @@ struct mmc_host {
 	struct extcon_dev	*extcon;
 	struct notifier_block card_detect_nb;
 
+#ifdef CONFIG_LGE_TRAY_EVENT
+	struct work_struct tray_work;
+#endif
+
 #ifdef CONFIG_MMC_PERF_PROFILING
 	struct {
 

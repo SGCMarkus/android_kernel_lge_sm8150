@@ -1,0 +1,194 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+#include "../../sm8150_common/sm8150_common-pm.dtsi"
+
+&vendor {
+	lge-veneer-psy {
+		charging-time {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			lge,overstatement-enable = <0>;
+			lge,overstatement-weight = <2>;
+			lge,overstatement-base = <100>;
+
+			lge,maxcharging-mw-chargerlogo = <15000>;
+			lge,maxcharging-mw-normal = <13000>;
+			lge,support-dd;
+
+			lge,full-capacity-design = <4000>;
+			lge,fix-slot-time-ui-soc = <80>;
+			lge,charging-current-profile-raws = <25>;
+			lge,charging-current-profile = <
+				/* format: raw_soc, raw_current(mA) */
+				/* CC */
+				138  3900
+				150  3500
+				163  3000
+				170  2600
+				175  2400
+				180  2350
+				191  2200
+				216  2100
+				224  1750
+				229  1450
+				232  1300
+				234  1200
+				/* cv - ui 95% */
+				235  1100
+				236  1080
+				237  1050
+				238  1000
+				239  930
+				240  890
+				241  800
+				242  760
+				243  720
+				244  670
+				245  600
+				246  560
+				247  500   /* <- END -> */
+			>;
+
+			lge,charging-target-data-raws = <7>;
+			lge,charging-target-data = <
+			/* format : type, power(mW), current(mA), down(uA), target(min), no_dd_decipct */
+			/* 0-type-wired: chargerlogo */   0    15000    2800       0    110    1000
+			/* 1-type-wired: power on    */   0    13000    2400       0    122    1000
+			/* 2-type-wired: DCP         */   0     7500    1650    1100    170    1000
+			/* 3-type-wired: SDP         */   0     2500     500       0    490    1000
+			/* 4-type-wireless: EPP      */   1     7200    1070     653    195     938
+			/* 5-type-wireless: BPP      */   1     4500    1076     832    240    1000
+			/* 6-type-BCC                */   2     7500    1500       0    155    1000
+			>;
+		};
+	};
+
+	lge_batterydata: qcom,battery-data {
+		qcom,batt-id-range-pct = <15>;
+		#include "../../battery_profile/LGE_BLT42_Tocad_4000mAh.dtsi"
+		#include "../../battery_profile/LGE_BLT42_LGC_4000mAh.dtsi"
+	};
+
+	lge-battery-supplement {
+		capacity-mah-min = <3880>;
+		capacity-raw-full = <247>;
+
+		default-battery-name = "LGE_BLT42_Tocad_4000mAh";
+		default-battery-kohm = <91>;
+
+		/* format : (temp index) (temp delta) */
+		tempcomp-offset = <
+			(-300) (-52)
+			(-200) (-52)
+			(-190) (-47)
+			(-180) (-43)
+			(-170) (-39)
+			(-160) (-34)
+			(-120) (-32)
+			( -70) (-30)
+			( -20) (-30)
+			   30  (-30)
+			   80  (-28)
+			  130  (-36)
+			  170  (-18)
+			  220  (-10)
+			  270   (-6)
+			  320   (-5)
+			  370   (-7)
+			  420   (-9)
+			  470  (-10)
+			  520  (-10)
+			  570   (-9)
+			  610   (-1)
+			  700     0
+			  800     0
+			  900     0
+		>;
+		tempcomp-icoeff = <100>;
+		qcom,fastchg-current-ma = <2800>;
+		LGE_BLT42_Tocad_4000mAh {
+			tempcomp-icoeff = <9>;
+			qcom,ki-coeff-low-chg = <250>;
+			qcom,ki-coeff-med-chg = <400>;
+			qcom,ki-coeff-hi-chg = <400>;
+		};
+
+		LGE_BLT42_LGC_4000mAh {
+			tempcomp-icoeff = <30>;
+			qcom,ki-coeff-low-chg = <250>;
+			qcom,ki-coeff-med-chg = <400>;
+			qcom,ki-coeff-hi-chg = <400>;
+		};
+	};
+};
+
+&soc {
+	lrmc {
+		compatible = "lge,lrmc";
+		bob_min_voltage    = <3920000>;
+		bob_max_voltage    = <4000000>;
+		def_min_voltage    = <3312000>;
+		def_max_voltage    = <4000000>;
+		lrmc_bob_vreg-supply = <&pm8150l_bob>;
+	};
+};
+
+&pm8150b_charger {
+	lge,parallel-pct = <70>;
+	lge,load-sw-on = <&tlmm 68 0>;
+};
+
+&thermal_zones {
+	ap-vts {
+		polling-delay-passive = <0>;
+		polling-delay = <0>;
+		thermal-governor = "user_space";
+	};
+
+	chg-vts {
+		polling-delay-passive = <0>;
+		polling-delay = <0>;
+		thermal-governor = "user_space";
+	};
+};
+
+&pm8150b_vadc {
+	mmw-pa2-lge {
+		reg = <ADC_AMUX_THM1_PU2>;
+		label = "mmw-pa2-lge";
+		qcom,ratiometic;
+		qcom,hw-settle-time = <200>;
+		qcom,pre-scaling = <1 1>;
+	};
+};
+
+&pm8150l_lpg {
+	qcom,lut-patterns = <0>;
+	qcom,sync-channel-ids = <1 2 3>;
+
+	lpg1 {
+		qcom,ramp-high-index = <47>;
+	};
+
+	lpg2 {
+		qcom,ramp-high-index = <47>;
+	};
+
+	lpg3 {
+		qcom,ramp-high-index = <47>;
+	};
+};
+
+&pm8150b_qnovo {
+	lge,enable-compensate-qni-fcc;
+};

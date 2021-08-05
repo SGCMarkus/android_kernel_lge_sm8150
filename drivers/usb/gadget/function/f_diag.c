@@ -224,12 +224,14 @@ static void diag_update_pid_and_serial_num(struct diag_context *ctxt)
 	struct usb_gadget_string_container *uc;
 	struct dload_struct local_diag_dload = { 0 };
 
+#ifndef CONFIG_LGE_USB_GADGET
 	/*
 	 * update pid and serial number to dload only if diag
 	 * interface is zeroth interface.
 	 */
 	if (intf_desc.bInterfaceNumber)
 		return;
+#endif
 
 	if (!diag_dload) {
 		pr_debug("%s: unable to update PID and serial_no\n", __func__);

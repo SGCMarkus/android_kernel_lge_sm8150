@@ -195,7 +195,7 @@ const char *HdcpErrors[] = {
 		req_buf, QSEECOM_ALIGN(sizeof(struct hdcp_##x##_req)), \
 		rsp_buf, QSEECOM_ALIGN(sizeof(struct hdcp_##x##_rsp))); \
 	if ((rc < 0) || (rsp_buf->status != HDCP_SUCCESS)) { \
-		pr_err("qseecom cmd %s failed with err = %d, status = %d:%s\n" \
+		pr_debug("qseecom cmd %s failed with err = %d, status = %d:%s\n" \
 		, #x, rc, rsp_buf->status, \
 		hdcp_cmd_status_to_str(rsp_buf->status)); \
 		rc = -EINVAL; \
@@ -978,7 +978,7 @@ static int hdcp2_app_tx_deinit(struct hdcp2_handle *handle)
 	}
 
 	if (!(handle->hdcp_state & HDCP_STATE_TXMTR_INIT)) {
-		pr_err("txmtr not initialized\n");
+		pr_debug("txmtr not initialized\n");
 		rc = -EINVAL;
 		goto error;
 	}

@@ -16,6 +16,9 @@
 #include <linux/sched/clock.h>
 #include <soc/qcom/sysmon.h>
 #include "esoc-mdm.h"
+// LGP_MODEMBSP_SFR For SFR display
+#include <linux/module.h>
+// LGP_MODEMBSP_SFR For SFR display
 
 enum gpio_update_config {
 	GPIO_UPDATE_BOOTING_CONFIG = 1,
@@ -61,27 +64,27 @@ static void mdm_debug_gpio_show(struct mdm_ctrl *mdm)
 {
 	struct device *dev = mdm->dev;
 
-	dev_dbg(dev, "%s: MDM2AP_ERRFATAL gpio = %d\n",
+	dev_err(dev, "%s: MDM2AP_ERRFATAL gpio = %d\n",
 			__func__, MDM_GPIO(mdm, MDM2AP_ERRFATAL));
-	dev_dbg(dev, "%s: AP2MDM_ERRFATAL gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_ERRFATAL gpio = %d\n",
 			__func__, MDM_GPIO(mdm, AP2MDM_ERRFATAL));
-	dev_dbg(dev, "%s: MDM2AP_STATUS gpio = %d\n",
+	dev_err(dev, "%s: MDM2AP_STATUS gpio = %d\n",
 			__func__, MDM_GPIO(mdm, MDM2AP_STATUS));
-	dev_dbg(dev, "%s: AP2MDM_STATUS gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_STATUS gpio = %d\n",
 			__func__, MDM_GPIO(mdm, AP2MDM_STATUS));
-	dev_dbg(dev, "%s: AP2MDM_SOFT_RESET gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_SOFT_RESET gpio = %d\n",
 			__func__, MDM_GPIO(mdm, AP2MDM_SOFT_RESET));
-	dev_dbg(dev, "%s: MDM2AP_WAKEUP gpio = %d\n",
+	dev_err(dev, "%s: MDM2AP_WAKEUP gpio = %d\n",
 			__func__, MDM_GPIO(mdm, MDM2AP_WAKEUP));
-	dev_dbg(dev, "%s: AP2MDM_WAKEUP gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_WAKEUP gpio = %d\n",
 			 __func__, MDM_GPIO(mdm, AP2MDM_WAKEUP));
-	dev_dbg(dev, "%s: AP2MDM_PMIC_PWR_EN gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_PMIC_PWR_EN gpio = %d\n",
 			 __func__, MDM_GPIO(mdm, AP2MDM_PMIC_PWR_EN));
-	dev_dbg(dev, "%s: MDM2AP_PBLRDY gpio = %d\n",
+	dev_err(dev, "%s: MDM2AP_PBLRDY gpio = %d\n",
 			 __func__, MDM_GPIO(mdm, MDM2AP_PBLRDY));
-	dev_dbg(dev, "%s: AP2MDM_VDDMIN gpio = %d\n",
+	dev_err(dev, "%s: AP2MDM_VDDMIN gpio = %d\n",
 			 __func__, MDM_GPIO(mdm, AP2MDM_VDDMIN));
-	dev_dbg(dev, "%s: MDM2AP_VDDMIN gpio = %d\n",
+	dev_err(dev, "%s: MDM2AP_VDDMIN gpio = %d\n",
 			 __func__, MDM_GPIO(mdm, MDM2AP_VDDMIN));
 }
 
@@ -290,7 +293,7 @@ static int mdm_cmd_exe(enum esoc_cmd cmd, struct esoc_clink *esoc)
 			esoc_mdm_log(
 			"ESOC_PREPARE_DEBUG: setting AP2MDM_ERRFATAL = 1\n");
 			gpio_set_value(MDM_GPIO(mdm, AP2MDM_ERRFATAL), 1);
-			dev_dbg(mdm->dev,
+			dev_err(mdm->dev,
 				"set ap2mdm errfatal to force reset\n");
 			msleep(mdm->ramdump_delay_ms);
 		}
@@ -319,7 +322,7 @@ static int mdm_cmd_exe(enum esoc_cmd cmd, struct esoc_clink *esoc)
 			mdm->debug = 0;
 			return -EIO;
 		}
-		dev_dbg(mdm->dev, "ramdump collection done\n");
+		dev_err(mdm->dev, "ramdump collection done\n");
 		mdm->debug = 0;
 		init_completion(&mdm->debug_done);
 		break;
@@ -330,7 +333,7 @@ static int mdm_cmd_exe(enum esoc_cmd cmd, struct esoc_clink *esoc)
 		 */
 		esoc_mdm_log("ESOC_EXIT_DEBUG: Setting AP2MDM_ERRFATAL = 0\n");
 		gpio_set_value(MDM_GPIO(mdm, AP2MDM_ERRFATAL), 0);
-		dev_dbg(mdm->dev, "exiting debug state after power on\n");
+		dev_err(mdm->dev, "exiting debug state after power on\n");
 		mdm->get_restart_reason = true;
 		break;
 	default:
@@ -353,7 +356,7 @@ static void mdm2ap_status_check(struct work_struct *work)
 
 	if (gpio_get_value(MDM_GPIO(mdm, MDM2AP_STATUS)) == 0) {
 		esoc_mdm_log("MDM2AP_STATUS did not go high\n");
-		dev_dbg(dev, "MDM2AP_STATUS did not go high\n");
+		dev_err(dev, "MDM2AP_STATUS did not go high\n");
 		esoc_clink_evt_notify(ESOC_UNEXPECTED_RESET, esoc);
 	}
 }
@@ -365,7 +368,7 @@ static void mdm_status_fn(struct work_struct *work)
 	struct device *dev = mdm->dev;
 	int value = gpio_get_value(MDM_GPIO(mdm, MDM2AP_STATUS));
 
-	dev_dbg(dev, "%s: status:%d\n", __func__, value);
+	dev_err(dev, "%s: status:%d\n", __func__, value);
 	/* Update gpio configuration to "running" config. */
 	mdm_update_gpio_configs(mdm, GPIO_UPDATE_RUNNING_CONFIG);
 }
@@ -390,11 +393,15 @@ static void mdm_get_restart_reason(struct work_struct *work)
 	} while (++ntries < SFR_MAX_RETRIES);
 	if (ntries == SFR_MAX_RETRIES) {
 		esoc_mdm_log("restart reason not obtained. err: %d\n", ret);
-		dev_dbg(dev, "%s: Error retrieving restart reason: %d\n",
+		dev_err(dev, "%s: Error retrieving restart reason: %d\n",
 						__func__, ret);
 	}
 	mdm->get_restart_reason = false;
 }
+
+// LGP_MODEMBSP_SFR For SFR display
+extern void mhi_print_sfr(void);
+// LGP_MODEMBSP_SFR For SFR display
 
 void mdm_wait_for_status_low(struct mdm_ctrl *mdm, bool atomic)
 {
@@ -408,6 +415,9 @@ void mdm_wait_for_status_low(struct mdm_ctrl *mdm, bool atomic)
 	do {
 		if (gpio_get_value(MDM_GPIO(mdm, MDM2AP_STATUS)) == 0) {
 			esoc_mdm_log("MDM2AP_STATUS went LOW\n");
+			// LGP_MODEMBSP_SFR For SFR display
+			mhi_print_sfr();
+			// LGP_MODEMBSP_SFR For SFR display
 			return;
 		}
 		now = local_clock();
@@ -477,7 +487,7 @@ static void mdm_notify(enum esoc_notify notify, struct esoc_clink *esoc)
 		break;
 	case ESOC_PRIMARY_CRASH:
 		mdm_disable_irqs(mdm);
-		dev_dbg(dev, "signal apq err fatal for graceful restart\n");
+		dev_err(dev, "signal apq err fatal for graceful restart\n");
 		esoc_mdm_log(
 		"ESOC_PRIMARY_CRASH: Setting AP2MDM_ERRFATAL = 1\n");
 		gpio_set_value(MDM_GPIO(mdm, AP2MDM_ERRFATAL), 1);
@@ -518,7 +528,7 @@ static irqreturn_t mdm_errfatal(int irq, void *dev_id)
 mdm_pwroff_irq:
 	esoc_mdm_log(
 	"MDM2AP_ERRFATAL IRQ received before modem booted. Ignoring.\n");
-	dev_info(dev, "errfatal irq when in pwroff\n");
+	dev_err(dev, "errfatal irq when in pwroff\n");
 no_mdm_irq:
 	return IRQ_HANDLED;
 }
@@ -561,7 +571,7 @@ static irqreturn_t mdm_status_change(int irq, void *dev_id)
 		esoc_mdm_log(
 		"Modem ready. Cancelling the the status_check work\n");
 		cancel_delayed_work(&mdm->mdm2ap_status_check_work);
-		dev_dbg(dev, "status = 1: mdm is now ready\n");
+		dev_err(dev, "status = 1: mdm is now ready\n");
 		mdm->ready = true;
 		mdm_trigger_dbg(mdm);
 		queue_work(mdm->mdm_queue, &mdm->mdm_status_work);
@@ -584,7 +594,7 @@ static irqreturn_t mdm_pblrdy_change(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	esoc = mdm->esoc;
 	dev = mdm->dev;
-	dev_dbg(dev, "pbl ready %d:\n",
+	dev_err(dev, "pbl ready %d:\n",
 			gpio_get_value(MDM_GPIO(mdm, MDM2AP_PBLRDY)));
 	if (mdm->init) {
 		mdm->init = 0;
@@ -875,23 +885,23 @@ static int mdm9x55_setup_hw(struct mdm_ctrl *mdm,
 	ret = mdm_dt_parse_gpios(mdm);
 	if (ret)
 		return ret;
-	dev_dbg(mdm->dev, "parsing gpio done\n");
+	dev_err(mdm->dev, "parsing gpio done\n");
 	ret = mdm_pon_dt_init(mdm);
 	if (ret)
 		return ret;
-	dev_dbg(mdm->dev, "pon dt init done\n");
+	dev_err(mdm->dev, "pon dt init done\n");
 	ret = mdm_pinctrl_init(mdm);
 	if (ret)
 		return ret;
-	dev_dbg(mdm->dev, "pinctrl init done\n");
+	dev_err(mdm->dev, "pinctrl init done\n");
 	ret = mdm_pon_setup(mdm);
 	if (ret)
 		return ret;
-	dev_dbg(mdm->dev, "pon setup done\n");
+	dev_err(mdm->dev, "pon setup done\n");
 	ret = mdm_configure_ipc(mdm, pdev);
 	if (ret)
 		return ret;
-	dev_dbg(mdm->dev, "ipc configure done\n");
+	dev_err(mdm->dev, "ipc configure done\n");
 	esoc->name = MDM9x55_LABEL;
 	mdm->dual_interface = of_property_read_bool(node,
 						"qcom,mdm-dual-link");
@@ -899,7 +909,7 @@ static int mdm9x55_setup_hw(struct mdm_ctrl *mdm,
 	ret = of_property_read_string(node, "qcom,mdm-link-info",
 					&esoc->link_info);
 	if (ret)
-		dev_info(mdm->dev, "esoc link info missing\n");
+		dev_err(mdm->dev, "esoc link info missing\n");
 
 	ret = of_property_read_u32(node, "qcom,shutdown-timeout-ms",
 				   &mdm->shutdown_timeout_ms);
@@ -923,7 +933,7 @@ static int mdm9x55_setup_hw(struct mdm_ctrl *mdm,
 		dev_err(mdm->dev, "esoc registration failed\n");
 		return ret;
 	}
-	dev_dbg(mdm->dev, "esoc registration done\n");
+	dev_err(mdm->dev, "esoc registration done\n");
 	init_completion(&mdm->debug_done);
 	INIT_WORK(&mdm->mdm_status_work, mdm_status_fn);
 	INIT_WORK(&mdm->restart_reason_work, mdm_get_restart_reason);
@@ -1009,7 +1019,7 @@ static int sdx50m_setup_hw(struct mdm_ctrl *mdm,
 	ret = of_property_read_string(node, "qcom,mdm-link-info",
 					&esoc->link_info);
 	if (ret)
-		dev_info(mdm->dev, "esoc link info missing\n");
+		dev_err(mdm->dev, "esoc link info missing\n");
 
 	mdm->skip_restart_for_mdm_crash = of_property_read_bool(node,
 				"qcom,esoc-skip-restart-for-mdm-crash");
@@ -1026,7 +1036,7 @@ static int sdx50m_setup_hw(struct mdm_ctrl *mdm,
 		dev_err(mdm->dev, "esoc registration failed\n");
 		goto err_free_irq;
 	}
-	dev_dbg(mdm->dev, "esoc registration done\n");
+	dev_err(mdm->dev, "esoc registration done\n");
 	esoc_mdm_log("Done configuring the GPIOs and esoc registration\n");
 
 	init_completion(&mdm->debug_done);

@@ -87,7 +87,7 @@ dtb-$(CONFIG_ARCH_SM6150)	+= sa6155-adp-star.dtb \
 endif
 
 else # TARGET_BOARD_TYPE != auto
-
+ifneq ($(CONFIG_MACH_LGE), y)
 dtb-$(CONFIG_ARCH_QCOM)	+= apq8016-sbc.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= apq8096-db820c.dtb
 dtb-$(CONFIG_ARCH_QCOM)	+= ipq8074-hk01.dtb
@@ -128,8 +128,9 @@ dtb-$(CONFIG_ARCH_QCS405) += qcs405-iot-sku1.dtb \
 		qcs404-iot-robot-reference-board.dtb \
 		qcs405-iot-robot-reference-dvt-board.dtb \
 		qcs404-iot-robot-reference-dvt-board.dtb
-
+endif
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+ifneq ($(CONFIG_MACH_LGE), y)
 	dtbo-$(CONFIG_ARCH_SM8150) += \
 		sm8150-cdp-overlay.dtbo \
 		sm8150-mtp-overlay.dtbo \
@@ -178,6 +179,11 @@ sm8150-sdxprairie-v2-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.d
 sm8150-sdxprairie-v3-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
 sm8150-marmot-cdp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
 sm8150-marmot-mtp-overlay.dtbo-base := sm8150.dtb sm8150-v2.dtb sm8150p.dtb sm8150p-v2.dtb
+else #CONFIG_MACH_LGE
+	dtb-$(CONFIG_ARCH_SM8150) += \
+				sm8150.dtb \
+				sm8150-v2.dtb
+endif
 else
 dtb-$(CONFIG_ARCH_SM8150)	+= sm8150-rumi.dtb \
 	sm8150-mtp.dtb \

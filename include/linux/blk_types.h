@@ -110,6 +110,10 @@ struct bio {
 #endif
 	};
 
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+	unsigned short		bi_excontrol;
+#endif
+
 	unsigned short		bi_vcnt;	/* how many bio_vec's */
 
 	/*
@@ -280,6 +284,17 @@ enum req_flag_bits {
 
 #define REQ_NOMERGE_FLAGS \
 	(REQ_NOMERGE | REQ_PREFLUSH | REQ_FUA)
+
+#ifdef CONFIG_LGE_IOSCHED_EXTENSION
+#define __REQ_EX_MAX 15
+enum req_exflag_bits {
+	__REQ_EX_ORDERED,
+
+	__REQ_EX_NR_BITS = __REQ_EX_MAX,
+};
+
+#define REQ_EX_ORDERED (1 << __REQ_EX_ORDERED)
+#endif
 
 #define bio_op(bio) \
 	((bio)->bi_opf & REQ_OP_MASK)

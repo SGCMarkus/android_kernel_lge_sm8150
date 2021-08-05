@@ -27,6 +27,9 @@
 #include <linux/suspend.h>
 #include <linux/mhi.h>
 #include "mhi_qcom.h"
+#ifdef CONFIG_LGE_DUAL_QFUSE
+#include "lge_qfuse.h"
+#endif
 
 struct arch_info {
 	struct mhi_dev *mhi_dev;
@@ -192,7 +195,9 @@ static int mhi_arch_esoc_ops_power_on(void *priv, unsigned int flags)
 
 	/* reset rpm state */
 	pm_runtime_set_active(&pci_dev->dev);
-	pm_runtime_enable(&pci_dev->dev);
+	/* force enable of PM runtime for device */
+	while(!pm_runtime_enabled(&pci_dev->dev))
+		pm_runtime_enable(&pci_dev->dev);
 	mutex_unlock(&mhi_cntrl->pm_mutex);
 	pm_runtime_forbid(&pci_dev->dev);
 	ret = pm_runtime_get_sync(&pci_dev->dev);
@@ -315,6 +320,12 @@ static void mhi_bl_dl_cb(struct mhi_device *mhi_device,
 	} else {
 		ipc_log_string(arch_info->boot_ipc_log, "%s %s", DLOG, buf);
 	}
+#ifdef CONFIG_LGE_DUAL_QFUSE
+	check_cp_fused(buf);
+#endif
+// LGE_ModemBSP_S, [DEBUG] Print esoc sbl log on kernel log
+        pr_err("esoc sbl : %s", buf);
+// LGE_ModemBSP_E, [DEBUG] Print esoc sbl log on kernel log
 }
 
 static void mhi_bl_dummy_cb(struct mhi_device *mhi_dev,
@@ -346,6 +357,10 @@ static void mhi_boot_monitor(void *data, async_cookie_t cookie)
 			   || mhi_cntrl->ee == MHI_EE_DISABLE_TRANSITION
 			   || mhi_cntrl->power_down,
 			   timeout);
+
+#ifdef CONFIG_LGE_DUAL_QFUSE
+		write_fuse_status(QFUSE_ALREADY_BLOWNED);
+#endif
 
 	ipc_log_string(arch_info->boot_ipc_log, HLOG "Device current ee = %s\n",
 		       TO_MHI_EXEC_STR(mhi_cntrl->ee));
@@ -423,8 +438,13 @@ static int mhi_bl_probe(struct mhi_device *mhi_device,
 							 node_name, 0);
 	ipc_log_string(arch_info->boot_ipc_log, HLOG
 		       "Entered SBL, Session ID:0x%x\n", mhi_cntrl->session_id);
+	pr_err("esoc-mdm Session ID:0x%x\n", mhi_cntrl->session_id);
 
-	return 0;
+#ifdef CONFIG_LGE_DUAL_QFUSE
+	write_fuse_status(SBL_LOAD);
+#endif
+
+return 0;
 }
 
 static const struct mhi_device_id mhi_bl_match_table[] = {

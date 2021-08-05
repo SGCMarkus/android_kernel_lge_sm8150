@@ -20,6 +20,14 @@
 #define LP55XX_CLOCK_INT	1
 #define LP55XX_CLOCK_EXT	2
 
+#define LED_I(fmt, args...)					\
+	pr_info("[LED] "					\
+			fmt, ##args)
+
+#define LED_E(fmt, args...)					\
+	pr_err("[LED E] [%s %d] "				\
+			fmt, __func__, __LINE__, ##args)
+
 struct lp55xx_led_config {
 	const char *name;
 	const char *default_trigger;

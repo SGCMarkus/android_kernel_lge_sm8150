@@ -120,6 +120,13 @@ struct usb_pdphy {
 
 	struct usbpd *usbpd;
 
+#ifdef CONFIG_LGE_USB
+	const void *emul;
+	int (*emul_signal_cb)(const void *emul, enum pd_sig_type sig);
+	int (*emul_msg_rx_cb)(const void *emul, enum pd_sop_type sop,
+			u8 *buf, size_t len);
+#endif
+
 	/* debug */
 	struct dentry *debug_root;
 	unsigned int tx_bytes; /* hdr + data */
@@ -347,13 +354,117 @@ int pd_phy_update_roles(enum data_role dr, enum power_role pr)
 }
 EXPORT_SYMBOL(pd_phy_update_roles);
 
+#ifdef CONFIG_LGE_USB
 int pd_phy_update_frame_filter(u8 frame_filter_val)
 {
 	struct usb_pdphy *pdphy = __pdphy;
 
-	return pdphy_reg_write(pdphy, USB_PDPHY_FRAME_FILTER, frame_filter_val);
+	pdphy->frame_filter_val = frame_filter_val;
+	return pdphy_reg_write(pdphy, USB_PDPHY_FRAME_FILTER,
+			       pdphy->frame_filter_val);
 }
 EXPORT_SYMBOL(pd_phy_update_frame_filter);
+
+int pd_phy_register_emul(const void *emul, struct pd_phy_emul_params *params)
+{
+	struct usb_pdphy *pdphy = __pdphy;
+
+	if (!pdphy) {
+		pr_err("%s: pdphy not found\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdphy->emul && pdphy->emul != emul) {
+		dev_dbg(pdphy->dev, "%s: emul is already used", __func__);
+		return -EBUSY;
+	}
+
+	if (!emul) {
+		dev_err(pdphy->dev, "%s: emul is NULL", __func__);
+		return -EINVAL;
+	}
+
+	if (params) {
+		pdphy->emul_signal_cb = params->signal_cb;
+		pdphy->emul_msg_rx_cb = params->msg_rx_cb;
+		pdphy->emul = emul;
+	} else {
+		pdphy->emul_signal_cb = NULL;
+		pdphy->emul_msg_rx_cb = NULL;
+		pdphy->emul = NULL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(pd_phy_register_emul);
+
+int pd_phy_emul_signal(const void *emul, enum pd_sig_type sig)
+{
+	struct usb_pdphy *pdphy = __pdphy;
+
+	if (!pdphy) {
+		pr_err("%s: pdphy not found\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdphy->emul != emul) {
+		dev_dbg(pdphy->dev, "%s: emul is not registered", __func__);
+		return -EPERM;
+	}
+
+	if (!pdphy->is_opened) {
+		dev_dbg(pdphy->dev, "%s: pdphy disabled\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdphy->signal_cb)
+		pdphy->signal_cb(pdphy->usbpd, sig);
+
+	return 0;
+}
+EXPORT_SYMBOL(pd_phy_emul_signal);
+
+int pd_phy_emul_write(const void *emul, u16 hdr, const u8 *data,
+		size_t data_len, enum pd_sop_type sop)
+{
+	struct usb_pdphy *pdphy = __pdphy;
+	size_t total_len = data_len + USB_PDPHY_MSG_HDR_LEN;
+
+	if (!pdphy) {
+		pr_err("%s: pdphy not found\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdphy->emul != emul) {
+		dev_dbg(pdphy->dev, "%s: emul is not registered", __func__);
+		return -EPERM;
+	}
+
+	if (!pdphy->is_opened) {
+		dev_dbg(pdphy->dev, "%s: pdphy disabled\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdphy->msg_rx_cb) {
+		u8 *msg = kzalloc(total_len, GFP_KERNEL);
+		if (!msg) {
+			dev_err(pdphy->dev, "%s: failed to allocate msg for usbpd",
+				__func__);
+			return -ENOMEM;
+		}
+
+		memcpy(msg, &hdr, sizeof(u16));
+		memcpy(msg + sizeof(u16), data, data_len);
+
+		pdphy->msg_rx_cb(pdphy->usbpd, sop, msg, total_len);
+
+		kfree(msg);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(pd_phy_emul_write);
+#endif
 
 int pd_phy_open(struct pd_phy_params *params)
 {
@@ -439,6 +550,15 @@ int pd_phy_signal(enum pd_sig_type sig)
 		return -ENODEV;
 	}
 
+#ifdef CONFIG_LGE_USB
+	if (pdphy->emul) {
+		if (pdphy->emul_signal_cb) {
+			return pdphy->emul_signal_cb(pdphy->emul, sig);
+		}
+		return 0;
+	}
+#endif
+
 	pdphy->tx_status = -EINPROGRESS;
 
 	ret = pdphy_reg_write(pdphy, USB_PDPHY_TX_CONTROL, 0);
@@ -501,6 +621,37 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len, enum pd_sop_type sop)
 		dev_dbg(pdphy->dev, "%s: pdphy disabled\n", __func__);
 		return -ENODEV;
 	}
+
+#ifdef CONFIG_LGE_USB
+	if (pdphy->emul) {
+		if (pdphy->emul_msg_rx_cb) {
+			u8 *msg = kzalloc(total_len, GFP_KERNEL);
+			if (!msg) {
+				dev_err(pdphy->dev, "%s: failed to allocate msg for emul",
+					__func__);
+				return -ENOMEM;
+			}
+
+			memcpy(msg, &hdr, sizeof(u16));
+			if (data && data_len)
+				memcpy(msg + sizeof(u16), data, data_len);
+
+			ret = pdphy->emul_msg_rx_cb(pdphy->emul, sop, msg, total_len);
+
+			kfree(msg);
+
+			return ret;
+		}
+		return 0;
+	}
+
+	if (pdphy->in_test_data_mode) {
+		dev_info(pdphy->dev,
+			 "%s: ignore writing during BIST_TEST_DATA mode.\n",
+			 __func__);
+		return 0;
+	}
+#endif
 
 	if (data_len > USB_PDPHY_MAX_DATA_OBJ_LEN) {
 		dev_err(pdphy->dev, "%s: invalid data object len %zu\n",
@@ -586,6 +737,11 @@ void pd_phy_close(void)
 		dev_err(pdphy->dev, "%s: not opened\n", __func__);
 		return;
 	}
+
+#ifdef CONFIG_LGE_USB
+	if (pdphy->emul && pdphy->emul_signal_cb)
+		pdphy->emul_signal_cb(pdphy->emul, HARD_RESET_SIG);
+#endif
 
 	pdphy->is_opened = false;
 	pdphy_enable_irq(pdphy, false);

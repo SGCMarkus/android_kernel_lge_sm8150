@@ -146,6 +146,14 @@ static struct qmi_dev_info device_clients[] = {
 		.type = QMI_CDEV_MAX_LIMIT_TYPE,
 	},
 	{
+		.dev_name = "cdsp_sw",
+		.type = QMI_CDEV_MAX_LIMIT_TYPE,
+	},
+	{
+		.dev_name = "cdsp_hw",
+		.type = QMI_CDEV_MAX_LIMIT_TYPE,
+	},
+	{
 		.dev_name = "cpuv_restriction_cold",
 		.type = QMI_CDEV_MIN_LIMIT_TYPE,
 	},
@@ -265,6 +273,11 @@ static int qmi_set_cur_or_min_state(struct qmi_cooling_device *qmi_cdev,
 	ret = qmi_tmd_send_state_request(qmi_cdev, (uint8_t)state);
 
 	qmi_cdev->mtgn_state = state;
+
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("%s: cdev[%s] set state=%d\n",
+			__func__, qmi_cdev->cdev_name, state);
+#endif
 
 	return ret;
 }

@@ -6830,7 +6830,12 @@ int __dev_change_flags(struct net_device *dev, unsigned int flags)
 
 	dev->flags = (flags & (IFF_DEBUG | IFF_NOTRAILERS | IFF_NOARP |
 			       IFF_DYNAMIC | IFF_MULTICAST | IFF_PORTSEL |
+
+#ifdef CONFIG_LGP_DATA_TCPIP_MPTCP
+			       IFF_AUTOMEDIA | IFF_NOMULTIPATH | IFF_MPBACKUP)) |
+#else
 			       IFF_AUTOMEDIA)) |
+#endif
 		     (dev->flags & (IFF_UP | IFF_VOLATILE | IFF_PROMISC |
 				    IFF_ALLMULTI));
 
@@ -7196,7 +7201,8 @@ static int dev_new_index(struct net *net)
 	int ifindex = net->ifindex;
 
 	for (;;) {
-		if (++ifindex <= 0)
+		// LGE_CHANGE, add reset iface index condition when exceeded 1000 over(CN#04056525), 2019-06-26, ella.hwang@lge.com
+		if (++ifindex <= 0 || ifindex >= 1000)
 			ifindex = 1;
 		if (!__dev_get_by_index(net, ifindex))
 			return net->ifindex = ifindex;
@@ -7943,7 +7949,7 @@ static void netdev_wait_allrefs(struct net_device *dev)
 			rebroadcast_time = jiffies;
 		}
 
-		msleep(250);
+		msleep(250*10);
 
 		refcnt = netdev_refcnt_read(dev);
 

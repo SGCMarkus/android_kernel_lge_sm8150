@@ -559,21 +559,13 @@
 			compatible = "android,firmware";
 			shared_meta: vbmeta {
 				compatible = "android,vbmeta";
-				parts = "vbmeta,boot,system,vendor,dtbo,odm";
+				parts = "vbmeta,boot,system,vendor,dtbo,product";
 			};
 			android_q_fstab: fstab {
 				compatible = "android,fstab";
 				vendor {
 					compatible = "android,vendor";
 					dev = "/dev/block/platform/soc/8804000.sdhci/by-name/vendor";
-					type = "ext4";
-					mnt_flags = "ro,barrier=1,discard";
-					fsmgr_flags = "wait,slotselect,avb";
-					status = "ok";
-				};
-				odm {
-					compatible = "android,odm";
-					dev = "/dev/block/platform/soc/8804000.sdhci/by-name/odm";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait,slotselect,avb";
@@ -692,9 +684,9 @@
 			reg = <0x0 0xa4c00000 0x0 0x3c00000>;
 		};
 
-		cont_splash_memory: cont_splash_region {
+		cont_splash_memory: splash_region {
 			reg = <0x0 0x9c000000 0x0 0x02400000>;
-			label = "cont_splash_region";
+			label = "splash_region";
 		};
 
 		disp_rdump_memory: disp_rdump_region {
@@ -3039,6 +3031,14 @@
 		qcom,appsbl-qseecom-support;
 		qcom,commonlib64-loaded-by-uefi;
 		qcom,qsee-reentrancy-support = <2>;
+	};
+
+	mcd {
+		compatible = "qcom,mcd";
+		qcom,ce-hw-instance = <0>;
+		qcom,ce-device = <0>;
+		interrupts = <0 472 0>;
+		interrupt-names = "mcd_irq";
 	};
 
 	qcom_smcinvoke: smcinvoke@87900000 {

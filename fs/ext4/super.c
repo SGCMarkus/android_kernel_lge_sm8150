@@ -449,6 +449,12 @@ static void ext4_handle_error(struct super_block *sb)
 		 */
 		smp_wmb();
 		sb->s_flags |= MS_RDONLY;
+#ifdef CONFIG_MACH_LGE
+		if(!strcmp(EXT4_SB(sb)->s_es->s_volume_name,"data") &&
+			system_state != SYSTEM_RESTART &&
+			system_state != SYSTEM_POWER_OFF)
+			printk(KERN_CRIT "EXT4-fs data remounted as RO in ext4_handle_error\n");
+#endif
 	}
 	if (test_opt(sb, ERRORS_PANIC)) {
 		if (EXT4_SB(sb)->s_journal &&
@@ -665,6 +671,16 @@ void __ext4_abort(struct super_block *sb, const char *function,
 		if (EXT4_SB(sb)->s_journal)
 			jbd2_journal_abort(EXT4_SB(sb)->s_journal, -EIO);
 		save_error_info(sb, function, line);
+#ifdef CONFIG_MACH_LGE
+		/* LGE_CHANGE, 2016-11-24, DIVAP-BSP-FS@lge.com
+		 * put panic when ext4 partition(data partition) is remounted as Read Only
+		 */
+		if(!strcmp(EXT4_SB(sb)->s_es->s_volume_name,"data") &&
+			system_state != SYSTEM_RESTART &&
+			system_state != SYSTEM_POWER_OFF &&
+			!test_opt(sb, ERRORS_RO))
+			panic("EXT4-fs panic from previous error. remounted as RO \n");
+#endif
 	}
 	if (test_opt(sb, ERRORS_PANIC)) {
 		if (EXT4_SB(sb)->s_journal &&
@@ -4650,6 +4666,12 @@ no_journal:
 cantfind_ext4:
 	if (!silent)
 		ext4_msg(sb, KERN_ERR, "VFS: Can't find ext4 filesystem");
+#ifdef CONFIG_MACH_LGE
+	/* LGE_CHANGE, BSP-FS@lge.com
+	   add return code if ext4 superblock is damaged
+	*/
+	ret=-ESUPER;
+#endif
 	goto failed_mount;
 
 #ifdef CONFIG_QUOTA
@@ -5001,11 +5023,32 @@ static int ext4_load_journal(struct super_block *sb,
 	return 0;
 }
 
+#ifdef CONFIG_MACH_LGE
+/* These avb-ed or verify-ed block list is definitley model based configuration,
+ * so need to get confirm from security part.
+ */
+#define VERITY_BLOCK(name) \
+	(\
+	!strncmp(name, "/", 1) 		||	\
+	!strncmp(name, "system", 6) ||	\
+	!strncmp(name, "vendor", 6)		\
+	)
+#endif
+
 static int ext4_commit_super(struct super_block *sb, int sync)
 {
 	struct ext4_super_block *es = EXT4_SB(sb)->s_es;
 	struct buffer_head *sbh = EXT4_SB(sb)->s_sbh;
 	int error = 0;
+
+#ifdef CONFIG_MACH_LGE
+	if (es && (sb->s_flags & MS_RDONLY)) {
+		if (VERITY_BLOCK(es->s_volume_name))
+		 printk("EXT4-fs : skipping %s for read only verity block(%s)\n",
+				__func__, es->s_volume_name);
+		 return error;
+	}
+#endif
 
 	if (!sbh || block_device_ejected(sb))
 		return error;
@@ -5631,6 +5674,14 @@ static int ext4_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_bfree = EXT4_C2B(sbi, max_t(s64, bfree, 0));
 	buf->f_bavail = buf->f_bfree -
 			(ext4_r_blocks_count(es) + resv_blocks);
+#if defined(CONFIG_MACH_SM8150_ALPHA_LAO_LDU) || defined(CONFIG_MACH_SM8150_FLASH_LAO_LDU)
+#if defined(CONFIG_LDU_BLOCK_FAKE_SIZE)
+	if(!strcmp(es->s_last_mounted,"/data"))
+	{
+		buf->f_blocks = 25711286;
+	}
+#endif
+#endif
 	if (buf->f_bfree < (ext4_r_blocks_count(es) + resv_blocks))
 		buf->f_bavail = 0;
 	buf->f_files = le32_to_cpu(es->s_inodes_count);

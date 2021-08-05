@@ -1106,6 +1106,13 @@ void dfc_do_burst_flow_control(struct dfc_qmi_data *dfc,
 				   ack_req,
 				   ancillary);
 
+    //lg_add_to_log_for_ul_stall
+    if (flow_status->num_bytes <= 10 ) {
+		pr_err("[DFC]dfc_flow_ind src =%d, mid=%u bid=%u, grant=%u, seq=%u, ack=%u"
+			,dfc->index,flow_status->mux_id, flow_status->bearer_id,flow_status->num_bytes,flow_status->seq_num, ack_req);
+	}
+    //lg_add_to_log_for_ul_stall
+
 		dev = rmnet_get_rmnet_dev(dfc->rmnet_port,
 					  flow_status->mux_id);
 		if (!dev)
@@ -1513,6 +1520,13 @@ void dfc_qmi_burst_check(struct net_device *dev, struct qos_info *qos,
 			     len, mark, bearer->grant_size);
 
 	bearer->bytes_in_flight += len;
+
+    //lg_add_to_log_for_ul_stall
+    if (bearer->grant_size <= 10 ) {
+		pr_err("[DFC]dfc_flow_check dev=%s, bearer_id=%d, skb_len=%d, current_grant=%d"
+			,dev->name,bearer->bearer_id,len,bearer->grant_size);
+	}
+    //lg_add_to_log_for_ul_stall
 
 	if (!bearer->grant_size)
 		goto out;

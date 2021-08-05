@@ -1,0 +1,78 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		label = "gpio-keys";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&key_vol_up_default &luke_gpio_default &dp_hpd_gpio_default>;
+		lge,use-flldo = <1>;
+
+		vol_up {
+			label = "volume_up";
+			gpios = <&pm8150_gpios 6 GPIO_ACTIVE_LOW>;
+			linux,input-type = <1>;
+			linux,code = <KEY_VOLUMEUP>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+			linux,can-disable;
+		};
+
+		luke {
+			label = "luke";
+			gpios = <&tlmm 37 GPIO_ACTIVE_LOW>;
+			linux,input-type = <5>;
+			linux,code = <222>;
+			gpio-key,wakeup;
+			debounce-interval = <200>;
+		};
+/*
+		dp_hpd {
+			label = "dp_hpd";
+			gpios = <&tlmm 114 GPIO_ACTIVE_HIGH>;
+			linux,input-type = <5>;
+			linux,code = <222>;
+			gpio-key,wakeup;
+			debounce-interval = <300>;
+		};
+*/
+		mcu_fw {
+			label = "mcu_fw";
+			gpios = <&tlmm 96 GPIO_ACTIVE_HIGH>;
+			linux,input-type = <5>;
+			linux,code = <222>;
+			debounce-interval = <15>;
+		};
+
+		hot_key: hot1_key {
+			label = "hot1_key";
+			gpios = <&pm8150_gpios 1 GPIO_ACTIVE_LOW>;
+			linux,input-type = <1>;
+			linux,code = <KEY_TV>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+			linux,can-disable;
+		};
+	};
+};
+
+&qupv3_se10_i2c {
+	lp5521@32 {
+		compatible = "ti,lp5521";
+		status = "ok";
+		reg = <0x32>;
+		ti,led_current = <10 2 3>; /* Red, Green, Blue */
+	};
+};

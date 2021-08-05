@@ -16,6 +16,10 @@
 
 #include "dp_catalog.h"
 #include "dp_reg.h"
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+#include <linux/lge_ds2.h>
+#include <soc/qcom/lge/board_lge.h>
+#endif
 
 #define dp_catalog_get_priv_v420(x) ({ \
 	struct dp_catalog *dp_catalog; \
@@ -27,16 +31,27 @@
 #define MAX_PRE_EMP_LEVELS 4
 
 static u8 const vm_pre_emphasis[MAX_VOLTAGE_LEVELS][MAX_PRE_EMP_LEVELS] = {
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	{0x0B, 0x0F, 0x14, 0xFF},       /* pe0, 2.1 db */
+	{0x0B, 0x0F, 0x12, 0xFF},       /* pe1, 2.9 db */
+	{0x0B, 0x0F, 0xFF, 0xFF},       /* pe2, 6.0 db */
+#else
 	{0x00, 0x0E, 0x16, 0xFF},       /* pe0, 0 db */
 	{0x00, 0x0E, 0x16, 0xFF},       /* pe1, 3.5 db */
 	{0x00, 0x0E, 0xFF, 0xFF},       /* pe2, 6.0 db */
+#endif
 	{0xFF, 0xFF, 0xFF, 0xFF}        /* pe3, 9.5 db */
 };
 
 /* voltage swing, 0.2v and 1.0v are not support */
 static u8 const vm_voltage_swing[MAX_VOLTAGE_LEVELS][MAX_PRE_EMP_LEVELS] = {
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	{0x08, 0x10, 0x17, 0xFF}, /* sw0, 0.4v  */
+	{0x12, 0x1F, 0x1F, 0xFF}, /* sw1, 0.6 v */
+#else
 	{0x07, 0x0F, 0x16, 0xFF}, /* sw0, 0.4v  */
 	{0x11, 0x1E, 0x1F, 0xFF}, /* sw1, 0.6 v */
+#endif
 	{0x1A, 0x1F, 0xFF, 0xFF}, /* sw1, 0.8 v */
 	{0xFF, 0xFF, 0xFF, 0xFF}  /* sw1, 1.2 v, optional */
 };
@@ -226,6 +241,10 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	struct dp_catalog_private_v420 *catalog;
 	struct dp_io_data *io_data;
 	u8 value0, value1;
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	enum hw_subrev_no hw_sub_revid = lge_get_board_subrev_no();
+	u8 value2;
+#endif
 
 	if (!ctrl || !((v_level < MAX_VOLTAGE_LEVELS)
 		&& (p_level < MAX_PRE_EMP_LEVELS))) {
@@ -240,6 +259,16 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	value0 = vm_voltage_swing[v_level][p_level];
 	value1 = vm_pre_emphasis[v_level][p_level];
 
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1)) {
+		value0 = 0x10; // 557.5 mV
+		value1 = 0x0B; // 2.6 db
+		value2 = 0x00; // 0.0 db
+	}
+	pr_err("[drm-dp] value0 0x%0x, value1 0x%0x, value2 0x%0x, subrevid:%d\n",
+			value0, value1, value2, hw_sub_revid);
+#endif
+
 	/* program default setting first */
 	io_data = catalog->io->dp_ln_tx0;
 	dp_write(catalog->exe_mode, io_data, TXn_TX_DRV_LVL_V420, 0x2A);
@@ -252,6 +281,9 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 	/* Enable MUX to use Cursor values from these registers */
 	value0 |= BIT(5);
 	value1 |= BIT(5);
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+	value2 |= BIT(5);
+#endif
 
 	/* Configure host and panel only if both values are allowed */
 	if (value0 != 0xFF && value1 != 0xFF) {
@@ -260,13 +292,22 @@ static void dp_catalog_ctrl_update_vx_px_v420(struct dp_catalog_ctrl *ctrl,
 				value0);
 		dp_write(catalog->exe_mode, io_data, TXn_TX_EMP_POST1_LVL,
 				value1);
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+		if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1))
+			dp_write(catalog->exe_mode, io_data, 0x108,
+					value2);
+#endif
 
 		io_data = catalog->io->dp_ln_tx1;
 		dp_write(catalog->exe_mode, io_data, TXn_TX_DRV_LVL_V420,
 				value0);
 		dp_write(catalog->exe_mode, io_data, TXn_TX_EMP_POST1_LVL,
 				value1);
-
+#if IS_ENABLED(CONFIG_LGE_DUAL_SCREEN)
+		if (is_ds2_connected() && (hw_sub_revid >= HW_SUB_REV_1))
+			dp_write(catalog->exe_mode, io_data, 0x108,
+					value2);
+#endif
 		pr_debug("hw: vx_value=0x%x px_value=0x%x\n",
 			value0, value1);
 	} else {

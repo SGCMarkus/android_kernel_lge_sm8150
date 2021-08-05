@@ -1,0 +1,414 @@
+#
+# LGE USB configuration
+#
+
+if USB_GADGET
+
+config LGE_USB_GADGET
+	boolean "LGE USB Gadget Support"
+	depends on USB_GADGET
+	select LGE_USB_GADGET_MULTI_CONFIG
+	select USB_CONFIGFS_NCM
+	select LGE_USB_CONFIGFS_LAF
+	select LGE_USB_FACTORY
+	select LGE_USB_DIAG_LOCK
+	select LGE_USB_DIAG_LOCK_SPR if LGE_ONE_BINARY_SKU
+	select LGE_USB_DIAG_LOCK_TRF if LGE_ONE_BINARY_SKU
+	select LGE_USB_DIAG_LOCK_VZW if LGE_ONE_BINARY_SKU
+	select LGE_USB_GADGET_AUTORUN_VZW if LGE_ONE_BINARY_SKU
+	help
+	  Customized Android Gadget USB framework for
+	  LGE United PC host USB driver.
+
+config LGE_USB_GADGET_MULTI_CONFIG
+	boolean "LGE USB Multiple Configuration"
+	depends on LGE_USB_GADGET
+	help
+	  Support multiple configuration.
+
+config LGE_USB_GADGET_AUTORUN
+	boolean "Common autorun support in LGE Android"
+	depends on LGE_USB_GADGET
+	select LGE_USB_GADGET_CDROM_MAC_SUPPORT
+	help
+	  Autorun is LGE specific feature which is able to install PC host
+	  USB driver automatically on Autorun-enabled OS(Ex. Windows). For this,
+	  virtual-cdrom device is provided on LGE Android powered device.
+
+config LGE_USB_GADGET_AUTORUN_VZW
+	boolean "VZW specific autorun support in LGE Android"
+	select LGE_USB_GADGET_AUTORUN
+	help
+	  It supports VZW specific autorun feature. note that this
+	  must be used in VZW devices.
+
+config LGE_USB_GADGET_CDROM_MAC_SUPPORT
+	boolean "USB CDROM support patch of LGE Android on Mac OS-X"
+	depends on LGE_USB_GADGET_AUTORUN
+	help
+	  This feature is based on Roger Quadros' patch as following;
+
+	  - usb:gadget:storage: Make CD-ROM emulation work with Mac OS-X
+	  - usb:gadget:f_mass_storage: Make CD-ROM emulation work with Mac OS-X
+
+	  ref: https://lkml.org/lkml/2011/4/5/190
+
+	  - Here is comment of committer:
+
+	  Mac OS-X expects CD-ROM TOC in raw format (i.e. format:2). It also
+	  sends the READ_TOC CDB in old style SFF8020i format. i.e. 2 format bits
+	  are encoded in MSBs of CDB byte 9.
+
+	  The first patch introduces a fsg_get_toc() helper which builds the
+	  Table of Contents (TOC) that can be used for the READ_TOC command.
+	  The remaining two patches simply make file_storage gadget and mass_storage
+	  gadget use the new helper function.
+
+config LGE_USB_F_LAF
+	boolean "LGE specific LAF support in LGE Android"
+	depends on LGE_USB_GADGET
+	help
+	  It supports LGE specific LAF feature.
+
+config LGE_USB_CONFIGFS_LAF
+	boolean "LGE specific configfs LAF support in LGE Android"
+	depends on USB_CONFIGFS
+	depends on LGE_USB_GADGET
+	select LGE_USB_F_LAF
+	help
+	  It supports LGE specific configfs LAF feature.
+
+config LGE_USB_FACTORY
+	boolean "Force full speed support if pif is connected in LGE Android"
+	depends on LGE_USB_GADGET
+	help
+	   This feature is that USB set forcely full speed if pif cable is
+	   connected. It is only for PIF cable, not normal USB cable.
+
+config LGE_USB_DEBUGGER
+	boolean "USB UART debugger support"
+	default n
+	help
+		Support USB type UART debugger cable
+
+config LGE_USB_EMBEDDED_BATTERY
+	depends on LGE_USB_FACTORY
+	boolean "power cycle when factory cable is connected"
+	help
+	  In case of the phone with embedded battery, power cycle is implemented
+	  when factory cable is connected.
+
+config LGE_USB_DIAG_LOCK
+	boolean "feature for usb diag access lock"
+	depends on LGE_USB_GADGET
+	help
+	  this feature should be applied to meet usb diag lock requirement
+
+config LGE_USB_DIAG_LOCK_SPR
+	boolean "feature for usb diag access lock"
+	depends on LGE_USB_DIAG_LOCK
+	help
+	  this feature should be applied to meet SPR requirement
+
+config LGE_USB_DIAG_LOCK_SPR_DEBUG
+	boolean "feature for usb diag access lock"
+	depends on LGE_USB_DIAG_LOCK_SPR
+	help
+	  this feature should be applied to meet SPR requirement
+
+config LGE_USB_DIAG_LOCK_TRF
+	boolean "feature for usb diag access lock"
+	depends on LGE_USB_DIAG_LOCK
+	help
+	  this feature should be applied to meet TRF requirement
+
+config LGE_USB_DIAG_LOCK_VZW
+        boolean "feature for usb diag access lock"
+        depends on LGE_USB_DIAG_LOCK
+        help
+          this feature should be applied to meet VZW requirement
+
+config LGE_USB_SBU_SWITCH
+	bool "LGE USB Type-C CC/SBU Protection Switch driver"
+	help
+	  Say y if this must be needed.
+
+config LGE_USB_MOISTURE_DETECTION
+	bool "Support moisture detection"
+	help
+	  Say y if this must be needed.
+
+if LGE_USB_MOISTURE_DETECTION
+
+choice
+	prompt "LGE USB Moisture Detector Version"
+	default LGE_USB_LGMD_LEGACY
+
+config LGE_USB_LGMD_LEGACY
+	boolean "LGE USB Legacy Moisture Detector"
+	help
+	  Support legacy moisture deteator.
+endchoice
+
+config LGE_USB_MOISTURE_DETECTION_NO_UX
+	bool "Do not support UX when detecting moisture"
+	help
+	  Say y if this must be needed.
+
+config LGE_USB_MOISTURE_DETECTION_CHG
+	bool "Allows charging when moisture is detected"
+	help
+	  Say y if this must be needed.
+
+config LGE_USB_MOISTURE_DETECTION_USB_EN
+	bool "Allows USB when moisture is detected"
+	help
+	  Say y if this must be needed.
+
+config LGE_USB_MOISTURE_DETECTION_DEBUG
+	bool "Support debugging moisture detection"
+	help
+	  Say y if this must be needed.
+
+endif # LGE_USB_MOISTURE_DETECTION
+
+config LGE_USB_COMPLIANCE_TEST
+	bool "USB Compliance test"
+	help
+	  Say y if this must be needed.
+
+endif # USB_GADGET
+
+config LGE_USB
+	boolean "Support for Host-side LGE USB"
+	select USB
+	select LGE_USB_SUPPORT_LIST_HID
+	select LGE_USB_SUPPORT_LIST_NETWORK
+	select LGE_USB_SUPPORT_LIST_INPUT
+	select LGE_USB_SUPPORT_LIST_SOUND
+	select LGE_USB_SUPPORT_LIST_VIDEO
+	select LGE_USB_SUPPORT_LIST_STORAGE
+	select LGE_USB_SUPPORT_LIST_SERIAL
+	select USB_LINK_LAYER_TEST
+	select USB_EHSET_TEST_FIXTURE
+	help
+	  Say Y here if your computer has a host-side USB port and you want
+	  to use USB devices.
+
+config LGE_USB_SUPPORT_LIST_HID
+	bool "enable usb host compatible hid devices list"
+	depends on LGE_USB
+	select HID
+	select HIDRAW
+	select UHID
+	select HID_GENERIC
+	select USB_HID
+	select USB_HIDDEV
+	select HID_A4TECH
+	select HID_ACRUX
+	select HID_ACRUX_FF
+	select HID_APPLE
+	select HID_BELKIN
+	select HID_CHERRY
+	select HID_CHICONY
+	select HID_PRODIKEYS
+	select HID_CYPRESS
+	select HID_DRAGONRISE
+	select DRAGONRISE_FF
+	select HID_EMS_FF
+	select HID_ELECOM
+	select HID_ELO
+	select HID_EZKEY
+	select HID_GEMBIRD
+	select HID_HOLTEK
+	select HID_KEYTOUCH
+	select HID_KYE
+	select HID_UCLOGIC
+	select HID_WALTOP
+	select HID_GYRATION
+	select HID_ICADE
+	select HID_TWINHAN
+	select HID_KENSINGTON
+	select HID_LCPOWER
+	select HID_LOGITECH
+	select HID_LOGITECH_DJ
+	select LOGITECH_FF
+	select LOGIRUMBLEPAD2_FF
+	select LOGIG940_FF
+	select LOGIWHEELS_FF
+	select HID_MAGICMOUSE
+	select HID_MICROSOFT
+	select HID_MONTEREY
+	select HID_MULTITOUCH
+	select HID_NTRIG
+	select HID_ORTEK
+	select HID_PANTHERLORD
+	select PANTHERLORD_FF
+	select HID_PETALYNX
+	select HID_PICOLCD
+	select HID_PLANTRONICS
+	select HID_PRIMAX
+	select HID_PS3REMOTE
+	select HID_ROCCAT
+	select HID_SAITEK
+	select HID_SAMSUNG
+	select HID_SONY
+	select HID_SPEEDLINK
+	select HID_STEELSERIES
+	select HID_SUNPLUS
+	select HID_GREENASIA
+	select GREENASIA_FF
+	select HID_SMARTJOYPLUS
+	select SMARTJOYPLUS_FF
+	select HID_TIVO
+	select HID_TOPSEED
+	select HID_THRUSTMASTER
+	select THRUSTMASTER_FF
+	select HID_WACOM
+	select HID_WACOM_POWER_SUPPLY
+	select HID_WIIMOTE
+	select HID_XINMO
+	select HID_ZEROPLUS
+	select HID_ZYDACRON
+	help
+	  hid devices include specials, change to yes here to support high
+	  compatiblily usb host devices.
+
+config LGE_USB_SUPPORT_LIST_NETWORK
+	bool "enable usb host compatible network devices list"
+	depends on LGE_USB
+	select USB_USBNET
+	select USB_CATC
+	#select USB_KAWETH
+	select USB_PEGASUS
+	select USB_RTL8150
+	select USB_RTL8156
+	#select USB_RTL8152
+	#select USB_LAN78XX
+	select USB_NET_AX8817X
+	select USB_NET_AX88179_178A
+	select USB_NET_CDCETHER
+	select USB_NET_CDC_EEM
+	select USB_NET_CDC_NCM
+	select USB_NET_CDC_MBIM
+	select USB_NET_DM9601
+	select USB_NET_SR9700
+	select USB_NET_SR9800
+	select USB_NET_SMSC75XX
+	select USB_NET_SMSC95XX
+	select USB_NET_GL620A
+	select USB_NET_NET1080
+	select USB_NET_PLUSB
+	select USB_NET_MCS7830
+	select USB_NET_RNDIS_HOST
+	select USB_NET_CDC_SUBSET
+	select USB_ALI_M5632
+	select USB_AN2720
+	select USB_BELKIN
+	select USB_ARMLINUX
+	select USB_EPSON2888
+	select USB_KC2190
+	select USB_NET_ZAURUS
+	select USB_NET_CX82310_ETH
+	select USB_NET_KALMIA
+	select USB_NET_QMI_WWAN
+	select USB_HSO
+	select USB_NET_INT51X1
+	select USB_IPHETH
+	select USB_SIERRA_NET
+	select USB_VL600
+	select USB_NET_CH9200
+	select MSM_RMNET_USB
+	help
+	  network devices include specials, change to yes here to support high
+	  compatiblily usb host devices.
+
+config LGE_USB_SUPPORT_LIST_INPUT
+	bool "enable usb host compatible input devices list"
+	depends on LGE_USB
+	select INPUT_MOUSEDEV
+	select INPUT_EVDEV
+	#select INPUT_MOUSE
+	select MOUSE_APPLETOUCH
+	select MOUSE_BCM5974
+	select MOUSE_SYNAPTICS_USB
+	select INPUT_JOYSTICK
+	select JOYSTICK_IFORCE
+	select JOYSTICK_IFORCE_USB
+	select JOYSTICK_XPAD
+	select JOYSTICK_XPAD_FF
+	select JOYSTICK_XPAD_LEDS
+	select INPUT_TABLET
+	select TABLET_USB_ACECAD
+	select TABLET_USB_AIPTEK
+	select TABLET_USB_GTCO
+	select TABLET_USB_HANWANG
+	select TABLET_USB_KBTAB
+	select TABLET_SERIAL_WACOM4
+	help
+	  network devices include specials, change to yes here to support high
+	  compatiblily usb host devices.
+
+config LGE_USB_SUPPORT_LIST_SOUND
+	bool "enable usb host compatible sound devices list"
+	depends on LGE_USB
+	select SND_USB
+	select SND_USB_AUDIO
+	select SND_USB_UA101
+	select SND_USB_CAIAQ
+	select SND_USB_CAIAQ_INPUT
+	select SND_USB_6FIRE
+	select SND_USB_HIFACE
+	select SND_BCD2000
+	select SND_USB_POD
+	select SND_USB_PODHD
+	select SND_USB_TONEPORT
+	select SND_USB_VARIAX
+	select SND_USB_AUDIO_QMI
+	help
+	  sound devices include specials, change to yes here to support high
+	  compatiblily usb host devices.
+
+config LGE_USB_SUPPORT_LIST_VIDEO
+	bool "enable usb host compatible video devices list"
+	depends on LGE_USB
+	select MEDIA_USB_SUPPORT
+	select USB_VIDEO_CLASS
+	select USB_VIDEO_CLASS_INPUT_EVDEV
+	help
+	  sound devices include specials, change to yes here to support high
+	  compatiblily usb host devices
+
+config LGE_USB_SUPPORT_LIST_STORAGE
+	bool "enable usb host compatible storage devices list"
+	depends on LGE_USB
+	select USB_STORAGE
+	select USB_STORAGE_REALTEK
+	select REALTEK_AUTOPM
+	select USB_STORAGE_DATAFAB
+	select USB_STORAGE_FREECOM
+	select USB_STORAGE_ISD200
+	select USB_STORAGE_USBAT
+	select USB_STORAGE_SDDR09
+	select USB_STORAGE_SDDR55
+	select USB_STORAGE_JUMPSHOT
+	select USB_STORAGE_ALAUDA
+	select USB_STORAGE_ONETOUCH
+	select USB_STORAGE_KARMA
+	select USB_STORAGE_CYPRESS_ATACB
+	#select USB_STORAGE_ENE_UB6250
+	#select USB_UAS
+	help
+	  sound devices include specials, change to yes here to support high
+	  compatiblily usb host devices
+
+config LGE_USB_SUPPORT_LIST_SERIAL
+	bool "enable usb host compatible storage devices list"
+	depends on LGE_USB
+	select USB_SERIAL
+	select USB_SERIAL_GENERIC
+	select USB_SERIAL_FTDI_SIO
+	select USB_SERIAL_PL2303
+	help
+	  serial devices include specials, change to yes here to support high
+	  compatiblily usb host devices

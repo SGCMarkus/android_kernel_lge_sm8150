@@ -154,7 +154,11 @@ int ecryptfs_derive_iv(char *iv, struct ecryptfs_crypt_stat *crypt_stat,
 		       loff_t offset)
 {
 	int rc = 0;
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+	char dst[SHA256_HASH_SIZE];
+#else
 	char dst[MD5_DIGEST_SIZE];
+#endif //CONFIG_SD_ENCRYPTION_ADVANCED
 	char src[ECRYPTFS_MAX_IV_BYTES + 16];
 
 	if (unlikely(ecryptfs_verbosity > 0)) {
@@ -199,7 +203,11 @@ int ecryptfs_init_crypt_stat(struct ecryptfs_crypt_stat *crypt_stat)
 	struct crypto_shash *tfm;
 	int rc;
 
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+	tfm = crypto_alloc_shash(ECRYPTFS_SHA256_HASH, 0, 0);
+#else
 	tfm = crypto_alloc_shash(ECRYPTFS_DEFAULT_HASH, 0, 0);
+#endif
 	if (IS_ERR(tfm)) {
 		rc = PTR_ERR(tfm);
 		ecryptfs_printk(KERN_ERR, "Error attempting to "
@@ -678,8 +686,11 @@ void ecryptfs_set_default_sizes(struct ecryptfs_crypt_stat *crypt_stat)
 int ecryptfs_compute_root_iv(struct ecryptfs_crypt_stat *crypt_stat)
 {
 	int rc = 0;
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+	char dst[SHA256_HASH_SIZE];
+#else
 	char dst[MD5_DIGEST_SIZE];
-
+#endif //CONFIG_SD_ENCRYPTION_ADVANCED
 	BUG_ON(crypt_stat->iv_bytes > MD5_DIGEST_SIZE);
 	BUG_ON(crypt_stat->iv_bytes <= 0);
 	if (!(crypt_stat->flags & ECRYPTFS_KEY_VALID)) {
@@ -1606,8 +1617,13 @@ ecryptfs_process_key_cipher(struct crypto_skcipher **key_tfm,
 		      "allowable is [%d]\n", *key_size, ECRYPTFS_MAX_KEY_BYTES);
 		goto out;
 	}
+#ifdef CONFIG_SD_ENCRYPTION_ADVANCED
+	rc = ecryptfs_crypto_api_algify_cipher_name(&full_alg_name, cipher_name,
+						    "cbc");
+#else
 	rc = ecryptfs_crypto_api_algify_cipher_name(&full_alg_name, cipher_name,
 						    "ecb");
+#endif //CONFIG_SD_ENCRYPTION_ADVANCED
 	if (rc)
 		goto out;
 	*key_tfm = crypto_alloc_skcipher(full_alg_name, 0, CRYPTO_ALG_ASYNC);

@@ -277,13 +277,14 @@ static int dp_parser_gpio(struct dp_parser *parser)
 		"qcom,aux-sel-gpio",
 		"qcom,usbplug-cc-gpio",
 	};
-
+#ifndef CONFIG_LGE_COVER_DISPLAY
 	if (of_find_property(of_node, "qcom,dp-hpd-gpio", NULL)) {
 		parser->no_aux_switch = true;
 		parser->lphw_hpd = of_find_property(of_node,
 				"qcom,dp-low-power-hw-hpd", NULL);
 		return 0;
 	}
+#endif
 
 	if (of_find_property(of_node, "qcom,dp-gpio-aux-switch", NULL))
 		parser->gpio_aux_switch = true;
@@ -799,6 +800,19 @@ static void dp_parser_widebus(struct dp_parser *parser)
 			parser->has_widebus);
 }
 
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+static void lge_dp_parser_dp_use(struct dp_parser *parser)
+{
+	struct device *dev = &parser->pdev->dev;
+
+	parser->lge_dp_use = of_property_read_bool(dev->of_node,
+			"lge,dp-use");
+
+	pr_debug("lge,dp-use parsing successful. dp-use:%d\n",
+			parser->lge_dp_use);
+}
+#endif
+
 static int dp_parser_parse(struct dp_parser *parser)
 {
 	int rc = 0;
@@ -852,6 +866,10 @@ static int dp_parser_parse(struct dp_parser *parser)
 	dp_parser_dsc(parser);
 	dp_parser_fec(parser);
 	dp_parser_widebus(parser);
+#ifdef CONFIG_LGE_DISPLAY_COMMON
+	lge_dp_parser_dp_use(parser);
+#endif
+
 err:
 	return rc;
 }

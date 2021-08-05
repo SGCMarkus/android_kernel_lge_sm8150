@@ -28,8 +28,173 @@
 #include <linux/gpio.h>
 #include <linux/gpio/consumer.h>
 #include <linux/of.h>
+#include <linux/of_platform.h>
+#include <linux/of_gpio.h>
 #include <linux/of_irq.h>
 #include <linux/spinlock.h>
+#include <linux/hall_ic.h>
+#include <linux/input/lge_touch_module.h>
+#include <soc/qcom/lge/board_lge.h>
+
+#ifdef CONFIG_LGE_PM
+#include "../../soc/qcom/lge/power/main/lge_prm.h"
+#endif
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
+
+#ifdef CONFIG_LGE_USE_DD_SAR_RESET
+#include <linux/dd_sar.h>
+#endif
+
+#if defined(CONFIG_LGE_DUAL_SCREEN) || defined(CONFIG_LGE_COVER_DISPLAY)
+#include <linux/lge_cover_display.h>
+#endif
+
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+#include <linux/lge_ds2.h>
+#include <soc/qcom/lge/board_lge.h>
+
+#define BACKCOVER_CLOSE 5
+extern int lge_get_dual_display_support(void);
+#endif
+#ifdef CONFIG_LGE_COVER_DISPLAY
+#include <linux/timer.h>
+#include <linux/jiffies.h>
+#include <linux/pm_wakeup.h>
+#include <asm/atomic.h>
+#include "../../gpu/drm/msm/lge/dp/lge_dp_def.h"
+#include <linux/fpga/ice40-spi.h>
+#include "../../gpu/drm/msm/lge/cover/lge_cover_ctrl_ops.h"
+
+extern int lp5521_cover_connect(void);
+extern int global_luke_status;
+extern int link_tr_state;
+extern int cover_led_status;
+extern struct lge_dp_display *get_lge_dp(void);
+#endif
+
+#define CONFIG_LGE_SUPPORT_HALLIC
+
+#ifdef CONFIG_LGE_SUPPORT_HALLIC
+struct hallic_dev sdev = {
+	.name = "smartcover",
+	.state = 0,
+	.state_front = 0,
+	.state_back = 0,
+};
+
+struct hallic_dev ndev = {
+	.name = "nfccover",
+	.state = 0,
+};
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+#define BACKCOVER_CLOSE 5
+extern void lge_dd_status_notify(struct hallic_dev *hdev, int state);
+extern int lge_get_dual_display_support(void);
+extern bool is_dd_connected(void);
+extern bool is_dd_powermode(void);
+extern bool is_dd_display_recovery_working(void);
+
+
+#define LUKE_MAX_RETRY_COUNT 10
+enum luke_check_state {
+	LUKE_DISCONNECTED = 0,
+	LUKE_CONNECTED,
+	LUKE_CHECKING,
+	LUKE_CHECKED,
+};
+
+struct cover_connection_data {
+	bool initialized;
+	bool notify_timedout;
+	unsigned int retry_count;
+	unsigned int retry_delay;
+	unsigned int wait_time;
+	struct delayed_work luke_work;
+	struct completion luke_done;
+	enum luke_check_state luke_state;
+	atomic_t wakelock_state;
+	struct wakeup_source wakelock;
+};
+
+struct cover_connection_handle {
+	bool initialized;
+	bool enable;
+	struct cover_connection_data *cover_data;
+};
+
+static struct cover_connection_handle cover_handle = {false, true, NULL};
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+struct hallic_dev luke_btn_sdev = {
+       .name = "luke_btn",
+};
+struct hallic_dev mcu_fw_sdev = {
+       .name = "mcu_fw",
+};
+struct hallic_dev mcu_int_check_sdev = {
+       .name = "mcu_int_check",
+};
+
+int global_luke_status;
+EXPORT_SYMBOL(global_luke_status);
+
+int mcu_fw_update_status;
+int mcu_boot_retry;
+int mcu_version_check_retry;
+int touch_version_check;
+int mcu_status;
+int use_flldo;
+
+static struct delayed_work mcu_boot_timeout_work;
+static struct delayed_work mcu_version_work;
+static struct delayed_work cover_fw_update_work;
+static struct delayed_work cover_fw_update_timeout_work;
+static struct delayed_work mcu_int_check_work;
+
+#define MCU_UPDATE                  0x01
+#define LATTICE_UPDATE              0x02
+
+#define MCU_BOOT_TIMEOUT_MS 350
+#define MCU_VER_CHECK_TIMEOUT_MS 1000
+#define COVER_FW_UPDATE_TIMEOUT_MS 60000
+
+#define MCU_BOOT_RETRY_COUNT 1
+#define MCU_VERSION_CHECK_RETRY_COUNT 5
+
+/* MCU_VER, LATTICE_VER have to sync with MCU code in FLASH_SYSTEM/Drivers/LGE_BSP_drivers/Src/bsp_driver_i2c.c
+   const uint8_t MCU_VER[] = "001";
+   const uint8_t LATTICE_VER[] = "114";
+ */
+#define MCU_VER                15
+#define LATTICE_VER           115
+#define MCU_VER_STRING       "015"
+#define LATTICE_VER_STRING   "115"
+
+
+static struct mutex p_lock;
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+struct hallic_dev luke_sdev = {
+       .name = "coverdisplay",
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+       .svid_handler_list = LIST_HEAD_INIT(luke_sdev.svid_handler_list),
+#endif
+};
+struct hallic_dev cover_fw_dev = {
+       .name = "cover_fw",
+       .state = -1,
+};
+struct hallic_dev cover_recovery = {
+	.name = "cover_recovery",
+	.state = 0,
+};
+extern bool lge_get_mfts_mode(void);
+#endif
 
 struct gpio_button_data {
 	const struct gpio_keys_button *button;
@@ -42,6 +207,7 @@ struct gpio_button_data {
 	unsigned int release_delay;	/* in msecs, for IRQ-only buttons */
 
 	struct delayed_work work;
+
 	unsigned int software_debounce;	/* in msecs, for GPIO-driven buttons */
 
 	unsigned int irq;
@@ -58,6 +224,299 @@ struct gpio_keys_drvdata {
 	unsigned short *keymap;
 	struct gpio_button_data data[0];
 };
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+struct usbpd_svid_handler *find_hallic_svid_handler(int svid) {
+   struct usbpd_svid_handler *handler;
+
+   if (list_empty(&luke_sdev.svid_handler_list))
+	   return NULL;
+
+   list_for_each_entry(handler, &luke_sdev.svid_handler_list, entry)
+       if (svid == handler->svid)
+           return handler;
+
+   return NULL;
+}
+
+int get_global_luke_status()
+{
+	return global_luke_status;
+}
+EXPORT_SYMBOL(get_global_luke_status);
+
+void set_mcu_fw_status(int status)
+{
+	pr_info("[MCU_FW] Change MCU FW Update Status[%d]\n", status);
+	mcu_fw_update_status = status;
+
+	if (status == MCU_FW_UPDATE_NO_NEED)
+		cancel_delayed_work_sync(&cover_fw_update_timeout_work);
+}
+
+int get_mcu_fw_status() {
+	return mcu_fw_update_status;
+}
+
+void mcu_fw_state_clear(int force)
+{
+	if (get_mcu_fw_status() >= MCU_FW_UPDATE_READY_USER_CONFIRM || force) {
+		pr_info("[MCU_FW] Clear MCU FW Update State\n");
+
+		hallic_set_state(&cover_fw_dev,	UPDATE_NO_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+
+		cancel_delayed_work_sync(&mcu_boot_timeout_work);
+		mcu_boot_retry = 0;
+
+		set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+	}
+}
+
+void set_mcu_boot_status(int status)
+{
+	pr_info("[MCU_FW] Change MCU Boot Status[%d]\n", status);
+	mcu_status = status;
+}
+
+static int cover_connection_validate(struct cover_connection_handle *h, struct cover_connection_data *data)
+{
+	if (!h || !data) {
+		pr_err("%s:null ptr\n", __func__);
+		return -EINVAL;
+	}
+
+	if (!h->initialized) {
+		pr_err("%s:not initialized\n", __func__);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static enum luke_check_state cover_connection_get_state(void)
+{
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+
+	if (cover_connection_validate(h, data) < 0) {
+		return LUKE_DISCONNECTED;
+	}
+
+	pr_debug("%s: %d\n", __func__, data->luke_state);
+	return data->luke_state;
+}
+
+bool is_cover_connection_state_connected(void)
+{
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+
+	if (cover_connection_validate(h, data) < 0) {
+		return false;
+	}
+
+	return ((cover_connection_get_state() == LUKE_CONNECTED) ? true : false);
+}
+EXPORT_SYMBOL(is_cover_connection_state_connected);
+
+void cover_connection_enable(bool enable)
+{
+	struct cover_connection_handle *h = &cover_handle;
+
+	if (!h) {
+		pr_err("%s:null ptr\n", __func__);
+		return;
+	}
+
+	pr_info("%s:%s\n", __func__, enable ? "enabled" : "disabled");
+	h->enable = enable;
+
+	return;
+}
+EXPORT_SYMBOL(cover_connection_enable);
+
+static void cover_connection_update_state(enum luke_check_state state)
+{
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+	char state_string[4][15] = {"disconnected", "connected", "checking", "finish_check"};
+
+
+	if (cover_connection_validate(h, data) < 0) {
+		return;
+	}
+
+	if (!h->enable) {
+		state = !!state;
+	}
+
+	if (state == LUKE_CHECKING) {
+		if (data->luke_state == LUKE_CHECKING)
+			return;
+	}
+
+	pr_info("%s: %s -> %s\n", __func__,
+			state_string[data->luke_state], state_string[state]);
+
+	data->luke_state = state;
+
+	switch (state) {
+	case LUKE_CONNECTED:
+		data->retry_count = LUKE_MAX_RETRY_COUNT;
+		if (h->enable) {
+			complete(&data->luke_done);
+			cancel_delayed_work_sync(&data->luke_work);
+
+			if (data->notify_timedout && (luke_sdev.state != state)) {
+				pr_info("%s: send event in connect state\n", __func__);
+				hallic_set_state(&luke_sdev, 1);
+				lge_dd_status_notify(&luke_sdev, 1);
+				data->notify_timedout = false;
+			}
+
+			if (atomic_read(&data->wakelock_state)) {
+				atomic_set(&data->wakelock_state, 0);
+				__pm_relax(&data->wakelock);
+			}
+		} else if (luke_sdev.state != state) {
+			pr_info("%s: send event\n", __func__);
+			hallic_set_state(&luke_sdev, 1);
+			lge_dd_status_notify(&luke_sdev, 1);
+		}
+		break;
+	case LUKE_DISCONNECTED:
+		data->retry_count = LUKE_MAX_RETRY_COUNT;
+		if (h->enable) {
+			cancel_delayed_work_sync(&data->luke_work);
+			if (atomic_read(&data->wakelock_state)) {
+				atomic_set(&data->wakelock_state, 0);
+				__pm_relax(&data->wakelock);
+			}
+		}
+		break;
+	case LUKE_CHECKING:
+		reinit_completion(&data->luke_done);
+		if (!atomic_read(&data->wakelock_state)) {
+			__pm_stay_awake(&data->wakelock);
+			atomic_set(&data->wakelock_state, 1);
+		}
+		queue_delayed_work(system_wq, &data->luke_work, 0);
+		break;
+	case LUKE_CHECKED:
+		if (h->enable) {
+			if (atomic_read(&data->wakelock_state)) {
+				atomic_set(&data->wakelock_state, 0);
+				__pm_relax(&data->wakelock);
+			}
+		}
+	default:
+		break;
+	};
+
+	return;
+}
+
+static void cover_connection_work_func(struct work_struct *work)
+{
+	int rc = 0;
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+
+	if (cover_connection_validate(h, data) < 0) {
+		goto exit_no_check;
+	}
+
+	if (data->luke_state == LUKE_CHECKED) {
+		pr_info("%s:finished\n", __func__);
+		goto exit_no_check;
+	}
+
+	if (data->retry_count <= 0) {
+
+		set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_ERROR);
+
+		cover_connection_update_state(LUKE_CHECKED);
+		hallic_set_state(&luke_sdev, 0);
+		goto exit_no_check;
+	} else {
+		data->retry_count--;
+		pr_info("%s:retry_count=%d\n", __func__, data->retry_count);
+	}
+
+	hallic_handle_5v_boost_gpios(1);
+
+	data->notify_timedout = false;
+	rc = wait_for_completion_timeout(&data->luke_done, msecs_to_jiffies(data->wait_time));
+	if (rc <= 0) {
+		reinit_completion(&data->luke_done);
+		queue_delayed_work(system_wq, &data->luke_work,
+				msecs_to_jiffies(data->retry_delay));
+		data->notify_timedout = true;
+		goto exit;
+	}
+
+	hallic_set_state(&luke_sdev, 1);
+	lge_dd_status_notify(&luke_sdev, 1);
+exit:
+	hallic_handle_5v_boost_gpios(0);
+exit_no_check:
+	return;
+}
+
+static int cover_connection_data_initialize(void)
+{
+	int rc = 0;
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+
+	if (!data) {
+		data = kzalloc(sizeof(struct cover_connection_data), GFP_KERNEL);
+		if (!data) {
+			pr_err("%s:mem error\n", __func__);
+			rc = -ENOMEM;
+			goto no_free_exit;
+		}
+	}
+
+	if (h->initialized)
+		goto no_free_exit;
+
+	data->retry_count = LUKE_MAX_RETRY_COUNT;
+	data->retry_delay = 600; /* 600ms */
+	data->wait_time = 400; /* 400 ms */
+	data->luke_state = LUKE_DISCONNECTED;
+	INIT_DELAYED_WORK(&data->luke_work, cover_connection_work_func);
+	init_completion(&data->luke_done);
+	wakeup_source_init(&data->wakelock, "luke_wakelock");
+
+	h->initialized = true;
+	h->cover_data = data;
+
+	pr_info("%s:initiaized\n", __func__);
+
+no_free_exit:
+	return rc;
+}
+
+#if 0
+static int cover_connection_data_deinitialize(void)
+{
+	int rc = 0;
+	struct cover_connection_handle *h = &cover_handle;
+	struct cover_connection_data *data = h->cover_data;
+
+	wakeup_source_trash(&data->wakelock);
+	if (data) {
+		kfree(data);
+		data = NULL;
+	}
+	h->initialized = false;
+
+	return rc;
+}
+#endif
+#endif
 
 /*
  * SYSFS interface for enabling/disabling keys and switches:
@@ -170,6 +629,890 @@ static void gpio_keys_enable_button(struct gpio_button_data *bdata)
 		bdata->disabled = false;
 	}
 }
+
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+static void send_recovery_event(int num)
+{
+	if (!cover_recovery.state) {
+		pr_info("[DD] %s\n", __func__);
+		hallic_set_state(&cover_recovery, num);
+	}
+}
+#endif
+
+#ifdef CONFIG_LGE_DUAL_SCREEN
+void request_dualscreen_recovery(void)
+{
+	pr_info("[Dualscreen] %s\n", __func__);
+	send_recovery_event(1);
+	cover_recovery.state = 0;
+}
+EXPORT_SYMBOL(request_dualscreen_recovery);
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+void request_cover_recovery(int num)
+{
+	struct lge_cover_ops *ops = get_lge_cover_ops();
+
+	if (!ops) {
+		pr_warn("ops is null\n");
+		send_recovery_event(num);
+		return;
+	}
+
+	if (is_dd_connected() && is_dd_powermode()) {
+		send_recovery_event(num);
+	} else if (ops->get_recovery_state() == RECOVERY_POWERDROP_BEGIN){
+		send_recovery_event(num);
+		ops->set_recovery_state(RECOVERY_POWERDROP_DONE);
+	} else {
+		int timeout = 10;
+
+		if (ops->get_recovery_state() != RECOVERY_NONE) {
+			pr_info("%s : recovery state = %d\n",
+					__func__, ops->get_recovery_state());
+			return;
+		}
+
+		ops->set_recovery_state(RECOVERY_MCU_BEGIN);
+
+		do {
+			if (ops->get_recovery_state() == RECOVERY_MCU_DONE) {
+				ops->set_recovery_state(RECOVERY_MCU_DONE);
+				break;
+			}
+
+			if (--timeout == 0)
+				break;
+			else
+				mdelay(50);
+		} while(timeout);
+	}
+}
+EXPORT_SYMBOL(request_cover_recovery);
+
+void mcu_fw_reset(int reset){
+	pr_info("[MCU_FW] MCU Reset [%d]\n", reset);
+
+	if (is_dd_display_recovery_working() && reset) {
+		pr_info("[MCU_FW] HPD recovery is working \n");
+		mcu_fw_state_clear(0);
+		return;
+	}
+
+	hallic_handle_5v_boost_gpios(0);
+
+	if (reset == 1) {
+		mdelay(200);
+		hallic_handle_5v_boost_gpios(1);
+	}
+}
+
+void mcu_sub_power_off_control(uint val){
+	int ret = 0;
+	int retry = 0;
+	unsigned int master_data = 0;
+
+	pr_info("[MCU_FW] %s : %d\n", __func__, val);
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 already enabled\n");
+	} else {
+		ice40_enable(global_ice40);
+		pr_info("[MCU_FW] ice40 enable\n");
+	}
+
+	/* touch reset to low */
+	pr_info("[MCU_FW] %s : touch reset to low\n", __func__);
+	ice40_master_reg_read(global_ice40, 0x00, &master_data);
+	ice40_master_reg_write(global_ice40, 0x00, (master_data & 0x7F));
+
+	ret = ice40_mcu_reg_write(global_ice40, I2C_W_SUB_DEVICE_POWER_OFF, val);
+
+	if (ret < 0) {
+		pr_err("[MCU_FW] Unable to set sub power control to %d\n", val);
+
+		do {
+			msleep(10);
+			retry++;
+			ret = ice40_mcu_reg_write(global_ice40, I2C_W_SUB_DEVICE_POWER_OFF, val);
+		} while (ret < 0 && retry < 10);
+	}
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 disable\n");
+		ice40_disable(global_ice40);
+	}
+}
+
+static ssize_t virtual_luke_btn_state_show(struct device *dev, struct device_attribute *attr, char *buf){
+    return sprintf(buf, "%d\n", luke_btn_sdev.state);
+}
+static ssize_t virtual_luke_btn_state_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+
+    unsigned long val = simple_strtoul(buf, NULL, 10);
+    int svid = 0xFF01;
+    struct usbpd_svid_handler *handler;
+
+    // when second display is connected
+    if( val == 1 ) {
+		global_luke_status = 1;
+
+		pr_err("#### LUKE #### VIRTUAL luke button is controled to %ld\n", val);
+		hallic_handle_5v_boost_gpios(1);
+
+        // get_handler
+        handler = find_hallic_svid_handler(svid);
+        if(handler) {
+            pr_debug("in luke_btn: find svid_handler!! svid=%x\n", handler->svid);
+            // displayport initialization
+            hallic_handle_displayport_initialize(handler);
+        } else {
+            pr_err("in luke_btn: handler is NULL!!!\n");
+            return count;
+        }
+    } else if ( val == 0 ) { // when second display is disconnected
+        pr_err("#### LUKE #### VIRTUAL luke button is controled to %ld\n", val);
+        // get_handler
+        handler = find_hallic_svid_handler(svid);
+        if(handler) {
+            pr_debug("in luke_btn: find svid_handler!! svid=%x\n", handler->svid);
+            handler->disconnect(handler);
+
+			global_luke_status = 0;
+			hallic_handle_5v_boost_gpios(0);
+        } else {
+            pr_err("in luke_btn: handler is NULL!!!\n");
+            return count;
+        }
+    }
+
+	luke_btn_sdev.state = val;
+    pr_err("luke_btn state switched to %ld \n", val);
+    return count;
+}
+
+static ssize_t virtual_mcu_firmware_write_show(struct device *dev, struct device_attribute *attr, char *buf){
+    return sprintf(buf, "%d\n", mcu_fw_sdev.state);
+}
+static ssize_t virtual_mcu_firmware_write_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	unsigned long val = simple_strtoul(buf, NULL, 10);
+
+	pr_info("[MCU_FW] virtual_mcu_firmware_write set to [%d]\n", (int)val);
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+		pr_info("[MCU_FW] Cover firmware update now. Need to wait update finish\n", (int)val);
+		return count;
+	}
+
+	switch ((int)val) {
+	case DD_MCU_FORCE_UPDATE:
+		set_mcu_fw_status(MCU_FW_UPDATE_READY_USER_CONFIRM);
+		hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+		mdelay(100);
+		hallic_set_state(&cover_fw_dev, UPDATE_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NEED);
+		return count;
+	case DD_MCU_UPDATE:
+		pr_info("[MCU_FW] MCU firmware will be updated\n");
+		touch_version_check = FIRMWARE_UPGRADE_NO_NEED;
+		set_mcu_fw_status(MCU_FW_UPDATE_FORCE);
+		break;
+	case DD_TOUCH_UPDATE:
+		pr_info("[MCU_FW] Touch firmware will be updated\n");
+		touch_version_check = FIRMWARE_UPGRADE_NEED;
+		set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+		break;
+	case DD_TOUCH_MCU_UPDATE:
+		pr_info("[MCU_FW] Touch/MCU firmware will be updated\n");
+		touch_version_check = FIRMWARE_UPGRADE_NEED;
+		set_mcu_fw_status(MCU_FW_UPDATE_FORCE);
+		break;
+	case DD_UPDATE_CLEAR:
+		mcu_fw_state_clear(1);
+		break;
+	case DD_MCU_RECOVERY:
+		hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+		mdelay(100);
+		hallic_set_state(&cover_fw_dev, RECOVERY_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, RECOVERY_NEED);
+		return count;
+	}
+
+	schedule_delayed_work(&mcu_version_work, msecs_to_jiffies(100));
+
+	return count;
+}
+
+static ssize_t mcu_firmware_version_show(struct device *dev, struct device_attribute *attr, char *buf){
+	int offset = 0;
+	int ret = 0;
+	int ver_cover = 0;
+	int ver_latest = 0;
+	char data[4] = {0,};
+	u8 display_id = 0;
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+		pr_info("[MCU_FW] Cover firmware update now. Can't read mcu version!\n");
+		return offset;
+	}
+
+	pr_info("[MCU_FW] MCU/Lattice Firmware version check\n");
+
+	mdelay(100);
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 already enabled\n");
+	} else {
+		ice40_enable(global_ice40);
+		pr_info("[MCU_FW] ice40 enable\n");
+	}
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_MCU_VER, data, sizeof(data)-1);
+
+	if( ret < 0) {
+		pr_err("[MCU_FW] failed to get MCU Ver\n");
+	} else {
+		pr_info("[MCU_FW] MCU Ver : %s [latest ver : %s]\n", &data[0], MCU_VER_STRING);
+		offset += snprintf(buf + offset, PAGE_SIZE - offset,
+				"MCU Ver : %s [latest ver : %s]\n", &data[0], MCU_VER_STRING);
+
+		ver_latest = MCU_VER;
+		ver_cover = simple_strtol(data, NULL, 10);
+		pr_info("[MCU_FW] ver_cover : %d [ver_latest : %d]\n", ver_cover, ver_latest);
+
+		if (ver_cover >= ver_latest)
+			offset += snprintf(buf + offset, PAGE_SIZE - offset,
+					"MCU has latest version\n");
+		else
+			offset += snprintf(buf + offset, PAGE_SIZE - offset,
+					"MCU FW updates are required\n");
+	}
+
+	mdelay(10);
+	memset(data, 0x0, sizeof(data));
+
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_LATTICE_VER, data, sizeof(data)-1);
+
+	if( ret < 0) {
+		pr_err("[MCU_FW] failed to get LATTICE Ver\n");
+	} else {
+		pr_info("[MCU_FW] Lattice Ver : %s [latest ver : %s]\n", &data[0], LATTICE_VER_STRING);
+		offset += snprintf(buf + offset, PAGE_SIZE - offset,
+				"LATTICE Ver : %s [latest ver : %s]\n", &data[0], LATTICE_VER_STRING);
+
+		ver_latest = LATTICE_VER;
+		ver_cover = simple_strtol(data, NULL, 10);
+		pr_info("[MCU_FW] ver_cover : %d [ver_latest : %d]\n", ver_cover, ver_latest);
+
+		if (ver_cover >= ver_latest)
+			offset += snprintf(buf + offset, PAGE_SIZE - offset,
+					"LATTICE has latest version\n");
+		else
+			offset += snprintf(buf + offset, PAGE_SIZE - offset,
+					"LATTICE FW updates are required\n");
+	}
+
+	mdelay(10);
+
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_DISPLAY_ID, (char *)&display_id, sizeof(display_id));
+
+	if(ret < 0) {
+		pr_err("[MCU_FW] failed to get Cover Display ID\n");
+	} else {
+		pr_info("[MCU_FW] Cover Display ID : %x\n", display_id);
+		offset += snprintf(buf + offset, PAGE_SIZE - offset,
+				"Cover Display ID : %x\n", display_id);
+
+		if (display_id == 1)
+			offset += snprintf(buf + offset, PAGE_SIZE - offset,
+				"FW updates are required to support display dualization\n");
+	}
+
+	return offset;
+}
+
+static ssize_t cover_version_check_show(struct device *dev, struct device_attribute *attr, char *buf){
+	int ret = 0;
+	int ver_cover = 0;
+	int ver_latest = 0;
+	char data[4] = {0,};
+	u8 display_id = 0;
+
+	pr_info("[MCU_FW] Cover version check\n");
+
+	if (!link_tr_state) {
+		pr_info("[MCU_FW] Link Traing Fail, Failed to get Cover Ver\n");
+		ret = -1;
+		goto end_check;
+	}
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+		pr_info("[MCU_FW] Cover firmware update now. Can't read mcu version!\n");
+		ret = -1;
+		goto end_check;
+	}
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 already enabled\n");
+	} else {
+		ice40_enable(global_ice40);
+		pr_info("[MCU_FW] ice40 enable\n");
+	}
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_MCU_VER, data, sizeof(data)-1);
+
+	if( ret < 0) {
+		pr_err("[MCU_FW] failed to get MCU Ver\n");
+		ret = -1;
+		goto end_check;
+	} else {
+		ver_latest = MCU_VER;
+		ver_cover = simple_strtol(data, NULL, 10);
+		pr_info("[MCU_FW] ver_cover : %d [ver_latest : %d]\n", ver_cover, ver_latest);
+
+		if (ver_cover >= ver_latest)
+			ret = 1;
+		else {
+			ret = 0;
+			goto end_check;
+		}
+	}
+
+	mdelay(10);
+	memset(data, 0x0, sizeof(data));
+
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_LATTICE_VER, data, sizeof(data)-1);
+
+	if( ret < 0) {
+		pr_err("[MCU_FW] failed to get LATTICE Ver\n");
+		ret = -1;
+		goto end_check;
+	} else {
+		ver_latest = LATTICE_VER;
+		ver_cover = simple_strtol(data, NULL, 10);
+		pr_info("[MCU_FW] ver_cover : %d [ver_latest : %d]\n", ver_cover, ver_latest);
+
+		if (ver_cover >= ver_latest)
+			ret = 1;
+		else
+			ret = 0;
+	}
+
+	ret = ice40_mcu_reg_read(global_ice40, I2C_R_DISPLAY_ID, (char *)&display_id, sizeof(display_id));
+
+	if(ret < 0) {
+		pr_err("[MCU_FW] failed to get Cover Display ID\n");
+		ret = -1;
+		goto end_check;
+	} else {
+		pr_info("[MCU_FW] Cover Display ID : %x\n", display_id);
+
+		if (display_id == NEW_TIANMA_ID || display_id == TOVIS_ID)
+			ret = 1;
+		else
+			ret = 0;
+	}
+
+end_check:
+	return sprintf(buf, "%d\n", ret);
+}
+
+static ssize_t mcu_power_control_show(struct device *dev, struct device_attribute *attr, char *buf){
+	int ret = 0;
+
+	ret = gpio_get_value (68);
+	pr_info("gpio 68(DD_5V_EN) value %d\n", ret );
+
+	return sprintf(buf, "%d\n", ret);
+}
+
+static ssize_t mcu_power_control_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	int ret = 0;
+	unsigned long val = simple_strtoul(buf, NULL, 10);
+
+    if( val == 1 ) {
+		gpio_direction_output(68, 1); // DD_5V_EN
+		ret = gpio_get_value (68);
+		pr_info("gpio 68(DD_5V_EN) value %d\n", ret );
+	} else if ( val == 0 ) {
+		gpio_direction_output(68, 0); // DD_5V_EN
+		ret = gpio_get_value (68);
+		pr_info("gpio 68(DD_5V_EN) value %d\n", ret );
+	} else
+		pr_err("Only 1 or 0 allow to control DD_5V_EN\n");
+
+    return count;
+}
+
+static ssize_t mcu_sub_power_control_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	unsigned long val = simple_strtoul(buf, NULL, 10);
+
+	mcu_sub_power_off_control(val);
+
+	return count;
+}
+
+static ssize_t mcu_power_onoff_test_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	int delay;
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
+
+	sscanf(buf, "%d", &delay);
+	pr_err("%s : %d\n", __func__, delay);
+	request_cover_recovery(1);
+/*
+	hallic_handle_5v_boost_gpios(0);
+	msleep(delay);
+	hallic_handle_5v_boost_gpios(1);
+*/
+	return ret;
+}
+
+static ssize_t cover_fw_update_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	unsigned long val = simple_strtoul(buf, NULL, 10);
+
+	pr_info("[MCU_FW] cover_fw_update %d\n",val);
+
+	if (val == 0)
+		mcu_fw_state_clear(0);
+	else if (val == 1) {
+		if (global_luke_status == 0) {
+			pr_info("[MCU_FW] invalid update confirm when cover disconnect\n");
+			hallic_set_state(&cover_fw_dev, UPDATE_DONE);
+			pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_DONE);
+		} else if(get_mcu_fw_status() == MCU_FW_UPDATE_READY_USER_CONFIRM || touch_version_check) {
+			if (get_mcu_fw_status() == MCU_FW_UPDATE_READY_USER_CONFIRM)
+				set_mcu_fw_status(MCU_FW_UPDATE_USER_CONFIRM);
+			schedule_delayed_work(&cover_fw_update_work, msecs_to_jiffies(1));
+		}
+	}
+
+	return count;
+}
+
+void hallic_handle_5v_boost_gpios(int state) {
+	struct lge_dp_display *lge_dp = get_lge_dp();
+
+	mutex_lock(&p_lock);
+
+	if (!state && cover_connection_get_state() == LUKE_CONNECTED) {
+		ice40_mcu_reg_write_norecovery(global_ice40, 0x0002, 0);
+		msleep(50);
+	}
+
+	if (atomic_read(&lge_dp->dd_5v_power_state) == state) {
+		pr_info("%s : Ignore wrong 5V control request state = %d\n", __func__, state);
+		mutex_unlock(&p_lock);
+		return;
+	}
+
+	if(get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+		pr_info("[MCU_FW] Can't on or off 5V boost, MCU firmware Updat Now\n");
+		mutex_unlock(&p_lock);
+		return;
+	}
+
+	atomic_set(&lge_dp->dd_5v_power_state, state);
+
+	if (cover_recovery.state && state) {
+		pr_info("%s : sleep 300ms for recovery power control\n", __func__);
+		msleep(300);
+		cover_recovery.state = 0;
+	}
+
+	if (use_flldo) {
+		gpio_direction_output(130, state); // lattice_1.8, keyssa_1.2
+		pr_info("gpio 130(FL_LDO_EN) value %d\n", gpio_get_value(130));
+		mdelay(10); // 10us delay need before pd_n_en
+	}
+
+	if( state == 1 ) {
+		set_mcu_boot_status(MCU_5V_HIGH);
+
+		if (get_mcu_fw_status() == MCU_FW_UPDATE_USER_CONFIRM) {
+			pr_info("[MCU_FW] Now firmware Update start\n");
+			set_mcu_fw_status(MCU_FW_UPDATE_START);
+			schedule_delayed_work(&cover_fw_update_timeout_work, msecs_to_jiffies(COVER_FW_UPDATE_TIMEOUT_MS));
+		}
+
+		if(cover_connection_get_state() == LUKE_CONNECTED)
+		{
+			schedule_delayed_work(&mcu_int_check_work, msecs_to_jiffies(500));
+		}
+
+		gpio_direction_output(68, state); // DD_5V_EN
+		pr_info("gpio 68(DD_5V_EN) value %d\n", gpio_get_value(68));
+
+		ice40_set_lreset(0);
+		pr_info("gpio 74(lreset) set to 0\n");
+		mdelay(50);
+		ice40_set_lreset(1);
+		pr_info("gpio 74(lreset) set to 1\n");
+
+		gpio_direction_output(73, state); // pd_n_en for keyssa Glass
+		pr_info("gpio 73(PD_N_EN) value %d\n", gpio_get_value(73));
+	} else {
+		set_mcu_boot_status(MCU_5V_LOW);
+
+		gpio_direction_output(73, state); // pd_n_en for keyssa Glass
+		pr_info("gpio 73(PD_N_EN) value %d\n", gpio_get_value(73));
+
+		ice40_set_lreset(0);
+		pr_info("gpio 74(lreset) set to %d\n",ice40_get_lreset());
+
+		mdelay(150); // 150ms delay to wait DD panel off sequence
+		gpio_direction_output(68, state); // DD_5V_EN
+		pr_info("gpio 68(DD_5V_EN) value %d\n", gpio_get_value(68));
+
+		global_ice40->in_recovery = 0;
+		cancel_delayed_work(&global_ice40->status_monitor);
+
+		mdelay(50);
+		pr_info("+++ add 50ms delay\n");
+	}
+	mutex_unlock(&p_lock);
+}
+EXPORT_SYMBOL(hallic_handle_5v_boost_gpios);
+
+void hallic_handle_displayport_initialize(struct usbpd_svid_handler *handler){
+	/* require connect/disconnect callbacks be implemented */
+	if (!handler->connect || !handler->disconnect) {
+		pr_err("SVID 0x%04x connect/disconnect must be non-NULL\n",
+				handler->svid);
+		return;
+	}
+	// jump to dp driver connection callback function
+	handler->connect(handler, true);
+}
+
+void hallic_register_svid_handler(struct usbpd_svid_handler *hdlr){
+
+	list_add_tail(&hdlr->entry, &luke_sdev.svid_handler_list);
+}
+
+static int mcu_fw_write_to_mcu(void){
+	int ret = 0;
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 already enabled\n");
+	} else {
+		ice40_enable(global_ice40);
+		pr_info("[MCU_FW] ice40 enable\n");
+	}
+
+	cancel_delayed_work(&global_ice40->status_monitor);
+
+	pr_info("[MCU_FW] MCU enter dload mode. Firmware Write Start\n");
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+		mdelay(200);
+		ret = mcu_firmware_partialbulkwrite(global_ice40, MCU_UPDATE);
+
+		if (ret < 0) {
+			pr_err("[MCU_FW] MCU Firmware Write Fail\n");
+			return ret;
+		}
+
+		mdelay(200);
+		ret = mcu_firmware_partialbulkwrite(global_ice40, LATTICE_UPDATE);
+
+		if (ret < 0) {
+			pr_err("[MCU_FW] Lattice Firmware Write Fail\n");
+			return ret;
+		}
+	}
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 disable\n");
+		ice40_disable(global_ice40);
+	}
+
+	return ret;
+}
+
+static int mcu_fw_handle_bootselect_gpio(void){
+	int ret;
+	uint data;
+
+	if(global_ice40->ice40_on) {
+		pr_info("[MCU_FW] ice40 already enabled\n");
+	} else {
+		ice40_enable(global_ice40);
+		pr_info("[MCU_FW] ice40 enable\n");
+	}
+
+	ret = ice40_master_reg_read(global_ice40, 0x00, &data);
+
+	if(ret < 0) {
+		pr_err("[MCU_FW] ice40 mater read fail\n");
+		return 0;
+	}
+
+	pr_info("[MCU_FW] global_luke_status: %d\n", global_luke_status);
+
+	if (global_luke_status == 1) {
+		if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+			/* bootselect pin set to high */
+			/* TODO : Skip i2c write if bootselect pin already high (((data&0x08) >> 3) == 1) */
+			ret = ice40_master_reg_write(global_ice40, 0x00, (data|0x08));
+
+			if(global_ice40->ice40_on) {
+				pr_info("[MCU_FW] ice40 disable\n");
+				ice40_disable(global_ice40);
+			}
+
+			if(ret < 0) {
+				pr_info("[MCU_FW] Fail to bootselect pin\n");
+				return 0;
+			} else
+				pr_info("[MCU_FW] bootselect pin set to High\n");
+		} else {
+			/* bootselect pin set to low */
+			ret = ice40_master_reg_write(global_ice40, 0x00, (data&0xF7));
+
+			if(ret < 0) {
+				pr_info("[MCU_FW] Fail to bootselect pin\n");
+				return 0;
+			} else
+				pr_info("[MCU_FW] bootselect pin set to Low\n");
+		}
+	} else
+	pr_info("[MCU_FW] luke is not connect. Skip bootselect control\n");
+
+	return 1;
+}
+
+void notify_touch_version_check(int state) {
+	pr_err("[Touch] %s : old_s : %d, new : %d\n", __func__, touch_version_check, state);
+	if (state == FIRMWARE_UPGRADE_NOT_INITIALIZED) {
+		touch_version_check = FIRMWARE_UPGRADE_NO_NEED;
+	} else
+		touch_version_check = state;
+}
+EXPORT_SYMBOL(notify_touch_version_check);
+
+static void mcu_fw_version_check_work_func(struct work_struct *work)
+{
+	int ret;
+	int ver_cover = 0;
+	int ver_latest = 0;
+	char data[4] = {0,};
+
+	pr_info("[MCU_FW] Version Check [ice40 : %d, status : %d]\n", global_ice40->ice40_on, get_mcu_fw_status());
+
+	if (global_ice40->ice40_on &&
+		(get_mcu_fw_status() == MCU_FW_UPDATE_READY_VERSION_CHECK || get_mcu_fw_status() == MCU_FW_UPDATE_FORCE))
+	{
+		if (!link_tr_state) {
+			if (mcu_version_check_retry < MCU_VERSION_CHECK_RETRY_COUNT) {
+				pr_info("[MCU_FW] Waiting for link training to end. check again after 1 second.[%d]\n", mcu_version_check_retry);
+				mcu_version_check_retry++;
+				schedule_delayed_work(&mcu_version_work, msecs_to_jiffies(MCU_VER_CHECK_TIMEOUT_MS));
+			} else {
+				pr_info("[MCU_FW] Link Traing Fail, Failed to get Cover Ver\n");
+				mcu_version_check_retry = 0;
+			}
+			return;
+		}
+
+		mcu_version_check_retry = 0;
+		//mdelay(300);
+
+		ret = ice40_mcu_reg_read(global_ice40, I2C_R_MCU_VER, data, sizeof(data)-1);
+
+		if( ret < 0) {
+			pr_err("[MCU_FW] failed to get MCU Ver\n");
+		} else {
+			ver_latest = MCU_VER;
+			ver_cover = simple_strtol(data, NULL, 10);
+			pr_info("[MCU_FW] MCU Ver : %d [latest ver : %d]\n", ver_cover, ver_latest);
+
+			if (ver_cover >= ver_latest) {
+				pr_info("[MCU_FW] MCU has latest version\n");
+				if (get_mcu_fw_status() == MCU_FW_UPDATE_FORCE) {
+					set_mcu_fw_status(MCU_FW_UPDATE_NEED);
+				} else
+					set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+			} else {
+				pr_info("[MCU_FW] MCU FW updates are required\n");
+				set_mcu_fw_status(MCU_FW_UPDATE_NEED);
+			}
+		}
+
+		if (get_mcu_fw_status() != MCU_FW_UPDATE_NEED) {
+			//mdelay(300);
+			memset(data, 0x0, sizeof(data));
+
+			ret = ice40_mcu_reg_read(global_ice40, I2C_R_LATTICE_VER, data, sizeof(data)-1);
+
+			if( ret < 0) {
+				pr_err("[MCU_FW] : failed to get LATTICE Ver\n");
+			} else {
+				ver_latest = LATTICE_VER;
+				ver_cover = simple_strtol(data, NULL, 10);
+				pr_info("[MCU_FW] LATTICE Ver : %d [latest ver : %d]\n", ver_cover, ver_latest);
+
+				if (ver_cover >= ver_latest) {
+					pr_info("[MCU_FW] LATTICE has latest version\n");
+					set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+				} else {
+					pr_info("[MCU_FW] LATTICE FW updates are required\n");
+					set_mcu_fw_status(MCU_FW_UPDATE_NEED);
+				}
+			}
+		}
+	}
+
+	pr_info("[MCU_FW] version check MCU/Lattice: %d, Touch: %d\n", get_mcu_fw_status(), touch_version_check);
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_NEED || touch_version_check) {
+		if (get_mcu_fw_status() == MCU_FW_UPDATE_NEED)
+			set_mcu_fw_status(MCU_FW_UPDATE_READY_USER_CONFIRM);
+
+		hallic_set_state(&cover_fw_dev,	UPDATE_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NEED);
+	} else if (get_mcu_fw_status() == MCU_FW_UPDATE_NO_NEED) {
+		hallic_set_state(&cover_fw_dev,	UPDATE_NO_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+	}
+}
+
+static void cover_fw_update_work_func(struct work_struct *work){
+	int retry = 0;
+	struct module_data *md;
+
+	pr_info("[MCU_FW] cover_fw_update start\n");
+
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_USER_CONFIRM || touch_version_check)
+		goto skip_dd_on_check;
+
+	if (!global_luke_status || !global_ice40->ice40_on) {
+		pr_err("[MCU_FW] cover_fw_update fail\n");
+		set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+		hallic_set_state(&cover_fw_dev,	UPDATE_NO_NEED);
+		pr_err("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+		return;
+	}
+
+skip_dd_on_check:
+
+	/* do upgrade for Touch */
+	pr_err("[MCU_FW] touch_version_check [%d]\n", touch_version_check);
+	if (touch_version_check == FIRMWARE_UPGRADE_NEED) {
+		if (plist != NULL) {
+			if (plist->sub_dev[2] != NULL) {
+				md = to_module(plist->sub_dev[2]);
+				if (!md) {
+					pr_err("[MCU_FW] module data is not located\n");
+					return;
+				}
+				md->m_driver.upgrade(md->dev);
+				do {
+					msleep(1000);
+					retry++;
+				} while (touch_version_check != FIRMWARE_UPGRADE_DONE && retry < 20);
+			}
+
+			if (touch_version_check == FIRMWARE_UPGRADE_DONE)
+				pr_info("[MCU_FW] Touch FW Update success \n");
+			else {
+				pr_err("[MCU_FW] Touch FW Update Fail [%d][%d]\n", touch_version_check, retry);
+				set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+				hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+				pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+				return;
+			}
+		} else {
+			pr_err("[MCU_FW][%s] plist is NULL. Touch FW Update Fail\n", __func__);
+			set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+			hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+			pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+			return;
+		}
+	}
+
+	/* do upgrade for MCU */
+	if (get_mcu_fw_status() == MCU_FW_UPDATE_USER_CONFIRM){
+		pr_info("[MCU_FW] MCU FW Update Start \n");
+		mcu_fw_reset(1);
+	} else {
+		pr_info("[MCU_FW] cover_fw_update finish \n");
+		set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+		hallic_set_state(&cover_fw_dev,	UPDATE_DONE);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_DONE);
+	}
+}
+
+static void mcu_boot_timeout_work_func(struct work_struct *work){
+	if(mcu_boot_retry < MCU_BOOT_RETRY_COUNT) {
+		if (!is_dd_display_recovery_working()) {
+			pr_err("[MCU_FW] MCU boot fail. MCU will Reset.[FW : %d, Retry : %d]\n",
+					get_mcu_fw_status(), mcu_boot_retry);
+			mcu_fw_reset(1);
+			mcu_boot_retry++;
+		} else {
+			pr_info("[MCU_FW] Booting timeout but recovery is working, Check again after recovery\n");
+			mcu_boot_retry = 0;
+		}
+	} else {
+		pr_err("[MCU_FW] MCU boot fail. Try MCU FW Recovery\n");
+		mcu_boot_retry = 0;
+		set_mcu_fw_status(MCU_FW_UPDATE_READY_USER_CONFIRM);
+		hallic_set_state(&cover_fw_dev, UPDATE_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NEED);
+		cancel_delayed_work_sync(&mcu_version_work);
+	}
+}
+
+static void cover_fw_update_timeout_work_func(struct work_struct *work){
+	pr_info("[MCU_FW] Abnormal Cover firmware timeout occurred\n", __func__);
+	mcu_fw_state_clear(0);
+}
+
+static void mcu_int_check_work_func (struct work_struct *work){
+	pr_err("[MCU_FW] 5V is on but mcu interrupt is not occurred\n", __func__);
+	hallic_set_state(&mcu_int_check_sdev, 1);
+}
+#elif defined (CONFIG_LGE_DUAL_SCREEN)
+static ssize_t virtual_mcu_firmware_write_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	unsigned long val = simple_strtoul(buf, NULL, 10);
+
+	pr_info("[MCU_FW] virtual_mcu_firmware_write set to [%d]\n", (int)val);
+
+	switch ((int)val) {
+	case DD_MCU_FORCE_UPDATE:
+		hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+		mdelay(100);
+		hallic_set_state(&cover_fw_dev, UPDATE_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NEED);
+		break;
+	case DD_MCU_CANCEL:
+		hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+		break;
+	case DD_MCU_RECOVERY:
+		hallic_set_state(&cover_fw_dev, UPDATE_NO_NEED);
+		mdelay(100);
+		hallic_set_state(&cover_fw_dev, RECOVERY_NEED);
+		pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, RECOVERY_NEED);
+	}
+
+	return count;
+}
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+static ssize_t cover_recovery_req_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count){
+	int delay;
+	ssize_t ret = strnlen(buf, PAGE_SIZE);
+
+	sscanf(buf, "%d", &delay);
+	pr_err("%s : %d\n", __func__, delay);
+
+	send_recovery_event(1);
+	cover_recovery.state = 0;       //FIXME : This value is set if power on control receivced from framework in DS1.
+
+    return ret;
+}
+#endif
 
 /**
  * gpio_keys_attr_show_helper() - fill in stringified bitmap of buttons
@@ -345,11 +1688,67 @@ static DEVICE_ATTR(disabled_switches, S_IWUSR | S_IRUGO,
 		   gpio_keys_show_disabled_switches,
 		   gpio_keys_store_disabled_switches);
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
+static DEVICE_ATTR(virtual_luke_btn_state, S_IRUGO | S_IWUSR | S_IWGRP,
+       virtual_luke_btn_state_show,
+       virtual_luke_btn_state_store);
+
+static DEVICE_ATTR(virtual_mcu_firmware_write, S_IRUGO | S_IWUSR | S_IWGRP,
+       virtual_mcu_firmware_write_show,
+       virtual_mcu_firmware_write_store);
+
+static DEVICE_ATTR(mcu_firmware_version, S_IRUGO | S_IWUSR | S_IWGRP,
+       mcu_firmware_version_show,
+       NULL);
+
+static DEVICE_ATTR(mcu_power_control, S_IRUGO | S_IWUSR | S_IWGRP,
+       mcu_power_control_show,
+       mcu_power_control_store);
+
+static DEVICE_ATTR(mcu_sub_power_control, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       mcu_sub_power_control_store);
+
+static DEVICE_ATTR(mcu_power_onoff_test, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       mcu_power_onoff_test_store);
+
+static DEVICE_ATTR(cover_fw_update, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       cover_fw_update_store);
+
+static DEVICE_ATTR(cover_version_check, S_IRUGO | S_IWUSR | S_IWGRP,
+       cover_version_check_show,
+       NULL);
+#elif defined (CONFIG_LGE_DUAL_SCREEN)
+static DEVICE_ATTR(virtual_mcu_firmware_write, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       virtual_mcu_firmware_write_store);
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+static DEVICE_ATTR(cover_recovery_req, S_IRUGO | S_IWUSR | S_IWGRP,
+       NULL,
+       cover_recovery_req_store);
+#endif
+
 static struct attribute *gpio_keys_attrs[] = {
 	&dev_attr_keys.attr,
 	&dev_attr_switches.attr,
 	&dev_attr_disabled_keys.attr,
 	&dev_attr_disabled_switches.attr,
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	&dev_attr_virtual_luke_btn_state.attr,
+	&dev_attr_mcu_firmware_version.attr,
+	&dev_attr_mcu_power_control.attr,
+	&dev_attr_mcu_sub_power_control.attr,
+	&dev_attr_mcu_power_onoff_test.attr,
+	&dev_attr_cover_fw_update.attr,
+	&dev_attr_cover_version_check.attr,
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+	&dev_attr_virtual_mcu_firmware_write.attr,
+	&dev_attr_cover_recovery_req.attr,
+#endif
 	NULL,
 };
 
@@ -363,6 +1762,11 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 	struct input_dev *input = bdata->input;
 	unsigned int type = button->type ?: EV_KEY;
 	int state;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	int svid = 0xFF01;
+	struct usbpd_svid_handler *handler;
+	int ret;
+#endif
 
 	state = gpiod_get_value_cansleep(bdata->gpiod);
 	if (state < 0) {
@@ -376,6 +1780,252 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 			input_event(input, type, button->code, button->value);
 	} else {
 		input_event(input, type, *bdata->code, state);
+		pr_err("gpio_keys_report_event: code(%d), value(%d)\n",button->code, state);
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		lge_gen_key_panic(button->code, state);
+#endif
+#ifdef CONFIG_LGE_SUPPORT_HALLIC
+#ifdef CONFIG_LGE_COVER_DISPLAY
+		if (!strncmp(bdata->button->desc, "smart_cover", 11) &&
+		    lge_get_dual_display_support()){
+#else
+		if (!strncmp(bdata->button->desc, "smart_cover", 11)) {
+#endif
+			if (sdev.state_front != !!state) {
+				sdev.state_front = state;
+
+				hallic_set_state(&sdev, state);
+				pr_err("[Display] smart_cover state switched to %s \n", (state ? "CLOSE" : "OPEN"));
+			}
+		}
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "ds2_smart_cover", 15) &&
+		    lge_get_dual_display_support()) {
+				if (sdev.state_front != state) {
+					sdev.state_front = state;
+					hallic_set_state(&sdev, state);
+					pr_err("[Display] %s state switched to %s \n", "ds2_smart_cover", (state ? "CLOSE" : "OPEN"));
+			}
+		}
+#endif
+
+		if (!strncmp(bdata->button->desc, "nfc_cover", 9)){
+			if (ndev.state != !!state) {
+				hallic_set_state(&ndev, state);
+				pr_err("[Display] nfc_cover state switched to %s \n", (state ? "CLOSE" : "OPEN"));
+			}
+		}
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+		if (!strncmp(bdata->button->desc, "cover_display_back", 18) &&
+		    lge_get_dual_display_support()){
+			if (state)
+				state = BACKCOVER_CLOSE;
+			if (sdev.state_back != state) {
+				sdev.state_back = state;
+				hallic_set_state(&sdev, state);
+				pr_err("[Display] cover_display_back state switched to %s\n", ((state==BACKCOVER_CLOSE) ? "CLOSE" : "OPEN"));
+			}
+		}
+#endif
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "ds2_cover_display_back", 22) &&
+		    lge_get_dual_display_support()) {
+				if (state) {
+					state = BACKCOVER_CLOSE;
+				}
+				if (sdev.state_back != state) {
+					sdev.state_back = state;
+					hallic_set_state(&sdev, state);
+					pr_err("[Display] %s state switched to %s \n", "ds2_cover_display_back", (state ? "CLOSE" : "OPEN"));
+				}
+			}
+#endif
+
+#if defined (CONFIG_LGE_COVER_DISPLAY)
+		if (!strncmp(bdata->button->desc, "luke", 4) &&
+		    lge_get_dual_display_support()){
+
+			if ((luke_sdev.state != state) ||
+				(((cover_connection_get_state() == LUKE_CHECKING) ||
+				(cover_connection_get_state() == LUKE_CHECKED)) &&
+				(state == 0))) {
+
+				// when second display is connected
+				if (state == 1) {
+					luke_btn_sdev.state = 1;
+					global_luke_status = 1;
+
+					pr_err("#### LUKE #### REAL luke is connected\n");
+					hallic_set_state(&luke_sdev, 2);
+
+					// get_handler
+					handler = find_hallic_svid_handler(svid);
+					if(handler) {
+						pr_debug("in luke: find svid_handler!! svid=%x\n", handler->svid);
+
+						set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_CHECKING);
+
+						cover_connection_update_state(LUKE_CHECKING);
+					} else {
+						pr_err("in luke: handler is NULL!!!\n");
+						return;
+					}
+#ifdef CONFIG_LGE_USE_DD_SAR_RESET
+					atmf04_dd_sar_reset();
+#endif
+				} else if (state == 0) { // when second display is disconnected
+					pr_err("#### LUKE #### REAL luke is disconnected\n");
+
+					set_cover_display_state(COVER_DISPLAY_STATE_DISCONNECTED);
+
+					cover_connection_update_state(LUKE_DISCONNECTED);
+
+					luke_btn_sdev.state = 0;
+					mcu_boot_retry = 0;
+					touch_version_check = FIRMWARE_UPGRADE_NO_NEED;
+
+					cancel_delayed_work_sync(&mcu_boot_timeout_work);
+
+					hallic_set_state(&cover_fw_dev,	UPDATE_NO_NEED);
+					pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+					set_mcu_fw_status(MCU_FW_UPDATE_READY_VERSION_CHECK);
+
+					// get_handler
+					handler = find_hallic_svid_handler(svid);
+					if(handler) {
+						pr_debug("in luke: find svid_handler!! svid=%x\n", handler->svid);
+						//handler->disconnect(handler);
+
+						global_luke_status = 0;
+						hallic_handle_5v_boost_gpios(0);
+
+						hallic_set_state(&luke_sdev, state);
+						lge_dd_status_notify(&luke_sdev, state);
+
+						cancel_delayed_work_sync(&mcu_version_work);
+						cancel_delayed_work_sync(&cover_fw_update_work);
+
+						pr_err("luke state switched to %d \n", state);
+					} else {
+						pr_err("in luke: handler is NULL!!!\n");
+						return;
+					}
+				}
+			}
+		}
+		if (!strncmp(bdata->button->desc, "mcu_fw", 6)){
+			if (mcu_fw_sdev.state != state){
+				/* when mcu_int pin set to high */
+				if (state == 1) {
+					mcu_fw_sdev.state = 1;
+
+					if (cover_connection_get_state() == LUKE_CHECKING) {
+						pr_info("[MCU_FW] Now Checking Cover Connection, Do nothing here!\n");
+
+						set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_OFF);
+
+						cover_connection_update_state(LUKE_CONNECTED);
+						return;
+					}
+
+					if (mcu_status != MCU_5V_HIGH) {
+						pr_info("[MCU_FW] MCU INT occur without 5V Control, Do nothing here!\n");
+						return;
+					}
+
+					cancel_delayed_work_sync(&mcu_int_check_work);
+					hallic_set_state(&mcu_int_check_sdev, 0);
+					pr_info("#### LUKE #### REAL MCU_FW is connected[%d]\n", mcu_status);
+					set_mcu_boot_status(MCU_START_BOOTLOADER);
+
+					cancel_delayed_work_sync(&mcu_version_work);
+					cancel_delayed_work_sync(&cover_fw_update_work);
+
+					ret = mcu_fw_handle_bootselect_gpio();
+
+					if (!ret) {
+						pr_err("[MCU_FW] Bootselect pin control fail.\n");
+						return;
+					}
+
+					if (get_mcu_fw_status() != MCU_FW_UPDATE_START) {
+						pr_info("[MCU_FW] Latest Firmware. Start MCU boot timer\n");
+						schedule_delayed_work(&mcu_boot_timeout_work, msecs_to_jiffies(MCU_BOOT_TIMEOUT_MS));
+					}
+				/* when mcu_int pin set to low */
+				} else if (state == 0) {
+					mcu_fw_sdev.state = 0;
+					pr_info("#### LUKE #### REAL MCU_FW is disconnected[%d]\n", mcu_status);
+
+					cancel_delayed_work_sync(&mcu_boot_timeout_work);
+
+					if (mcu_status != MCU_START_BOOTLOADER)
+						pr_info("[MCU_FW] Abnormal MCU Int. Do nothing here!\n");
+
+					if (global_luke_status == 1 && mcu_status == MCU_START_BOOTLOADER) {
+						mcu_boot_retry = 0;
+						set_mcu_boot_status(MCU_START_SYSTEM);
+
+						if (get_mcu_fw_status() == MCU_FW_UPDATE_START) {
+							pr_info("[MCU_FW] MCU in Dload mode\n");
+							ret = mcu_fw_write_to_mcu();
+							if (ret < 0) {
+								set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+								hallic_set_state(&cover_fw_dev,	UPDATE_NO_NEED);
+								pr_err("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_NO_NEED);
+								pr_err("[MCU_FW] MCU firmware write fail.\n");
+							} else {
+								set_mcu_fw_status(MCU_FW_UPDATE_NO_NEED);
+								hallic_set_state(&cover_fw_dev,	UPDATE_DONE);
+								pr_info("[MCU_FW][%s] cover_fw set to %d\n", __func__, UPDATE_DONE);
+								pr_info("[MCU_FW] MCU firmware write success.\n");
+							}
+
+							/* wait until flash write in mcu */
+							mdelay(500);
+							mcu_fw_reset(0);
+						} else {
+							pr_info("[MCU_FW] MCU in System mode\n");
+							pr_info("[MCU_FW] cover_led_status %d\n", cover_led_status);
+
+							if (cover_led_status) {
+								mdelay(200);
+								lp5521_cover_connect();
+								mcu_sub_power_off_control(0);
+							} else {
+								schedule_delayed_work(&mcu_version_work, msecs_to_jiffies(MCU_VER_CHECK_TIMEOUT_MS));
+							}
+						}
+					}
+				}
+			}
+		}
+#elif defined (CONFIG_LGE_DUAL_SCREEN)
+		if (!strncmp(bdata->button->desc, "luke", 4) &&
+		    lge_get_dual_display_support()) {
+
+			// when second display is connected
+			if (state == 1) {
+				if(lge_get_mfts_mode())
+					luke_sdev.state = 1;
+				set_hallic_status(true);
+				set_cover_display_state(COVER_DISPLAY_STATE_CONNECTED_CHECKING);
+				pr_info("DS2 cover hallic connected\n");
+			} else if (state == 0) { // when second display is disconnected
+				if(lge_get_mfts_mode())
+					luke_sdev.state = 0;
+				pr_info("DS2 cover hallic disconnected\n");
+				set_hallic_status(false);
+			}
+		}
+#endif
+#ifdef CONFIG_LGE_PM
+		if (!strncmp(bdata->button->desc, "luke", 4)) {
+			lge_prm_display_set_event(LGE_PRM_DISPLAY_EVENT_HALLIC_STATE, !!state);
+		}
+#endif
 	}
 	input_sync(input);
 }
@@ -548,7 +2198,62 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 				bdata->software_debounce =
 						button->debounce_interval;
 		}
+#ifdef CONFIG_LGE_SUPPORT_HALLIC
+		if (bdata->button->desc != NULL) {
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+			if (!strncmp(bdata->button->desc, "ds2_smart_cover", 15))
+#elif defined(CONFIG_LGE_COVER_DISPLAY)
+			if (!strncmp(bdata->button->desc, "smart_cover", 11) &&
+			    lge_get_dual_display_support())
+#else
+			if (!strncmp(bdata->button->desc, "smart_cover", 11))
+#endif
+			{
+				if (hallic_register(&sdev) < 0) {
+					pr_err("%s switch registration failed\n", bdata->button->desc);
+				}
+				pr_err("%s switch registration success\n", bdata->button->desc);
+			}
+#if defined(CONFIG_LGE_DUAL_SCREEN)
+			if (!strncmp(bdata->button->desc, "ds2_cover_display_back", 22))
+				pr_err("ds2_cover_display_back register");
+#endif
+		}
 
+		if (bdata->button->desc != NULL) {
+			if (!strncmp(bdata->button->desc, "nfc_cover", 9)) {
+				hallic_register(&ndev);
+				pr_err("hallic_dev switch registration success\n");
+			}
+		}
+#endif
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "luke", 4) &&
+			     lge_get_dual_display_support()) {
+			if (hallic_register(&luke_sdev) < 0) {
+				pr_err("luke_dev switch registration failed\n");
+			}
+			pr_err("luke_dev switch registration success\n");
+		}
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "mcu_fw", 4)) {
+			if (hallic_register(&mcu_fw_sdev) < 0) {
+				pr_err("mcu_fw_dev switch registration failed\n");
+			}
+			pr_err("mcu_fw_dev switch registration success\n");
+		}
+#elif defined(CONFIG_LGE_DUAL_SCREEN)
+		if (bdata->button->desc &&
+		    !strncmp(bdata->button->desc, "luke", 4) &&
+			     lge_get_dual_display_support()) {
+			if (hallic_register(&luke_sdev) < 0) {
+				pr_err("ds2 luke_dev switch registration failed\n");
+			}
+			pr_err("ds2 luke_dev switch registration success\n");
+		}
+#endif
 		if (button->irq) {
 			bdata->irq = button->irq;
 		} else {
@@ -564,7 +2269,6 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 		}
 
 		INIT_DELAYED_WORK(&bdata->work, gpio_keys_gpio_work_func);
-
 		isr = gpio_keys_gpio_isr;
 		irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
 
@@ -695,6 +2399,13 @@ gpio_keys_get_devtree_pdata(struct device *dev)
 	pdata->rep = device_property_read_bool(dev, "autorepeat");
 
 	device_property_read_string(dev, "label", &pdata->name);
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+	if (device_property_read_u32(dev, "lge,use-flldo", &use_flldo)) {
+		pr_err("Can not read lge,use-flldo property\n");
+		use_flldo = 1;
+	}
+	pr_info("dev = %s, use_flldo = %d\n", pdata->name, use_flldo);
+#endif
 
 	device_for_each_child_node(dev, child) {
 		if (is_of_node(child))
@@ -748,6 +2459,22 @@ static int gpio_keys_probe(struct platform_device *pdev)
 	size_t size;
 	int i, error;
 	int wakeup = 0;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	//int err = 0 ;
+	mcu_boot_retry = 0;
+	mcu_version_check_retry = 0;
+	set_mcu_boot_status(MCU_NOT_INITIALIZED);
+	set_mcu_fw_status(MCU_FW_UPDATE_READY_VERSION_CHECK);
+	touch_version_check = FIRMWARE_UPGRADE_NO_NEED;
+
+	INIT_DELAYED_WORK(&mcu_boot_timeout_work, mcu_boot_timeout_work_func);
+	INIT_DELAYED_WORK(&cover_fw_update_timeout_work, cover_fw_update_timeout_work_func);
+	INIT_DELAYED_WORK(&mcu_version_work, mcu_fw_version_check_work_func);
+	INIT_DELAYED_WORK(&cover_fw_update_work, cover_fw_update_work_func);
+	INIT_DELAYED_WORK(&mcu_int_check_work, mcu_int_check_work_func);
+
+	mutex_init(&p_lock);
+#endif
 
 	if (!pdata) {
 		pdata = gpio_keys_get_devtree_pdata(dev);
@@ -827,6 +2554,41 @@ static int gpio_keys_probe(struct platform_device *pdev)
 
 	fwnode_handle_put(child);
 
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	if (!luke_btn_sdev.dev) {
+		error = hallic_register(&luke_btn_sdev);
+		if(error) {
+			pr_err("luke_btn switch dev register failed\n");
+			return error;
+		}
+	}
+
+	if (!mcu_int_check_sdev.dev) {
+		error = hallic_register(&mcu_int_check_sdev);
+		if(error) {
+			pr_err("mcu_int_check_sdev switch dev register failed\n");
+			return error;
+		}
+	}
+#endif
+#if defined(CONFIG_LGE_COVER_DISPLAY) || defined(CONFIG_LGE_DUAL_SCREEN)
+	if (!cover_fw_dev.dev) {
+		error = hallic_register(&cover_fw_dev);
+		if (error) {
+			pr_err("cover_fw_dev switch dev register failed\n");
+			return error;
+		}
+		else
+			pr_err("cover_fw_dev switch registration success\n");
+	}
+	if (!cover_recovery.dev) {
+		error = hallic_register(&cover_recovery);
+		if(error) {
+			pr_err("cover recovery switch dev register failed\n");
+			return error;
+		}
+	}
+#endif
 	error = devm_device_add_group(dev, &gpio_keys_attr_group);
 	if (error) {
 		dev_err(dev, "Unable to export keys/switches, error: %d\n",
@@ -842,6 +2604,41 @@ static int gpio_keys_probe(struct platform_device *pdev)
 	}
 
 	device_init_wakeup(dev, wakeup);
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	if (use_flldo) {
+		if (gpio_is_valid(130)) {
+			error = gpio_request(130, "fl_ldo_en");
+			pr_debug("gpio130 request return = %d\n", error);
+			error = gpio_direction_output(130, 0);
+			pr_debug("gpio130: direction_output return = %d\n", error);
+		} else {
+			pr_err("gpio130 is not valid\n ");
+		}
+	}
+
+	if (gpio_is_valid(73)) {
+		error = gpio_request(73, "pd_n_en");
+		pr_debug("gpio73 request return = %d\n", error);
+		error = gpio_direction_output(73, 0);
+		pr_debug("gpio73: direction_output return = %d\n", error);
+	} else {
+		pr_err("gpio73 is not valid\n ");
+	}
+
+	if (gpio_is_valid(68)) {
+		error = gpio_request(68, "dd_5v_en");
+		pr_debug("gpio68 request return = %d\n", error);
+		error = gpio_direction_output(68, 0);
+		pr_debug("gpio68: direction_output return = %d\n", error);
+	} else {
+		pr_err("gpio68 is not valid\n ");
+	}
+
+	if (cover_connection_data_initialize() < 0) {
+		pr_warn("failed to cover connection data\n");
+	}
+#endif
 
 	return 0;
 }

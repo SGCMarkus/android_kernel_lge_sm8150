@@ -353,6 +353,11 @@ int32_t cam_qup_i2c_write_table(struct camera_io_master *client,
 			write_setting->addr_type, write_setting->data_type);
 		if (rc < 0)
 			break;
+#if CONFIG_MACH_LGE
+		if(reg_setting->delay > 0) {
+			usleep_range(reg_setting->delay, reg_setting->delay+1);
+		}
+#endif
 		reg_setting++;
 	}
 

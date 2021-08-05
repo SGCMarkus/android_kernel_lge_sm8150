@@ -820,6 +820,9 @@ no_ops:
 	return 0;
 }
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+int skip_free_rdump = 0;
+#endif
 static int _sde_kms_release_splash_buffer(unsigned int mem_addr,
 					unsigned int splash_buffer_size,
 					unsigned int ramdump_base,
@@ -833,6 +836,15 @@ static int _sde_kms_release_splash_buffer(unsigned int mem_addr,
 		return -EINVAL;
 	}
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	if(!skip_free_rdump)
+	{
+		SDE_DEBUG("Freeing display rdump region because dload_mode is disabled.\n");
+		ramdump_buffer_size = 0;
+	}
+	else
+		SDE_DEBUG("NOT freeing display rdump region because dload_mode is enabled.\n");
+#endif
 	/* leave ramdump memory only if base address matches */
 	if (ramdump_base == mem_addr &&
 			ramdump_buffer_size <= splash_buffer_size) {
@@ -3248,7 +3260,7 @@ static int _sde_kms_get_splash_data(struct sde_splash_data *data)
 	int ret = 0;
 	struct device_node *parent, *node, *node1;
 	struct resource r, r1;
-	const char *node_name = "cont_splash_region";
+	const char *node_name = "splash_region";
 	struct sde_splash_mem *mem;
 	bool share_splash_mem = false;
 	int num_displays, num_regions;

@@ -360,6 +360,9 @@ struct clock_data {
 	int load_low;
 	int load_norm;
 	int load_high;
+#ifdef CONFIG_MACH_LGE
+	int load_higher;
+#endif
 	int min_threshold;
 	int max_threshold;
 	enum hal_buffer buffer_type;

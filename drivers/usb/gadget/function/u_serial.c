@@ -510,6 +510,12 @@ static void gs_rx_push(unsigned long _port)
 
 	/* hand any queued data to the tty */
 	spin_lock_irq(&port->port_lock);
+#ifdef CONFIG_LGE_USB_GADGET
+	if (!port->port_usb) {
+		spin_unlock_irq(&port->port_lock);
+		return;
+	}
+#endif
 	tty = port->port.tty;
 	while (!list_empty(queue)) {
 		struct usb_request	*req;
@@ -715,7 +721,11 @@ static int gs_start_io(struct gs_port *port)
 	port->n_read = 0;
 	started = gs_start_rx(port);
 
+#ifndef CONFIG_LGE_USB_GADGET
 	if (started) {
+#else
+	if (started && port->port.tty) {
+#endif
 		gs_start_tx(port);
 		/* Unblock any pending writes into our circular buffer, in case
 		 * we didn't in gs_start_tx() */
@@ -1027,6 +1037,85 @@ static int gs_break_ctl(struct tty_struct *tty, int duration)
 	return status;
 }
 
+#ifdef CONFIG_LGE_USB_GADGET
+static int gs_tiocmget(struct tty_struct *tty)
+{
+	struct gs_port  *port = tty->driver_data;
+	struct gserial  *gser;
+	unsigned int result = 0;
+
+	spin_lock_irq(&port->port_lock);
+	gser = port->port_usb;
+	if (!gser) {
+		result = -ENODEV;
+		goto fail;
+	}
+
+	if (gser->get_dtr)
+		result |= (gser->get_dtr(gser) ? TIOCM_DTR : 0);
+
+	if (gser->get_rts)
+		result |= (gser->get_rts(gser) ? TIOCM_RTS : 0);
+
+	if (gser->serial_state & TIOCM_CD)
+		result |= TIOCM_CD;
+
+	if (gser->serial_state & TIOCM_RI)
+		result |= TIOCM_RI;
+
+fail:
+	spin_unlock_irq(&port->port_lock);
+	return result;
+}
+
+static int gs_tiocmset(struct tty_struct *tty,
+		unsigned int set, unsigned int clear)
+{
+	struct gs_port  *port = tty->driver_data;
+	struct gserial *gser;
+	int status = 0;
+
+	spin_lock_irq(&port->port_lock);
+	gser = port->port_usb;
+
+	if (!gser) {
+		status = -ENODEV;
+		goto fail;
+	}
+
+	if (set & TIOCM_RI) {
+		if (gser->send_ring_indicator) {
+			gser->serial_state |= TIOCM_RI;
+			status = gser->send_ring_indicator(gser, 1);
+		}
+	}
+
+	if (clear & TIOCM_RI) {
+		if (gser->send_ring_indicator) {
+			gser->serial_state &= ~TIOCM_RI;
+			status = gser->send_ring_indicator(gser, 0);
+		}
+	}
+
+	if (set & TIOCM_CD) {
+		if (gser->send_carrier_detect) {
+			gser->serial_state |= TIOCM_CD;
+			status = gser->send_carrier_detect(gser, 1);
+		}
+	}
+
+	if (clear & TIOCM_CD) {
+		if (gser->send_carrier_detect) {
+			gser->serial_state &= ~TIOCM_CD;
+			status = gser->send_carrier_detect(gser, 0);
+		}
+	}
+fail:
+	spin_unlock_irq(&port->port_lock);
+	return status;
+}
+#endif
+
 static const struct tty_operations gs_tty_ops = {
 	.open =			gs_open,
 	.close =		gs_close,
@@ -1037,6 +1126,10 @@ static const struct tty_operations gs_tty_ops = {
 	.chars_in_buffer =	gs_chars_in_buffer,
 	.unthrottle =		gs_unthrottle,
 	.break_ctl =		gs_break_ctl,
+#ifdef CONFIG_LGE_USB_GADGET
+	.tiocmget =		gs_tiocmget,
+	.tiocmset =		gs_tiocmset,
+#endif
 };
 
 /*-------------------------------------------------------------------------*/

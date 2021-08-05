@@ -1015,6 +1015,9 @@ bool drm_mode_equal_no_clocks_no_stereo(const struct drm_display_mode *mode1,
 	    mode1->vsync_end == mode2->vsync_end &&
 	    mode1->vtotal == mode2->vtotal &&
 	    mode1->vscan == mode2->vscan &&
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	    mode1->vrefresh == mode2->vrefresh &&
+#endif
 	    (mode1->flags & ~DRM_MODE_FLAG_3D_MASK) ==
 	     (mode2->flags & ~DRM_MODE_FLAG_3D_MASK))
 		return true;

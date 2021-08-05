@@ -327,6 +327,24 @@ static int glink_rpm_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_LGE_PM
+static int glink_rpm_suspend(struct device *dev)
+{
+	struct qcom_glink *glink = container_of(dev, struct qcom_glink, irq_work);
+	cancel_work_sync(&glink->irq_work);
+	return 0;
+}
+
+static int glink_rpm_resume(struct device *dev)
+{
+	return 0;
+}
+
+static const struct dev_pm_ops glink_rpm_pm_ops = {
+	.suspend	= glink_rpm_suspend,
+	.resume		= glink_rpm_resume,
+};
+#endif
 static const struct of_device_id glink_rpm_of_match[] = {
 	{ .compatible = "qcom,glink-rpm" },
 	{}
@@ -339,6 +357,9 @@ static struct platform_driver glink_rpm_driver = {
 	.driver = {
 		.name = "qcom_glink_rpm",
 		.of_match_table = glink_rpm_of_match,
+#ifdef CONFIG_LGE_PM
+		.pm				= &glink_rpm_pm_ops,
+#endif
 	},
 };
 

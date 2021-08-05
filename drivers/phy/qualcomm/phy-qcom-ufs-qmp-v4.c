@@ -15,6 +15,12 @@
 
 #define UFS_PHY_NAME "ufs_phy_qmp_v4"
 
+#ifdef CONFIG_UFSDBG_TUNABLES
+#define IMPORT_TO_UFSMPHY
+#include "../../scsi/ufs/ufsdbg-tunables.c"
+#undef IMPORT_TO_UFSMPHY
+#endif
+
 #define check_v1(major, minor, step) \
 	((major == 0x4) && (minor == 0x000) && (step == 0x0000))
 #define check_v2(major, minor, step) \
@@ -239,6 +245,10 @@ struct ufs_qcom_phy_specific_ops phy_v4_ops = {
 	.ctrl_rx_linecfg	= ufs_qcom_phy_qmp_v4_ctrl_rx_linecfg,
 	.power_control		= ufs_qcom_phy_qmp_v4_power_control,
 	.dbg_register_dump	= ufs_qcom_phy_qmp_v4_dbg_register_dump,
+#ifdef CONFIG_UFSDBG_TUNABLES
+	.calibrate_phy_tunables = ufsdbg_tunables_mphy_apply,
+#endif
+
 };
 
 static int ufs_qcom_phy_qmp_v4_probe(struct platform_device *pdev)

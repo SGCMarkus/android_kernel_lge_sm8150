@@ -38,7 +38,11 @@ static const struct address_space_operations swap_aops = {
 };
 
 struct address_space *swapper_spaces[MAX_SWAPFILES] __read_mostly;
+#ifdef CONFIG_HSWAP
+unsigned int nr_swapper_spaces[MAX_SWAPFILES] __read_mostly;
+#else
 static unsigned int nr_swapper_spaces[MAX_SWAPFILES] __read_mostly;
+#endif
 bool enable_vma_readahead __read_mostly = true;
 
 #define SWAP_RA_WIN_SHIFT	(PAGE_SHIFT / 2)
@@ -749,6 +753,12 @@ struct page *swap_vma_readahead(swp_entry_t fentry, gfp_t gfp_mask,
 		goto skip;
 
 	blk_start_plug(&plug);
+
+#if 1//case 03706282 debug patch	
+	trace_printk("nr_pte : %d, ptes : %p\n", ra_info.nr_pte, ra_info.ptes); 
+	if (ra_info.nr_pte > PTRS_PER_PTE) 
+		BUG();
+#endif 
 	for (i = 0, pte = ra_info.ptes; i < ra_info.nr_pte;
 	     i++, pte++) {
 		pentry = *pte;

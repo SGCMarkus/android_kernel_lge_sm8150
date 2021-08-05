@@ -21,6 +21,12 @@
 #include "dp_aux.h"
 
 #define DP_AUX_ENUM_STR(x)		#x
+#undef pr_debug
+#define pr_debug pr_err
+
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+extern bool is_dd_connected(void);
+#endif
 
 enum {
 	DP_AUX_DATA_INDEX_WRITE = BIT(31),
@@ -596,6 +602,27 @@ end:
 	return ret;
 }
 
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+void dp_aux_set_cfg(struct drm_dp_aux *drm_aux, u32 index)
+{
+	struct dp_aux_private *aux = container_of(drm_aux,
+		struct dp_aux_private, drm_aux);
+
+	aux->catalog->change_aux_cfg(aux->catalog,
+		aux->cfg, PHY_AUX_CFG1, index);
+}
+
+void dp_aux_set_recfg(struct drm_dp_aux *drm_aux)
+{
+	struct dp_aux_private *aux = container_of(drm_aux,
+		struct dp_aux_private, drm_aux);
+
+	aux->catalog->update_aux_cfg(aux->catalog,
+		aux->cfg, PHY_AUX_CFG1);
+	aux->catalog->reset(aux->catalog);
+}
+#endif
+
 /*
  * This function does the real job to process an AUX transaction.
  * It will call aux_reset() function to reset the AUX channel,
@@ -627,6 +654,7 @@ static ssize_t dp_aux_transfer(struct drm_dp_aux *drm_aux,
 			aux->catalog->update_aux_cfg(aux->catalog,
 				aux->cfg, PHY_AUX_CFG1);
 		aux->catalog->reset(aux->catalog);
+		pr_err("%s %d non-native reset retry_cnt=%d !!\n", __func__, __LINE__, aux->retry_cnt);
 		goto unlock_exit;
 	} else if (ret < 0) {
 		goto unlock_exit;
@@ -850,10 +878,11 @@ static int dp_aux_configure_aux_switch(struct dp_aux *dp_aux,
 
 	pr_debug("enable=%d, orientation=%d, event=%d\n",
 			enable, orientation, event);
-
+/*
 	rc = fsa4480_switch_event(aux->aux_switch_node, event);
 	if (rc)
 		pr_err("failed to configure fsa4480 i2c device (%d)\n", rc);
+*/
 end:
 	return rc;
 }
@@ -904,6 +933,10 @@ struct dp_aux *dp_aux_get(struct device *dev, struct dp_catalog_aux *catalog,
 	dp_aux->dpcd_updated = dp_aux_dpcd_updated;
 	dp_aux->set_sim_mode = dp_aux_set_sim_mode;
 	dp_aux->aux_switch = dp_aux_configure_aux_switch;
+#if defined(CONFIG_LGE_DISPLAY_COMMON)
+	dp_aux->set_cfg = dp_aux_set_cfg;
+	dp_aux->set_recfg = dp_aux_set_recfg;
+#endif
 
 	return dp_aux;
 error:

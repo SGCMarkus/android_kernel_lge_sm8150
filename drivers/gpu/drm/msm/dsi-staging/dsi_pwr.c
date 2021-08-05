@@ -434,3 +434,35 @@ int dsi_pwr_panel_regulator_mode_set(struct dsi_regulator_info *regs,
 
 	return rc;
 }
+
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+
+/**
+ * dsi_pwr_enable_regulator() - enable a set of regulators
+ * @regs:       Pointer to set of regulators to enable or disable.
+ * @mode:		regulators mode.
+ *
+ * return: error code in case of failure or 0 for success.
+ */
+int dsi_pwr_set_regulator(struct dsi_regulator_info *regs, int mode)
+{
+	int rc = 0, i = 0;
+	struct dsi_vreg *vreg;
+
+	if (!regs->vregs) {
+		pr_err("Invalid params\n");
+		return -EINVAL;
+	}
+
+	for (i = 0; i < regs->count; i++) {
+		vreg = &regs->vregs[i];
+		rc = regulator_set_mode(vreg->vreg, mode);
+		if (rc) {
+			pr_err("%pS->%s: %s failed to set mode %x. rc=%d\n",
+							__builtin_return_address(0), __func__,
+							vreg->vreg_name, mode, rc);
+		}
+	}
+	return rc;
+}
+#endif

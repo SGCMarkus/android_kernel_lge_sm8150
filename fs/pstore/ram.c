@@ -36,6 +36,10 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 
+#ifdef CONFIG_LGE_HANDLE_PANIC
+#include <soc/qcom/lge/lge_handle_panic.h>
+#endif
+
 #define RAMOOPS_KERNMSG_HDR "===="
 #define MIN_MEM_SIZE 4096UL
 
@@ -316,8 +320,10 @@ static ssize_t ramoops_pstore_read(struct pstore_record *record)
 						prz_next->corrected_bytes;
 				tmp_prz->bad_blocks += prz_next->bad_blocks;
 				size = ftrace_log_combine(tmp_prz, prz_next);
-				if (size)
+				if (size) {
+					kfree(tmp_prz);
 					goto out;
+				}
 			}
 			record->id = 0;
 		}
@@ -347,8 +353,13 @@ static ssize_t ramoops_pstore_read(struct pstore_record *record)
 
 out:
 	if (free_prz) {
-		kfree(prz->old_log);
-		kfree(prz);
+		if(prz_ok(prz)) {
+			kfree(prz->old_log);
+		}
+
+		if(prz) {
+			kfree(prz);
+		}
 	}
 
 	return size;
@@ -655,65 +666,65 @@ static int ramoops_init_prz(const char *name,
 	return 0;
 }
 
-static int ramoops_parse_dt_size(struct platform_device *pdev,
-				 const char *propname, u32 *value)
-{
-	u32 val32 = 0;
-	int ret;
-
-	ret = of_property_read_u32(pdev->dev.of_node, propname, &val32);
-	if (ret < 0 && ret != -EINVAL) {
-		dev_err(&pdev->dev, "failed to parse property %s: %d\n",
-			propname, ret);
-		return ret;
-	}
-
-	if (val32 > INT_MAX) {
-		dev_err(&pdev->dev, "%s %u > INT_MAX\n", propname, val32);
-		return -EOVERFLOW;
-	}
-
-	*value = val32;
-	return 0;
-}
-
 static int ramoops_parse_dt(struct platform_device *pdev,
 			    struct ramoops_platform_data *pdata)
 {
 	struct device_node *of_node = pdev->dev.of_node;
-	struct resource *res;
-	u32 value;
+	u32 ecc_size;
 	int ret;
 
 	dev_dbg(&pdev->dev, "using Device Tree\n");
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res) {
-		dev_err(&pdev->dev,
-			"failed to locate DT /reserved-memory resource\n");
-		return -EINVAL;
+	ret = of_property_read_u32(of_node, "mem-size", (u32*)&pdata->mem_size);
+	if (ret < 0) {
+		pr_err("failed to read mem-size from ramoops DT, ret: %d\n", ret);
+		return ret;
 	}
 
-	pdata->mem_size = resource_size(res);
-	pdata->mem_address = res->start;
+	ret = of_property_read_u32(of_node, "mem-address", (u32*)&pdata->mem_address);
+	if (ret < 0) {
+		pr_err("failed to read mem-address from ramoops DT, ret: %d\n", ret);
+		return ret;
+	}
+
+
 	pdata->mem_type = of_property_read_bool(of_node, "unbuffered");
 	pdata->dump_oops = !of_property_read_bool(of_node, "no-dump-oops");
 
-#define parse_size(name, field) {					\
-		ret = ramoops_parse_dt_size(pdev, name, &value);	\
-		if (ret < 0)						\
-			return ret;					\
-		field = value;						\
+	ret = of_property_read_u32(of_node, "record-size", (u32*)&pdata->record_size);
+	if (ret < 0) {
+		pr_err("failed to read record-size from ramoops DT, ret: %d\n", ret);
+		return ret;
 	}
 
-	parse_size("record-size", pdata->record_size);
-	parse_size("console-size", pdata->console_size);
-	parse_size("ftrace-size", pdata->ftrace_size);
-	parse_size("pmsg-size", pdata->pmsg_size);
-	parse_size("ecc-size", pdata->ecc_info.ecc_size);
-	parse_size("flags", pdata->flags);
+	ret = of_property_read_u32(of_node, "console-size", (u32*)&pdata->console_size);
+	if (ret < 0) {
+		pr_err("failed to read console-size from ramoops DT, ret: %d\n", ret);
+		return ret;
+	}
 
-#undef parse_size
+	ret = of_property_read_u32(of_node, "ftrace-size", (u32*)&pdata->ftrace_size);
+	if (ret < 0) {
+		pr_err("failed to read ftrace-size from ramoops DT, ret: %d\n", ret);
+		return ret;
+	}
+
+	ret = of_property_read_u32(of_node, "pmsg-size", (u32*)&pdata->pmsg_size);
+	if (ret < 0) {
+		pr_err("failed to read pmsg-size from ramoops DT, ret: %d\n", ret);
+		return ret;
+	}
+
+	ret = of_property_read_u32(of_node, "ecc-size", (u32*)&ecc_size);
+	if (ret == 0) {
+		if (ecc_size > INT_MAX) {
+			dev_err(&pdev->dev, "invalid ecc-size %u\n", ecc_size);
+			return -EOVERFLOW;
+		}
+		pdata->ecc_info.ecc_size = ecc_size;
+	} else if (ret != -EINVAL) {
+		return ret;
+	}
 
 	return 0;
 }
@@ -789,11 +800,15 @@ static int ramoops_probe(struct platform_device *pdev)
 
 	dump_mem_sz = cxt->size - cxt->console_size - cxt->ftrace_size
 			- cxt->pmsg_size;
-	err = ramoops_init_przs("dump", dev, cxt, &cxt->dprzs, &paddr,
-				dump_mem_sz, cxt->record_size,
-				&cxt->max_dump_cnt, 0, 0);
-	if (err)
-		goto fail_out;
+	if (dump_mem_sz) {
+		err = ramoops_init_przs("dump", dev, cxt, &cxt->dprzs, &paddr,
+					dump_mem_sz, cxt->record_size,
+					&cxt->max_dump_cnt, 0, 0);
+		if (err) {
+			pr_err("failed to init dump inside ramoops_init_przs, err: %d\n", err);
+			goto fail_out;
+		}
+	}
 
 	err = ramoops_init_prz("console", dev, cxt, &cxt->cprz, &paddr,
 			       cxt->console_size, 0);
@@ -839,7 +854,13 @@ static int ramoops_probe(struct platform_device *pdev)
 	 * and ECC bytes have been accounted for).
 	 */
 	if (cxt->pstore.flags & PSTORE_FLAGS_DMESG) {
+#ifdef CONFIG_LGE_HANDLE_PANIC
+		if (cxt->console_size)
+			cxt->pstore.bufsize = 1024; /* LOG_LINE_MAX */
+		cxt->pstore.bufsize = max(cxt->record_size, cxt->pstore.bufsize);
+#else
 		cxt->pstore.bufsize = cxt->dprzs[0]->buffer_size;
+#endif
 		cxt->pstore.buf = kzalloc(cxt->pstore.bufsize, GFP_KERNEL);
 		if (!cxt->pstore.buf) {
 			pr_err("cannot allocate pstore crash dump buffer\n");
@@ -869,6 +890,10 @@ static int ramoops_probe(struct platform_device *pdev)
 	pr_info("attached 0x%lx@0x%llx, ecc: %d/%d\n",
 		cxt->size, (unsigned long long)cxt->phys_addr,
 		cxt->ecc_info.ecc_size, cxt->ecc_info.block_size);
+
+#ifdef CONFIG_LGE_HANDLE_PANIC
+	lge_set_ram_console_addr(cxt->phys_addr, cxt->size);
+#endif
 
 	return 0;
 

@@ -58,4 +58,11 @@ struct dp_power *dp_power_get(struct dp_parser *parser);
  * @power: pointer to the power module's data
  */
 void dp_power_put(struct dp_power *power);
+
+#if defined(CONFIG_LGE_COVER_DISPLAY)
+extern struct ice40 *global_ice40;
+extern int ice40_master_reg_write(struct ice40 *ice40, uint addr, uint val);
+extern int ice40_master_reg_read(struct ice40 *ice40, uint addr, uint *val);
+extern int ice40_enable(struct ice40 *ice40);
+#endif
 #endif /* _DP_POWER_H_ */

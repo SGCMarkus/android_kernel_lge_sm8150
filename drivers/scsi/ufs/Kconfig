@@ -111,6 +111,12 @@ config SCSI_UFS_TEST
 	the test-iosched and will be initiated when the test-iosched will
 	be chosen to be the active I/O scheduler.
 
+config UFS_LGE_FEATURE
+    tristate "Add LGE Feature for UFS device"
+    depends on SCSI_UFSHCD
+    ---help---
+    This Feature adds for LGE modification
+
 config SCSI_UFSHCD_CMD_LOGGING
 	bool "Universal Flash Storage host controller driver layer command logging support"
 	depends on SCSI_UFSHCD
@@ -139,3 +145,24 @@ config SCSI_UFS_CRYPTO_QTI
 	 Enable Vendor Crypto Engine Support in UFS
 	 Enabling this allows kernel to use UFS crypto operations defined
 	 and implemented by QTI.
+
+config UFSDBG_TUNABLES
+	bool "UFS tunables test"
+	depends on SCSI_UFSHCD && DEBUG_FS
+	default n
+	---help---
+	This Feature adds debug fs nodes for ufs tunables
+
+config LGE_IOSCHED_EXTENSION
+	bool "extension I/O schedule"
+	default y
+	help
+	  for extension scheduling for I/O
+
+config UFSDBG_SYSFS_COMMON
+	bool "UFS SYSFS COMMON"
+	depends on SCSI_UFSHCD && DEBUG_FS
+	default y
+	---help---
+	This Feature adds sysfs for common access
+

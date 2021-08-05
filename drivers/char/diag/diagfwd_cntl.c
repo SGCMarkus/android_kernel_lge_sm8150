@@ -26,6 +26,11 @@
 #include "diag_ipc_logging.h"
 #include "diag_mux.h"
 
+#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+#include "diag_lock.h"
+#include <soc/qcom/lge/board_lge.h>
+#endif
+
 #define FEATURE_SUPPORTED(x)	((feature_mask << (i * 8)) & (1 << x))
 #define DIAG_GET_MD_DEVICE_SIG_MASK(proc) (0x100000 * (1 << proc))
 /* tracks which peripheral is undergoing SSR */
@@ -871,6 +876,10 @@ static void process_diagid(uint8_t *buf, uint32_t len,
 	}
 }
 
+#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+extern void diag_lock_set_allowed(bool allowed);
+#endif
+
 void diag_cntl_process_read_data(struct diagfwd_info *p_info, void *buf,
 				 int len)
 {
@@ -878,6 +887,9 @@ void diag_cntl_process_read_data(struct diagfwd_info *p_info, void *buf,
 	uint32_t header_len = sizeof(struct diag_ctrl_pkt_header_t);
 	uint8_t *ptr = buf;
 	struct diag_ctrl_pkt_header_t *ctrl_pkt = NULL;
+#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+	struct diag_ctrl_cmd_reg *reg = NULL;
+#endif
 
 	if (!buf || len <= 0 || !p_info)
 		return;
@@ -930,6 +942,18 @@ void diag_cntl_process_read_data(struct diagfwd_info *p_info, void *buf,
 			process_diagid(ptr, ctrl_pkt->len,
 						   p_info->peripheral);
 			break;
+#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+		case DIAG_CTRL_MSG_LGE_DIAG_ENABLE:
+#ifdef CONFIG_LGE_ONE_BINARY_SKU
+			if (lge_get_laop_operator() != OP_SPR_US)
+				break;
+#endif
+			reg = (struct diag_ctrl_cmd_reg *)ptr;
+			diag_lock_set_allowed(reg->cmd_code);
+			pr_info("diag: In %s, diag_enable: %d\n", __func__,
+				reg->cmd_code);
+			break;
+#endif
 		default:
 			pr_debug("diag: Control packet %d not supported\n",
 				 ctrl_pkt->pkt_id);
@@ -1144,8 +1168,16 @@ void diag_real_time_work_fn(struct work_struct *work)
 		if (peripheral == APPS_DATA)
 			continue;
 
+#ifdef CONFIG_LGE_USB
+		if (peripheral > NUM_PERIPHERALS) {
+			peripheral = diag_search_peripheral_by_pd(i);
+			if (peripheral >= NUM_PERIPHERALS)
+				continue;
+		}
+#else
 		if (peripheral > NUM_PERIPHERALS)
 			peripheral = diag_search_peripheral_by_pd(i);
+#endif
 
 		if (peripheral < 0 || peripheral >= NUM_PERIPHERALS)
 			continue;

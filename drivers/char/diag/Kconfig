@@ -46,3 +46,22 @@ config DIAG_OVER_PCIE
 	  over USB.
 
 endmenu
+
+menu "LGE DM APP Support"
+
+config LGE_DM_APP
+	bool "LGE DM APP Support"
+	default y
+	depends on MACH_LGE
+	help
+	 LGE DM APP Support
+endmenu
+
+menu "LGE DIAG BYPASS Support"
+config LGE_DIAG_BYPASS
+	tristate "Support LGE diag bypass for factory"
+	default n
+	depends on MACH_LGE
+	help
+	 LGE diag bypass
+endmenu

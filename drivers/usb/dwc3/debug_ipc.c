@@ -59,6 +59,10 @@ void dwc3_dbg_print(struct dwc3 *dwc, u8 ep_num, const char *name,
 
 	ipc_log_string(dwc->dwc_ipc_log_ctxt, "%02X %-25.25s %4i ?\t%s",
 			ep_num, name, status, extra);
+#ifdef CONFIG_LGE_USB
+	dev_dbg(dwc->dev, "%02X %-25.25s %4i ?\t%s",
+		ep_num, name, status, extra);
+#endif
 }
 
 /**
@@ -76,6 +80,10 @@ void dwc3_dbg_done(struct dwc3 *dwc, u8 ep_num,
 
 	ipc_log_string(dwc->dwc_ipc_log_ctxt, "%02X %-25.25s %4i ?\t%d",
 			ep_num, "DONE", status, count);
+#ifdef CONFIG_LGE_USB
+	dev_dbg(dwc->dev, "%02X %-25.25s %4i ?\t%d",
+		ep_num, "DONE", status, count);
+#endif
 }
 
 /**
@@ -109,6 +117,11 @@ void dwc3_dbg_queue(struct dwc3 *dwc, u8 ep_num,
 		ipc_log_string(dwc->dwc_ipc_log_ctxt,
 			"%02X %-25.25s %4i ?\t%d %d", ep_num, "QUEUE", status,
 			!req->no_interrupt, req->length);
+#ifdef CONFIG_LGE_USB
+		dev_dbg(dwc->dev,
+			"%02X %-25.25s %4i ?\t%d %d", ep_num, "QUEUE", status,
+			!req->no_interrupt, req->length);
+#endif
 	}
 }
 
@@ -129,6 +142,13 @@ void dwc3_dbg_setup(struct dwc3 *dwc, u8 ep_num,
 			ep_num, "SETUP", req->bRequestType,
 			req->bRequest, le16_to_cpu(req->wValue),
 			le16_to_cpu(req->wIndex), le16_to_cpu(req->wLength));
+#ifdef CONFIG_LGE_USB
+		dev_dbg(dwc->dev,
+			"%02X %-25.25s ?\t%02X %02X %04X %04X %d",
+			ep_num, "SETUP", req->bRequestType,
+			req->bRequest, le16_to_cpu(req->wValue),
+			le16_to_cpu(req->wIndex), le16_to_cpu(req->wLength));
+#endif
 	}
 }
 
@@ -143,6 +163,9 @@ void dwc3_dbg_print_reg(struct dwc3 *dwc, const char *name, int reg)
 		return;
 
 	ipc_log_string(dwc->dwc_ipc_log_ctxt, "%s = 0x%08x", name, reg);
+#ifdef CONFIG_LGE_USB
+	dev_dbg(dwc->dev, "%s = 0x%08x", name, reg);
+#endif
 }
 
 void dwc3_dbg_dma_unmap(struct dwc3 *dwc, u8 ep_num, struct dwc3_request *req)

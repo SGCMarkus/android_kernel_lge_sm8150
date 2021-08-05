@@ -423,6 +423,9 @@ static int dp_audio_info_setup(struct platform_device *pdev,
 	dp_audio_enable(audio, true);
 
 	mutex_unlock(&audio->ops_lock);
+
+	pr_debug("audio stream configured\n");
+
 	return rc;
 }
 
@@ -670,6 +673,10 @@ static int dp_audio_notify(struct dp_audio_private *audio, u32 state)
 		goto end;
 
 	if (atomic_read(&audio->acked))
+		goto end;
+
+	//FIXME LGE Feature
+	if (state == EXT_DISPLAY_CABLE_DISCONNECT && !audio->engine_on)
 		goto end;
 
 	if (state == EXT_DISPLAY_CABLE_CONNECT)

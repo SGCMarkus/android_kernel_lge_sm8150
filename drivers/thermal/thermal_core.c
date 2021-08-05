@@ -44,6 +44,9 @@ static DEFINE_IDA(thermal_cdev_ida);
 static LIST_HEAD(thermal_tz_list);
 static LIST_HEAD(thermal_cdev_list);
 static LIST_HEAD(thermal_governor_list);
+#ifdef CONFIG_LGE_PM
+struct list_head thermal_cdev_debug_list = LIST_HEAD_INIT(thermal_cdev_debug_list);
+#endif
 
 static DEFINE_MUTEX(thermal_list_lock);
 static DEFINE_MUTEX(thermal_governor_lock);
@@ -1078,6 +1081,9 @@ __thermal_cooling_device_register(struct device_node *np,
 	/* Add 'this' new cdev to the global cdev list */
 	mutex_lock(&thermal_list_lock);
 	list_add(&cdev->node, &thermal_cdev_list);
+#ifdef CONFIG_LGE_PM
+	thermal_cdev_debug_list = thermal_cdev_list;
+#endif
 	mutex_unlock(&thermal_list_lock);
 
 	/* Update binding information for 'this' new cdev */

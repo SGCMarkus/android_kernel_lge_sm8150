@@ -37,6 +37,11 @@
 
 #include "thermal_core.h"
 
+#ifdef CONFIG_LGE_PM
+#include <soc/qcom/lge/board_lge.h>
+enum lge_sku_carrier_type carrier = HW_SKU_MAX;
+#endif
+
 /***   Private data structures to represent thermal device tree data ***/
 
 /**
@@ -1274,6 +1279,13 @@ static int thermal_of_populate_trip(struct device_node *np,
 	}
 	trip->temperature = prop;
 
+#ifdef CONFIG_LGE_PM
+	if (!strncmp(np->name, "sdx50m-sub6", 11) && carrier == HW_SKU_NA_CDMA_VZW)
+		trip->temperature = 120000;
+	else if (!strncmp(np->name, "sdx50m-mmw", 10) && carrier != HW_SKU_NA_CDMA_VZW)
+		trip->temperature = 120000;
+#endif
+
 	ret = of_property_read_u32(np, "hysteresis", &prop);
 	if (ret < 0) {
 		pr_err("missing hysteresis property\n");
@@ -1463,6 +1475,12 @@ int __init of_parse_thermal_zones(void)
 	struct __thermal_zone *tz;
 	struct thermal_zone_device_ops *ops;
 
+#ifdef CONFIG_LGE_PM
+	carrier = lge_get_sku_carrier();
+	pr_info("operator is %s\n",
+		carrier == HW_SKU_NA_CDMA_VZW ? "VZW" : "Non-VZW");
+#endif
+
 	np = of_find_node_by_name(NULL, "thermal-zones");
 	if (!np) {
 		pr_debug("unable to find thermal zones\n");
@@ -1475,6 +1493,16 @@ int __init of_parse_thermal_zones(void)
 		int i, mask = 0;
 		u32 prop;
 		const char *governor_name;
+
+#if defined(CONFIG_MACH_SM8150_ALPHA_LAO_LDU) || \
+    defined(CONFIG_MACH_SM8150_FLASH_LAO_LDU) || \
+    defined(CONFIG_MACH_SM8150_BETA_LDU)
+		if (!strncmp(child->name, "pa-therm", strlen("pa-therm"))) {
+			pr_err("[LDU] %s is detected. skip to register tz\n",
+					child->name);
+			continue;
+		}
+#endif
 
 		tz = thermal_of_build_thermal_zone(child);
 		if (IS_ERR(tz)) {

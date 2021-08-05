@@ -1,0 +1,125 @@
+
+qcom,LGE_BLT41_LGC_3500mAh {
+	/* #3747457_LGE_BLT41lgc_3500mAh_averaged_MasterSlave_Nov26th2018*/
+	qcom,max-voltage-uv = <4430000>;
+	qcom,fg-cc-cv-threshold-mv = <4430>;
+	qcom,fastchg-current-ma = <3000>;
+	qcom,batt-id-kohm = <12>;
+	qcom,battery-type = "LGE_BLT41_LGC_3500mAh";
+	/* Begin of fg accuracy compensation during charging */
+	qcom,cutoff-ki-coeff = <5900>;
+	qcom,cutoff-lt-ki-coeff = <9200>;
+	/* End of fg accuracy compensation during charging */
+	qcom,therm-coefficients = <0x230d 0xcf0 0x42 0xccbe 0x81ca>;
+	qcom,therm-center-offset = <0x5b>;
+	qcom,therm-pull-up = <100>;
+	qcom,rslow-normal-coeffs = <0xb0 0x05 0xdb 0x12>;
+	qcom,rslow-low-coeffs = <0x56 0xf5 0xc8 0x13>;
+	qcom,checksum = <0x69D2>;
+	qcom,fg-profile-data = [
+		 09 00 4F 00
+		 6A DC 2A E3
+		 8D DC 00 00
+		 5C BC 43 8A
+		 04 80 06 92
+		 25 94 40 80
+		 17 00 B0 05
+		 DB 12 E1 E3
+		 4A 06 CE 07
+		 32 00 36 EA
+		 2C E4 4C E2
+		 E1 0A 02 ED
+		 19 C4 96 22
+		 2D 0B 04 DB
+		 60 00 48 00
+		 49 00 3D 00
+		 2B 00 32 00
+		 3A 00 46 00
+		 44 00 46 00
+		 3D 00 60 00
+		 3E 00 45 00
+		 58 00 50 00
+		 4E 00 A8 00
+		 70 64 5B 00
+		 52 00 4F 08
+		 60 00 51 00
+		 4A 00 81 10
+		 64 10 5D 00
+		 A4 28 78 48
+		 64 58 5B 0E
+		 5D 00 D8 00
+		 C5 1F 1D 0D
+		 F5 02 EA FD
+		 74 1C 26 03
+		 D2 0D 71 22
+		 BD 17 0D 42
+		 D5 5D 2C 03
+		 69 10 D0 1F
+		 43 05 E0 0A
+		 E9 05 E9 1C
+		 9F FB 3E 04
+		 45 0A 07 18
+		 C7 23 53 44
+		 72 52 7A 11
+		 0E 1F 1B EE
+		 4F CA 61 B6
+		 C7 1C B7 CB
+		 5E 04 36 BA
+		 C8 17 8B 8B
+		 DB 84 D3 9B
+		 74 A8 09 80
+		 45 02 24 0D
+		 23 05 CB E2
+		 00 F8 23 E4
+		 FD EB F6 E7
+		 20 CC E7 BD
+		 9E 11 14 00
+		 6C D5 08 02
+		 D8 06 9B 02
+		 CE 07 32 00
+		 D7 02 8D 02
+		 AB 05 67 05
+		 AD 05 99 02
+		 6A 03 F1 00
+		 AF 05 4B 00
+		 3A 00 45 00
+		 4A 64 4C 00
+		 4C 00 4D 00
+		 4E F0 4C 00
+		 4D 00 50 10
+		 47 10 3F 00
+		 59 20 5E 48
+		 69 58 85 0E
+		 5C 00 65 00
+		 71 08 7E 00
+		 85 00 4A 00
+		 4B 10 67 10
+		 62 00 7A 28
+		 98 48 5F 58
+		 72 0D 7D 00
+		 7C 00 75 08
+		 D8 F8 45 1F
+		 82 06 59 0B
+		 79 0C E4 1C
+		 2B 23 CC 45
+		 6E 5A 8A 18
+		 EE 03 DB 05
+		 41 03 62 10
+		 3F 0A BC 1F
+		 73 05 CA 02
+		 EA 05 CA 1C
+		 13 03 D1 05
+		 85 02 7D 18
+		 03 02 B8 05
+		 97 03 64 00
+		 58 1F DB 05
+		 86 02 49 04
+		 DB 1C 62 02
+		 09 05 83 03
+		 9C 18 56 03
+		 CB 04 21 02
+		 69 00 3D 01
+		 C0 00 FA 00
+		 99 0D 00 00
+	];
+};

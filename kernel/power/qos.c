@@ -51,6 +51,10 @@
 #include <linux/export.h>
 #include <trace/events/power.h>
 
+#ifdef CONFIG_PROC_FS
+#include <linux/proc_fs.h>
+#endif
+
 /*
  * locking rule: all changes to constraints or notifiers lists
  * or pm_qos_object list and pm_qos_objects need to happen with pm_qos_lock
@@ -152,6 +156,22 @@ static const struct file_operations pm_qos_power_fops = {
 	.release = pm_qos_power_release,
 	.llseek = noop_llseek,
 };
+
+#ifdef CONFIG_PROC_FS
+static int pm_qos_dbg_show_requests(struct seq_file *s, void *unused);
+
+static int procfs_pm_qos_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, pm_qos_dbg_show_requests, PDE_DATA(inode));
+}
+
+static const struct file_operations procfs_pm_qos_fops = {
+	.open           = procfs_pm_qos_open,
+	.read           = seq_read,
+	.llseek         = seq_lseek,
+	.release        = single_release,
+};
+#endif
 
 /* unlocked internal variant */
 static inline int pm_qos_get_value(struct pm_qos_constraints *c)
@@ -821,7 +841,9 @@ static int register_pm_qos_misc(struct pm_qos_object *qos, struct dentry *d)
 		(void)debugfs_create_file(qos->name, S_IRUGO, d,
 					  (void *)qos, &pm_qos_debug_fops);
 	}
-
+#ifdef CONFIG_PROC_FS
+	proc_create_data(qos->name, 0444, NULL, &procfs_pm_qos_fops, (void *)qos);
+#endif
 	return misc_register(&qos->pm_qos_power_miscdev);
 }
 

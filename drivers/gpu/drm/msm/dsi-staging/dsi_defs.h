@@ -306,6 +306,8 @@ enum dsi_cmd_set_type {
 	DSI_CMD_SET_ROI,
 	DSI_CMD_SET_TIMING_SWITCH,
 	DSI_CMD_SET_POST_TIMING_SWITCH,
+	DSI_CMD_SET_LOW_PERSIST_MODE_OFF,
+	DSI_CMD_SET_LOW_PERSIST_MODE_ON,
 	DSI_CMD_SET_QSYNC_ON,
 	DSI_CMD_SET_QSYNC_OFF,
 	DSI_CMD_SET_MAX
@@ -438,6 +440,9 @@ struct dsi_mode_info {
 	bool dsc_enabled;
 	struct msm_display_dsc_info *dsc;
 	struct msm_roi_caps roi_caps;
+#if IS_ENABLED(CONFIG_LGE_DISPLAY_COMMON)
+	u32 refresh_rate_div;
+#endif
 };
 
 /**

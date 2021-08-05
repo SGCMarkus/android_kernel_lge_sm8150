@@ -20,7 +20,9 @@
 #include <linux/types.h>
 #include <linux/device.h>
 #include "dp_hpd.h"
-
+#ifdef CONFIG_LGE_COVER_DISPLAY
+#include "../lge/dp/lge_dp_def.h"
+#endif
 /**
  * enum dp_usbpd_port - usb/dp port type
  * @DP_USBPD_PORT_NONE: port not configured
@@ -80,4 +82,7 @@ struct dp_hpd *dp_usbpd_init(struct device *dev, struct usbpd *pd,
  * This function will cleanup the usbpd module
  */
 void dp_usbpd_deinit(struct dp_hpd *pd);
+#ifdef CONFIG_LGE_COVER_DISPLAY
+extern void hallic_register_svid_handler(struct usbpd_svid_handler *hdlr);
+#endif
 #endif /* _DP_USBPD_H_ */

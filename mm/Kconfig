@@ -851,3 +851,48 @@ config FORCE_ALLOC_FROM_DMA_ZONE
 	  always using ZONE_DMA memory.
 
 	  If unsure, say "n".
+
+config CMA_PINPAGE_MIGRATION
+	bool "CMA pinned page migration (EXPERIMENTAL)"
+	default n
+	help
+	  Turns on cma page migration for pinned page.
+
+config LGE_BDI_STRICTLIMIT_DIRTY
+	bool "limit dirty ratio strictly"
+	default y
+	help
+	  limit dirty page ratio strictly
+
+config MIGRATE_HIGHORDER
+	bool "Enable migrate highorder"
+	default n
+	select ALLOC_BUFFERS_IN_4K_CHUNKS
+	help
+	  This option enables migratetype highorder.
+	  It creates the specific reserved pool for 4 and more order allocation    .
+	  This is helpful fragmentation and allocation success rate
+	  that system has too much high order allocation.
+
+config HIGHORDER_PAGES
+	int "Set migrate highorder pool size (pages)"
+	depends on MIGRATE_HIGHORDER
+	default 0
+	help
+	  Set the reserved size for migrate highorder.
+	  Normally, android system needs about 10% of total memory.
+	  (Thus, reserve 10% of memory if set to 0)
+	  Please check ION memory usage in your system.
+	  And, set this size about minimum (ION + extra) some memory.
+
+config HSWAP
+	bool "Enable Hybrid SWAP"
+	depends on SWAP && ZRAM && PROCESS_RECLAIM
+	default n
+	help
+		This config supports multiple swap files which are based on different
+		block devices such as eMMC, UFS, or ZRAM.
+		kswapd use high priority swap file.
+		lowmemorykiller and direct reclaim module use low priority swap file.
+		lowmemorykiller reclaims pages of victim process instead kill the process.
+

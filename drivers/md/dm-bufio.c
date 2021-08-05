@@ -675,6 +675,63 @@ static void use_inline_bio(struct dm_buffer *b, int rw, sector_t sector,
 	submit_bio(&b->bio);
 }
 
+#ifdef CONFIG_LGE_DM_VERITY_RECOVERY
+void* dm_direct_read(sector_t block, struct dm_bufio_client *bufio)
+{
+	void* data = NULL;
+	unsigned block_size = bufio->block_size;
+	struct block_device *bdev = bufio->bdev;
+	gfp_t gfp_mask = GFP_NOIO | __GFP_NORETRY | __GFP_NOMEMALLOC | __GFP_NOWARN;
+
+	if (block_size <= PAGE_SIZE) {
+		data = (void*)__get_free_pages(gfp_mask, 0);
+	}
+	else {
+		// vmalloc case is not support yet. Now, UFS/eMMC block size is not greather than 4KB.
+		goto return_data;
+	}
+
+	if(data) {
+		struct bio bio;
+		struct bio_vec bio_vec;
+	    unsigned char sectors_per_block_bits = ffs(block_size) - 1 - SECTOR_SHIFT;
+
+		bio_init(&bio, &bio_vec, DM_BUFIO_INLINE_VECS);
+		bio.bi_iter.bi_sector = block << sectors_per_block_bits;
+		bio_set_dev(&bio, bdev);
+
+		if (!bio_add_page(&bio, virt_to_page(data),
+				  PAGE_SIZE, virt_to_phys(data) & (PAGE_SIZE - 1))) {
+			free_pages((unsigned long)data, 0);
+			data = NULL;
+			goto return_data;
+		}
+
+		submit_bio_wait(&bio);
+		printk(KERN_ERR "%s block:%d, data:%p(page:%p)(phys:%p)\n",__func__, (int)block, data, (void*)virt_to_page(data), (void*)virt_to_phys(data));
+	}
+return_data:
+	return data;
+}
+
+void dm_direct_free(void* data)
+{
+	printk(KERN_ERR "%s data:%p(page:%p)(phys:%p)\n",__func__, data, (void*)virt_to_page(data), (void*)virt_to_phys(data));
+	if(data)
+		free_pages((unsigned long)data, 0);
+}
+
+void dm_verity_recovery_lock(struct dm_bufio_client *bufio)
+{
+	dm_bufio_lock(bufio);
+}
+
+void dm_verity_recovery_unlock(struct dm_bufio_client *bufio)
+{
+	dm_bufio_unlock(bufio);
+}
+#endif
+
 static void submit_io(struct dm_buffer *b, int rw, bio_end_io_t *end_io)
 {
 	unsigned n_sectors;

@@ -1,0 +1,53 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+#include "../../sm8150_common/sm8150_common-panel.dtsi"
+
+&soc {
+	gpio_keys {
+		compatible = "gpio-keys";
+		label = "gpio_keys";
+		status = "okay";
+		pinctrl_names = "default";
+		pinctrl-0 = <&ds2_smartcover_gpio_default &ds2_cover_display_back_gpio_default>;
+		ds2_smart_cover {
+			label = "ds2_smart_cover";
+			gpios = <&tlmm 3 GPIO_ACTIVE_LOW>;
+			linux,input-type = <5>;
+			linux,code = <222>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+			linux,can-disable;
+		};
+		ds2_cover_display_back {
+			label = "ds2_cover_display_back";
+			gpios = <&tlmm 121 GPIO_ACTIVE_LOW>;
+			linux,input-type = <5>;
+			linux,code = <222>;
+			gpio-key,wakeup;
+			debounce-interval = <15>;
+			linux,can-disable;
+		};
+	};
+};
+
+&sde_dp {
+	lge,dp-use;
+	pinctrl-names = "mdss_dp_active", "mdss_dp_sleep";
+	pinctrl-0 = <&sde_dp_aux_active &sde_dp_usbplug_cc_active>;
+	pinctrl-1 = <&sde_dp_aux_suspend &sde_dp_usbplug_cc_suspend>;
+
+	qcom,aux-cfg1-settings = [24 23 13 1d];
+
+	qcom,aux-en-gpio = <&tlmm 42 0>;
+	qcom,aux-sel-gpio = <&tlmm 148 0>;
+};

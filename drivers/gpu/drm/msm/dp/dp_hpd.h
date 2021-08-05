@@ -30,6 +30,14 @@
  * @DP_HPD_BRIDGE:  External bridge HPD
  */
 
+
+#ifdef CONFIG_LGE_COVER_DISPLAY
+#include <linux/ktime.h>
+
+#define CONSECUTIVE_RECOVERY_TIME 10000
+#define MAX_RECOVERY_COUNT 1
+#endif
+
 enum dp_hpd_type {
 	DP_HPD_USBPD,
 	DP_HPD_GPIO,
@@ -75,6 +83,10 @@ struct dp_hpd {
 	bool alt_mode_cfg_done;
 	bool multi_func;
 	bool peer_usb_comm;
+#ifdef CONFIG_LGE_COVER_DISPLAY
+	ktime_t last_recovery_time;
+	int recovery_count;
+#endif
 
 	void (*isr)(struct dp_hpd *dp_hpd);
 	int (*register_hpd)(struct dp_hpd *dp_hpd);

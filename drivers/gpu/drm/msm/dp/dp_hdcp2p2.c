@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,6 +36,7 @@ enum dp_hdcp2p2_sink_status {
 
 struct dp_hdcp2p2_ctrl {
 	atomic_t auth_state;
+	atomic_t abort;
 	enum dp_hdcp2p2_sink_status sink_status; /* Is sink connected */
 	struct dp_hdcp2p2_interrupts *intr;
 	struct sde_hdcp_init_data init_data;
@@ -156,6 +157,9 @@ static void dp_hdcp2p2_set_interrupts(struct dp_hdcp2p2_ctrl *ctrl, bool enable)
 {
 	void __iomem *base = ctrl->init_data.dp_ahb->base;
 	struct dp_hdcp2p2_interrupts *intr = ctrl->intr;
+
+	if (atomic_read(&ctrl->abort))
+		return;
 
 	while (intr && intr->reg) {
 		struct dp_hdcp2p2_int_set *int_set = intr->int_set;
@@ -864,6 +868,13 @@ void sde_dp_hdcp2p2_deinit(void *input)
 	kfree(ctrl);
 }
 
+static void dp_hdcp2p2_abort(void *input, bool abort)
+{
+	struct dp_hdcp2p2_ctrl *ctrl = input;
+
+	atomic_set(&ctrl->abort, abort);
+}
+
 void *sde_dp_hdcp2p2_init(struct sde_hdcp_init_data *init_data)
 {
 	int rc;
@@ -878,6 +889,7 @@ void *sde_dp_hdcp2p2_init(struct sde_hdcp_init_data *init_data)
 		.set_mode = dp_hdcp2p2_register,
 		.on = dp_hdcp2p2_on,
 		.off = dp_hdcp2p2_off,
+		.abort = dp_hdcp2p2_abort,
 		.cp_irq = dp_hdcp2p2_cp_irq,
 		.register_streams = dp_hdcp2p2_register_streams,
 		.deregister_streams = dp_hdcp2p2_deregister_streams,

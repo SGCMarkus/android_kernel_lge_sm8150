@@ -1285,7 +1285,6 @@ static int cam_icp_mgr_ipe_bps_power_collapse(struct cam_icp_hw_mgr *hw_mgr,
 
 		hw_mgr->ipe_clk_state = false;
 	}
-
 end:
 	return rc;
 }

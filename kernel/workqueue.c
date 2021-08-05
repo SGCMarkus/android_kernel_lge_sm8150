@@ -5478,7 +5478,7 @@ static void workqueue_sysfs_unregister(struct workqueue_struct *wq)	{ }
 
 static void wq_watchdog_timer_fn(unsigned long data);
 
-static unsigned long wq_watchdog_thresh = 30;
+static unsigned long wq_watchdog_thresh = 60;
 static struct timer_list wq_watchdog_timer =
 	TIMER_DEFERRED_INITIALIZER(wq_watchdog_timer_fn, 0, 0);
 
@@ -5541,8 +5541,10 @@ static void wq_watchdog_timer_fn(unsigned long data)
 
 	rcu_read_unlock();
 
-	if (lockup_detected)
+	if (lockup_detected) {
 		show_workqueue_state();
+		BUG();
+	}
 
 	wq_watchdog_reset_touched();
 	mod_timer(&wq_watchdog_timer, jiffies + thresh);

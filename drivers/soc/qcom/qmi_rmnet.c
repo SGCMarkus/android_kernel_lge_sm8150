@@ -1285,6 +1285,9 @@ void qmi_rmnet_work_init(void *port)
 	if (!rmnet_ps_wq)
 		return;
 
+	if (!rmnet_ps_wq)
+		return;
+
 	rmnet_work = kzalloc(sizeof(*rmnet_work), GFP_ATOMIC);
 	if (!rmnet_work) {
 		destroy_workqueue(rmnet_ps_wq);

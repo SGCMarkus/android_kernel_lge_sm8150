@@ -25,6 +25,9 @@
 #include <linux/uaccess.h>
 #include <linux/mhi.h>
 #include "mhi_qcom.h"
+#ifdef CONFIG_LGE_DUAL_QFUSE
+#include "lge_qfuse.h"
+#endif
 
 struct firmware_info {
 	unsigned int dev_id;
@@ -44,6 +47,12 @@ static const struct firmware_info firmware_table[] = {
 	/* default, set to debug.mbn */
 	{.fw_image = "debug.mbn", .edl_image = "debug.mbn"},
 };
+
+#ifdef CONFIG_LGE_DUAL_QFUSE
+static const struct firmware_info fuse_firmware_table[] = {
+	{.dev_id = 0x305, .fw_image = "sdx50m/sbl_fuse.mbn"},
+};
+#endif
 
 static int debug_mode;
 module_param_named(debug_mode, debug_mode, int, 0644);
@@ -795,6 +804,11 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 			      firmware_info->fw_image);
 	}
 
+#ifdef CONFIG_LGE_DUAL_QFUSE
+	if (check_if_sbl_fuse_is_loaded()) {
+		firmware_info = fuse_firmware_table;
+	}
+#endif
 	mhi_cntrl->fw_image = firmware_info->fw_image;
 	mhi_cntrl->edl_image = firmware_info->edl_image;
 

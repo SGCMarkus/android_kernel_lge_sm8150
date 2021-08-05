@@ -1,0 +1,230 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-pinctrl.dtsi"
+
+&tlmm {
+	qupv3_se8_spibus {
+		qupv3_se8_spibus_active: qupv3_se8_spibus_active {
+			mux {
+				pins = "gpio88", "gpio89", "gpio90";
+				function = "qup8";
+			};
+			config {
+				pins = "gpio88", "gpio89", "gpio90";
+				drive-strength = <6>;
+				bias-disable;
+			};
+		};
+		qupv3_se8_spibus_sleep: qupv3_se8_spibus_sleep {
+			mux {
+				pins = "gpio88", "gpio89", "gpio90";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio88", "gpio89", "gpio90";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	qupv3_se8_spi_cs0 {
+		spi_tdmb_active: spi_tdmb_active {
+			mux {
+				pins = "gpio91";
+				function = "qup8";
+			};
+			config {
+				pins = "gpio91";
+				drive-strength = <6>;
+				bias-disable;
+			};
+		};
+		spi_tdmb_sleep: spi_tdmb_sleep {
+			mux {
+				pins = "gpio91";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio91";
+				drive-strength = <2>;
+				output-low;
+				bias-pull-down;
+			};
+		};
+	};
+
+	pmx_tdmb_int {
+		tdmb_int_active: tdmb_int_active {
+			mux {
+				pins = "gpio108";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio108";
+				drive-strength = <2>;
+				input-enable;
+				bias-pull-up;
+			};
+		};
+		tdmb_int_suspend: tdmb_int_suspend {
+			mux {
+				pins = "gpio108";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio108";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+	};
+
+	pmx_tdmb_en {
+		tdmb_en_active: tdmb_en_active {
+			mux {
+				pins = "gpio166";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio166";
+				drive-strength = <4>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		tdmb_en_suspend: tdmb_en_suspend {
+			mux {
+				pins = "gpio166";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio166";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+	};
+
+	pmx_tdmb_ant {
+		tdmb_ant_active: tdmb_ant_active {
+			mux {
+				pins = "gpio163";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio163";
+				drive-strength = <2>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		tdmb_ant_suspend: tdmb_ant_suspend {
+			mux {
+				pins = "gpio163";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio163";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	pmx_tdmb_lna {
+		tdmb_lna_active: tdmb_lna_active {
+			mux {
+				pins = "gpio164";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio164";
+				drive-strength = <2>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		tdmb_lna_suspend: tdmb_lna_suspend {
+			mux {
+				pins = "gpio164";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio164";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	pmx_tdmb_ldo_en {
+		tdmb_ldo_en_active: tdmb_ldo_en_active {
+			mux {
+				pins = "gpio11";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio11";
+				drive-strength = <2>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		tdmb_ldo_en_suspend: tdmb_ldo_en_suspend {
+			mux {
+				pins = "gpio11";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio11";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	tcs3407_int_pin {
+		tcs3407_int_active: tcs3407_int_active {
+			mux {
+				pins = "gpio96";
+				function ="gpio";
+			};
+			config {
+				pins = "gpio96";
+				drive-strength = <2>;
+				input-enable;
+				bias-disable;
+			};
+		};
+		tcs3407_int_suspend: tcs3407_int_suspend {
+			mux {
+				pins = "gpio96";
+				function ="gpio";
+			};
+			config {
+				pins = "gpio96";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+};

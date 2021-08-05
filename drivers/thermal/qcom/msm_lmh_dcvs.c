@@ -217,6 +217,11 @@ static void limits_dcvs_poll(struct work_struct *work)
 		idx++;
 	}
 	if (cpu_ct >= cpumask_weight(&hw->core_map)) {
+#ifdef CONFIG_LGE_PM_DEBUG
+		pr_info_ratelimited("CPU:%d max limit:%lu. enable interrupt\n",
+				cpumask_first(&hw->core_map),
+				max_limit);
+#endif
 		writel_relaxed(0xFF, hw->int_clr_reg);
 		hw->is_irq_enabled = true;
 		enable_irq(hw->irq_num);
@@ -230,6 +235,10 @@ static void limits_dcvs_poll(struct work_struct *work)
 static void lmh_dcvs_notify(struct limits_dcvs_hw *hw)
 {
 	if (hw->is_irq_enabled) {
+#ifdef CONFIG_LGE_PM_DEBUG
+		pr_info_ratelimited("CPU:%d. disable interrupt\n",
+				cpumask_first(&hw->core_map));
+#endif
 		hw->is_irq_enabled = false;
 		disable_irq_nosync(hw->irq_num);
 		limits_mitigation_notify(hw);
@@ -242,6 +251,10 @@ static irqreturn_t lmh_dcvs_handle_isr(int irq, void *data)
 {
 	struct limits_dcvs_hw *hw = data;
 
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("CPU:%d. interrupt\n",
+			cpumask_first(&hw->core_map));
+#endif
 	mutex_lock(&hw->access_lock);
 	lmh_dcvs_notify(hw);
 	mutex_unlock(&hw->access_lock);
@@ -392,6 +405,10 @@ static int lmh_set_max_limit(int cpu, u32 freq)
 			max_freq = hw->cdev_data[idx].max_freq;
 		idx++;
 	}
+#ifdef CONFIG_LGE_PM_DEBUG
+	pr_info_ratelimited("CPU:%d. software limit:%u\n",
+			cpumask_first(&hw->core_map), max_freq);
+#endif
 	ret = limits_dcvs_write(hw->affinity, LIMITS_SUB_FN_THERMAL,
 				  LIMITS_FREQ_CAP, max_freq,
 				  (max_freq == U32_MAX) ? 0 : 1, 1);

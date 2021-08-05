@@ -191,3 +191,15 @@ obj-$(CONFIG_ESOC)              += esoc/
 # GNSS driver
 obj-$(CONFIG_GNSS_SIRF)		+= gnsssirf/
 obj-$(CONFIG_GNSS)		+= gnss/
+
+obj-$(CONFIG_TSPDRV)              += tspdrv/
+#TDMB
+obj-$(CONFIG_LGE_BROADCAST_TDMB) += broadcast/
+obj-$(CONFIG_LATTICE_ICE40)              += ice40/
+
+ifeq ($(CONFIG_TRUSTONIC_TEE),y)
+obj-$(CONFIG_TRUSTONIC_TEE) += gud/
+endif
+
+# ISDBT
+obj-$(CONFIG_LGE_BROADCAST_ISDBT_JAPAN) += broadcast/

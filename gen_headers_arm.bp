@@ -967,6 +967,8 @@ gen_headers_out_arm = [
     "asm/swab.h",
     "asm/types.h",
     "asm/unistd.h",
+
+    "linux/lib_lge_triton.h",
 ]
 
 genrule {

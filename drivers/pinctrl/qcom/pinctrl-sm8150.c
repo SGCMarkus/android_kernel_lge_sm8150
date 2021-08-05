@@ -15,6 +15,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pinctrl/pinctrl.h>
+#include <linux/slab.h>
 
 #include "pinctrl-msm.h"
 
@@ -65,8 +66,8 @@
 		.mux_bit = 2,			\
 		.pull_bit = 0,			\
 		.drv_bit = 6,			\
-		.egpio_enable = 12,		\
-		.egpio_present = 11,		\
+		.egpio_enable = 12,	\
+		.egpio_present = 11,	\
 		.oe_bit = 9,			\
 		.in_bit = 0,			\
 		.out_bit = 1,			\
@@ -2012,8 +2013,87 @@ static int sm8150_pinctrl_dir_conn_probe(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_LGE_PM
+static int *access_denied_list;
+static int access_denied_cnt;
+
+bool msm_gpio_check_access(int gpio)
+{
+	int i = 0;
+
+	for (i = 0; i < access_denied_cnt; i++) {
+		if (access_denied_list[i] == gpio)
+			return false;
+	}
+	return true;
+}
+EXPORT_SYMBOL(msm_gpio_check_access);
+#endif
+
 static int sm8150_pinctrl_probe(struct platform_device *pdev)
 {
+#ifdef CONFIG_LGE_PM
+	int len = 0;
+	int rc = 0;
+	int i = 0;
+	int ret = 0;
+	struct property *gpios;
+
+	if (!pdev->dev.of_node) {
+		goto exit;
+	}
+
+	if (of_find_property(pdev->dev.of_node, "dirconn-list", &len)) {
+		ret = sm8150_pinctrl_dir_conn_probe(pdev);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"Unable to parse TLMM direct connects\n");
+			goto exit;
+		}
+	}
+
+	gpios = of_find_property(pdev->dev.of_node, "lge,access-denied-gpios", &len);
+	if (!gpios) {
+		printk(KERN_ERR "cannot get access-denied-gpios property\n");
+		goto exit;
+	}
+
+	len /= sizeof(u32);
+	if (len < 1) {
+		printk(KERN_ERR "access-denied-gpios length is abnormal, %d\n", len);
+		goto exit;
+	}
+
+	printk(KERN_ERR "lge access-denied-gpios, %d\n", len);
+
+	access_denied_list = devm_kmalloc_array(&pdev->dev, len, sizeof(int), GFP_KERNEL);
+	if (!access_denied_list) {
+		printk(KERN_ERR "access_denied_list array malloc failed\n");
+		goto exit_malloc;
+	}
+
+	rc = of_property_read_u32_array(pdev->dev.of_node,
+			"lge,access-denied-gpios", access_denied_list, len);
+	if (rc) {
+		printk(KERN_ERR "property array read fail, %d\n", rc);
+		goto exit_malloc;
+	}
+
+	for (i = 0; i < len; i++)
+		printk(KERN_ERR "access_denied_list[%d] = %d\n", i, access_denied_list[i]);
+
+	access_denied_cnt = len;
+	return msm_pinctrl_probe(pdev, &sm8150_pinctrl);
+
+exit_malloc:
+	kfree(access_denied_list);
+exit:
+	access_denied_list = NULL;
+	access_denied_cnt = 0;
+
+
+	return msm_pinctrl_probe(pdev, &sm8150_pinctrl);
+#else
 	int len, ret;
 
 	if (of_find_property(pdev->dev.of_node, "dirconn-list", &len)) {
@@ -2026,6 +2106,7 @@ static int sm8150_pinctrl_probe(struct platform_device *pdev)
 	}
 
 	return msm_pinctrl_probe(pdev, &sm8150_pinctrl);
+#endif
 }
 
 static const struct of_device_id sm8150_pinctrl_of_match[] = {

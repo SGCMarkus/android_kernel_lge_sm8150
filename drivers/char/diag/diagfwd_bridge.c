@@ -25,9 +25,13 @@
 #include "diag_dci.h"
 #include "diag_ipc_logging.h"
 #include <linux/of.h>
+#include "lg_diag_bypass.h"
 
 #define BRIDGE_TO_MUX(x)	(x + DIAG_MUX_BRIDGE_BASE)
 
+#ifdef CONFIG_LGE_DIAG_BYPASS
+extern int diag_bypass_enable;
+#endif
 /* variable to identify which interface is selected to bridging with mdm */
 static bool hsic_interface_active;
 
@@ -313,3 +317,17 @@ void diag_unregister_bridge(void)
 	else if (IS_ENABLED(CONFIG_MHI_BUS))
 		diag_unregister_mhi();
 }
+
+#ifdef CONFIG_LGE_DIAG_BYPASS
+int diagfwd_bridge_mux_connect_bypass(int id, int mode) {
+    return diagfwd_bridge_mux_connect(id, mode);
+}
+
+int diagfwd_bridge_mux_write_done_bypass(unsigned char *buf, int len, int buf_ctx, int id) {
+    return diagfwd_bridge_mux_write_done(buf, len, buf_ctx, id);
+}
+
+int diagfwd_bridge_mux_disconnect_bypass(int id, int mode) {
+    return diagfwd_bridge_mux_disconnect(id, mode);
+}
+#endif

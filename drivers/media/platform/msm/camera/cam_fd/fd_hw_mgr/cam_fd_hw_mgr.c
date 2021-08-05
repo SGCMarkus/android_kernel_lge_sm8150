@@ -173,6 +173,23 @@ static int cam_fd_mgr_util_put_frame_req(
 	return rc;
 }
 
+/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+static int cam_fd_mgr_util_put_frame_req_unlocked(
+	struct list_head *src_list,
+	struct cam_fd_mgr_frame_request **frame_req)
+{
+	int rc = 0;
+	struct cam_fd_mgr_frame_request *req_ptr = NULL;
+
+	req_ptr = *frame_req;
+	if (req_ptr)
+		list_add_tail(&req_ptr->list, src_list);
+	*frame_req = NULL;
+
+	return rc;
+}
+/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
+
 static int cam_fd_mgr_util_get_frame_req(
 	struct list_head *src_list,
 	struct cam_fd_mgr_frame_request **frame_req)
@@ -1375,6 +1392,15 @@ static int cam_fd_mgr_hw_flush_req(void *hw_mgr_priv,
 
 			list_del_init(&frame_req->list);
 
+			/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+			// nodes removed from frame_processing_list should be added to frame_free_list
+			rc = cam_fd_mgr_util_put_frame_req_unlocked(&hw_mgr->frame_free_list,
+				&frame_req);
+			if (rc) {
+				CAM_ERR(CAM_FD, "Failed in putting frame req in free list");
+			}
+			/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
+
 			mutex_lock(&hw_device->lock);
 			if ((hw_device->ready_to_process == true) ||
 				(hw_device->cur_hw_ctx != hw_ctx))
@@ -1460,6 +1486,16 @@ static int cam_fd_mgr_hw_flush_ctx(void *hw_mgr_priv,
 			continue;
 
 		list_del_init(&frame_req->list);
+
+		/* LGE_CHANGE_S, Fixed list leakage on FD node, 2018-12-28 */
+		// nodes removed from frame_processing_list should be added to frame_free_list
+		rc = cam_fd_mgr_util_put_frame_req_unlocked(&hw_mgr->frame_free_list,
+			&frame_req);
+		if (rc) {
+			CAM_ERR(CAM_FD, "Failed in putting frame req in free list");
+		}
+		/* LGE_CHANGE_E, Fixed list leakage on FD node, 2018-12-28 */
+
 		mutex_lock(&hw_device->lock);
 		if ((hw_device->ready_to_process == true) ||
 			(hw_device->cur_hw_ctx != hw_ctx))

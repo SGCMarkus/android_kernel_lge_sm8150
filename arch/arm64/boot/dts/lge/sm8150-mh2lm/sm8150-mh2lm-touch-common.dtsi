@@ -1,0 +1,183 @@
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+
+&qupv3_se17_i2c {
+	status = "okay";
+
+	synaptics_common@20 {
+		status = "ok";
+		compatible = "synaptics,common";
+
+		reg = <0x20>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <122 0x2008>;
+		irqflags = <0x00000002>;      // Falling-Edge Trigger
+		//irqflags = <0x00000008>;        // Low-Level Trigger
+
+		pinctrl-names = "touch_pin_active", "touch_pin_sleep";
+		pinctrl-0 = <&ts_reset_active &ts_int_active>;
+		pinctrl-1 = <&ts_reset_suspend &ts_int_suspend>;
+
+		vdd-gpio = <&tlmm 152 0x00>;
+		vcl-gpio = <&tlmm 59 0x00>;
+		reset-gpio = <&tlmm 54 0x00>;
+		irq-gpio = <&tlmm 122 0x2008>;
+
+		/* Caps */
+		max_x = <1079>;
+		max_y = <2339>;
+		max_pressure = <0xff>;
+		max_width_major = <2339>;
+		max_width_minor = <2339>;
+		max_orientation = <90>;
+		max_id = <10>;
+		hw_reset_delay = <200>;
+		sw_reset_delay = <200>;
+
+		/* Role */
+		use_lpwg = <1>;
+		use_lpwg_test = <1>;
+		hide_coordinate = <1>;
+		use_film_status = <1>;
+
+		/* Firmware */
+		fw_image = "touch/mh2lm/main/tianma/PLG675-V0.25-PR3106505-s3618_DS6_60064119.img",
+			 "touch/mh2lm/main/tovis/PLG674-V0.05-PR3005749-s3706b_BLV86_DS5.10.81.2_20064105.img",
+			 "touch/mh2lm/main/tovis/PLG680-V1.05-PR3151223-s3706b_BLV86_DS5.10.81.2_20064185.img";
+		panel_spec = "touch/mh2lm/main/tovis/mh2lm_synaptics_limit.txt";
+		panel_spec_mfts_folder = "touch/mh2lm/main/tovis/mh2lm_synaptics_limit_mfts.txt";
+
+		/* Performance Test */
+		use_perf_test = <1>;
+		test_delay = <8>;
+		test_pressure = <50>;
+		test_width = <100>;
+		click_test_x = <180>;
+		click_test_y = <756>;
+		v_drag_test_x = <144>;
+		v_drag_test_start_y = <1971>;
+		v_drag_test_end_y = <1148>;
+		h_drag_test_start_x = <1131>;
+		h_drag_test_end_x = <308>;
+		h_drag_test_y = <2184>;
+	};
+
+	focaltech_ft3518@38 {
+		compatible = "focaltech,ft3518";
+		status = "ok";
+
+		reg = <0x38>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <122 0x2008>;
+		irqflags = <0x00000002>;
+
+		pinctrl-names = "touch_pin_active", "touch_pin_sleep";
+		pinctrl-0 = <&ts_reset_active &ts_int_active>;
+		pinctrl-1 = <&ts_reset_suspend &ts_int_suspend>;
+
+		vdd-gpio = <&tlmm 152 0x00>;
+		vcl-gpio = <&tlmm 59 0x00>;
+		reset-gpio = <&tlmm 54 0x00>;
+		irq-gpio = <&tlmm 122 0x2008>;
+
+		/* Caps */
+		max_x = <1079>;
+		max_y = <2251>;
+		max_pressure = <0xff>;
+		max_width_major = <2251>;
+		max_width_minor = <2251>;
+		max_orientation = <90>;
+		max_id = <10>;
+		hw_reset_delay = <300>;
+		sw_reset_delay = <100>;
+
+		/* Role */
+		use_lpwg = <1>;
+		use_lpwg_test = <1>;
+		hide_coordinate = <1>;
+		use_film_status = <1>;
+
+		/* 1st firmware should be Pramboot firmware to upgrade another,
+		   2nd firmware should be actual firmware that we want to be upgraded */
+		fw_image = "touch/mh2lm/main/L0W55CV5_1_06.img",
+			 "touch/mh2lm/main/L0W55CV5_1_06.img";
+		panel_spec = "touch/mh2lm/main/mh2lm_focaltech_limit.txt";
+		panel_spec_mfts_folder = "touch/mh2lm/main/mh2lm_focaltech_limit_mfts.txt";
+
+		/* Performance Test */
+		use_perf_test = <1>;
+		test_delay = <8>;
+		test_pressure = <50>;
+		test_width = <100>;
+		click_test_x = <180>;
+		click_test_y = <756>;
+		v_drag_test_x = <144>;
+		v_drag_test_start_y = <1971>;
+		v_drag_test_end_y = <1148>;
+		h_drag_test_start_x = <1131>;
+		h_drag_test_end_x = <308>;
+		h_drag_test_y = <2184>;
+	};
+
+	synaptics_s3706@20 {
+		status = "disable";
+		compatible = "synaptics,s3706";
+
+		reg = <0x20>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <122 0x2008>;
+		irqflags = <0x00000002>;
+
+		vdd-gpio = <&tlmm 152 0x00>;
+		vcl-gpio = <&tlmm 59 0x00>;
+		reset-gpio = <&tlmm 54 0x00>;
+		irq-gpio = <&tlmm 122 0x2008>;
+
+		/* Caps */
+		max_x = <1079>;
+		max_y = <2339>;
+		max_pressure = <0xff>;
+		max_width_major = <2339>;
+		max_width_minor = <2339>;
+		max_orientation = <90>;
+		max_id = <10>;
+		hw_reset_delay = <100>;
+		sw_reset_delay = <100>;
+
+		/* Role */
+		use_lpwg = <1>;
+		use_lpwg_test = <1>;
+		hide_coordinate = <0>;
+		use_film_status = <1>;
+
+		/* Firmware */
+		fw_image = "touch/mh2lm/main/tovis/PLG674-V0.02-PR2958581-s3706b_BLV86_DS5.10.81.2_20064102.img";
+		panel_spec = "touch/mh2lm/main/mh2lm_synaptics_limit.txt";
+		panel_spec_mfts_folder = "touch/mh2lm/main/mh2lm_synaptics_limit_mfts.txt";
+
+		/* Performance Test */
+		use_perf_test = <1>;
+		test_delay = <8>;
+		test_pressure = <50>;
+		test_width = <100>;
+		click_test_x = <135>;
+		click_test_y = <605>;
+		v_drag_test_x = <108>;
+		v_drag_test_start_y = <1514>;
+		v_drag_test_end_y = <879>;
+		h_drag_test_start_x = <857>;
+		h_drag_test_end_x = <222>;
+		h_drag_test_y = <1646>;
+	};
+
+};

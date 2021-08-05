@@ -32,6 +32,12 @@
 #include "ufs_quirks.h"
 #include "ufshcd-crypto-qti.h"
 
+#ifdef CONFIG_UFSDBG_TUNABLES
+#define IMPORT_TO_UFSQCOM
+#include "ufsdbg-tunables.c"
+#undef IMPORT_TO_UFSQCOM
+#endif
+
 #define MAX_PROP_SIZE		   32
 #define VDDP_REF_CLK_MIN_UV        1200000
 #define VDDP_REF_CLK_MAX_UV        1200000
@@ -914,6 +920,10 @@ static int ufs_qcom_full_reset(struct ufs_hba *hba)
 	if (ret)
 		dev_err(hba->dev, "%s: core_reset deassert failed, err = %d\n",
 				__func__, ret);
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+	ufsdbg_tunables_refclk_drv_apply(hba);
+#endif
 
 out:
 	return ret;
@@ -2193,6 +2203,10 @@ static int ufs_qcom_init(struct ufs_hba *hba)
 
 	ufs_qcom_save_host_ptr(hba);
 
+#ifdef CONFIG_UFSDBG_TUNABLES
+	ufsdbg_tunables_init(hba);
+#endif
+
 	goto out;
 
 out_set_load_vccq_parent:
@@ -2386,6 +2400,11 @@ static int ufs_qcom_update_sec_cfg(struct ufs_hba *hba, bool restore_sec_cfg)
 static inline u32 ufs_qcom_get_scale_down_gear(struct ufs_hba *hba)
 {
 	struct ufs_qcom_host *host = ufshcd_get_variant(hba);
+
+#ifdef CONFIG_UFSDBG_TUNABLES
+	if (ufsdbg_get_fix_gear(hba) != -1)
+		return ufsdbg_get_fix_gear(hba);
+#endif
 
 	if (ufs_qcom_cap_svs2(host))
 		return UFS_HS_G1;

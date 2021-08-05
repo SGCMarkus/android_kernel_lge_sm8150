@@ -1,0 +1,125 @@
+/*
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include "../sm8150-mh2lm_common/sm8150-mh2lm_common-pinctrl.dtsi"
+
+&tlmm {
+	pmx_isdbt_en {
+		isdbt_en_active: isdbt_en_active {
+			mux {
+				pins = "gpio166", "gpio108";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio166", "gpio108";
+				drive-strength = <4>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		isdbt_en_suspend: isdbt_en_suspend {
+			mux {
+				pins = "gpio166", "gpio108";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio166", "gpio108";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+
+	};
+
+	pmx_isdbt_lna {
+		isdbt_lna_active: isdbt_lna_active {
+			mux {
+				pins = "gpio164";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio164";
+				drive-strength = <2>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		isdbt_lna_suspend: isdbt_lna_suspend {
+			mux {
+				pins = "gpio164";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio164";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	pmx_isdbt_ldo_en {
+		isdbt_ldo_en_active: isdbt_ldo_en_active {
+			mux {
+				pins = "gpio11";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio11";
+				drive-strength = <2>;
+				output-low;
+				bias-disable;
+			};
+		};
+
+		isdbt_ldo_en_suspend: isdbt_ldo_en_suspend {
+			mux {
+				pins = "gpio11";
+				function = "gpio";
+			};
+			config {
+				pins = "gpio11";
+				drive-strength = <2>;
+				bias-pull-down;
+			};
+		};
+	};
+
+	tcs3407_int_pin {
+		tcs3407_int_active: tcs3407_int_active {
+			mux {
+				pins = "gpio96";
+				function ="gpio";
+			};
+			config {
+				pins = "gpio96";
+				drive-strength = <2>;
+				input-enable;
+				bias-disable;
+			};
+		};
+		tcs3407_int_suspend: tcs3407_int_suspend {
+			mux {
+				pins = "gpio96";
+				function ="gpio";
+			};
+			config {
+				pins = "gpio96";
+				drive-strength = <2>;
+				bias-disable;
+			};
+		};
+	};
+
+};

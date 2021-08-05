@@ -717,7 +717,11 @@ EXPORT_SYMBOL(bdi_set_max_ratio);
 static unsigned long dirty_freerun_ceiling(unsigned long thresh,
 					   unsigned long bg_thresh)
 {
+#ifdef CONFIG_LGE_BDI_STRICTLIMIT_DIRTY
+	return (3 * thresh + bg_thresh) / 4;
+#else
 	return (thresh + bg_thresh) / 2;
+#endif
 }
 
 static unsigned long hard_dirty_limit(struct wb_domain *dom,

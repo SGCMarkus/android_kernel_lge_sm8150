@@ -1,0 +1,305 @@
+config MACH_LGE
+	bool "Machine LGE"
+	help
+	  Support for machine LGE.
+
+menu "LGE Board Selection"
+
+config MACH_SM8150_ALPHA
+	bool "SM8150 ALPHA"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 ALPHA device.
+
+config MACH_SM8150_ALPHA_LAO_COM
+        bool "SM8150 ALPHA_LAO_COM"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 ALPHA_LAO_COM device.
+
+config MACH_SM8150_ALPHA_LAO_LDU
+        bool "SM8150 ALPHA_LAO_LDU"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 ALPHA_LAO_LDU device.
+
+config MACH_SM8150_ALPHAPLUS
+	bool "SM8150 ALPHAPLUS"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 ALPHAPLUS device.
+
+config MACH_SM8150_ALPHAPLUS_LAO_COM
+        bool "SM8150 ALPHAPLUS_LAO_COM"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+		  Support for the Qualcomm SM8150 ALPHAPLUS_LAO_COM device.
+
+config MACH_SM8150_ALPHAPLUS_LAO_LDU
+        bool "SM8150 ALPHAPLUS_LAO_LDU"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+		  Support for the Qualcomm SM8150 ALPHAPLUS_LAO_LDU device.
+
+config MACH_SM8150_FLASH
+        bool "SM8150 FLASH"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 FLASH device.
+
+config MACH_SM8150_FLASH_LAO_COM
+        bool "SM8150 FLASH_LAO_COM"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 FLASH_LAO_COM device.
+
+config MACH_SM8150_FLASH_LAO_LDU
+        bool "SM8150 FLASH_LAO_LDU"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 FLASH_LAO_LDU device.
+
+config MACH_SM8150_FLASH_DCM_JP
+        bool "SM8150 FLASH_DCM_JP"
+        depends on ARCH_SM8150
+        select MACH_LGE
+        help
+          Support for the Qualcomm SM8150 FLASH_DCM_JP device.
+
+config MACH_SM8150_BETA
+	bool "SM8150 BETA"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 BETA device.
+
+config MACH_SM8150_BETA_LDU
+	bool "SM8150 BETA_LDU"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 BETA_LDU device.
+
+config MACH_SM8150_MH2LM_SB_JP
+	bool "SM8150 MH2LM_SB_JP"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 MH2LM_SB_JP device.
+
+config MACH_SM8150_MH2LM
+	bool "SM8150 MH2LM"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 MH2LM device.
+
+config MACH_SM8150_MH2LM_5G
+	bool "SM8150 MH2LM 5G"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 MH2LM 5G device.
+
+config MACH_SM8150_MH2LM_LDU
+	bool "SM8150 MH2LM_LDU"
+	depends on ARCH_SM8150
+	select MACH_LGE
+	select LGE_DM_VERITY_RECOVERY
+	help
+	  Support for the Qualcomm SM8150 MH2LM_LDU device.
+
+config LGE_PM
+	tristate "SDM845 LGE POWER Feature"
+	depends on SPMI || MSM_SPMI
+	help
+	  Say Y here to enable support for SDM845/PMI8998 chip lge feature.
+	  Power Management, Battery charging, Battery Monitoring System
+	  with battery FET and fuel gauge.
+
+config LGE_PM_DEBUG
+        tristate "Support LGE PM Debug Feature"
+        default n
+        depends on MACH_LGE
+        help
+	  LGE PM Debug Feature
+
+config LGE_PM_PRM
+	tristate "Support LGE Power resource manager"
+	help
+	  LGE power resource manager
+endmenu
+menu "LGE Specific Patches"
+
+config LGE_HANDLE_PANIC
+	tristate "Support LGE Crash Handler"
+	default n
+	depends on MACH_LGE
+	select LGE_HANDLE_PANIC_RPMH_TIMEOUT
+	help
+	  LGE Crash Handler
+
+config LGE_HANDLE_PANIC_RPMH_TIMEOUT
+	tristate "Support LGE Crash Handler RPMH Timeout"
+	default n
+	depends on LGE_HANDLE_PANIC
+	help
+	  LGE Crash Handler
+
+config LGE_BOOTLOADER_LOG
+	tristate "Support LGE bootloader log"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE bootloader log
+
+config LGE_PSTORE_BACKUP
+	tristate "Support pstore backup"
+	default y
+	depends on MACH_LGE
+	help
+	  Ramoops region is backed up to pstore partition
+
+config LGE_BOOTLOADER_TIME_CHECKER
+	tristate "Supprt bootloader(LK, SBL) time"
+	default n
+	depends on MACH_LGE
+	help
+	  Check LK, SBL booting time at
+	  sys/module/lge_bootloader_time_checker/parameters/lk_time
+	  sys/module/lge_bootloader_time_checker/parameters/sbl_time
+
+config LGE_PM
+	tristate "SM8150 LGE POWER Feature"
+	depends on SPMI || MSM_SPMI
+	help
+	  Say y to support for SM8150/PM8150 chip LGE feature.
+	  Power Management, Battery Charging, Battery Monitoring System
+	  with battery FET and Fuel gauge
+
+config LGE_PM_DEBUG
+	tristate " Support LGE PM Debug feature"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE PM Debug Feature
+
+config LGE_QSDL_SUPPORT
+	tristate "Support for Quality Statistics Data Logging"
+	default n
+	depends on MACH_LGE
+	help
+	  QSDL is a feature which notify infomation for quality statistics
+	  data logging of device.
+
+config LGE_PM_SMPL_COUNTER
+	tristate "Support LGE SMPL COUNTER feature"
+	default n
+	depends on MACH_LGE
+	help
+	  Say y to enable smpl_cnt module, that count when
+	  booted by SMPL
+
+config LGE_DM_VERITY_RECOVERY
+	tristate "Support dm verity corrupt recovery"
+	default n
+	depends on MACH_LGE
+	help
+	  Sometimes, dm-bufio has invalid data. If data is corrupted,
+	  try to recover data.
+
+menuconfig LGE_TOUCH_CORE
+	bool "LGE Touch Core - Generic"
+	help
+	  If your plaform is generic linux, say Y
+
+config LGE_ONE_BINARY_SKU
+	tristate "Support LGE One binary sku carrier"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE One Binary sku carrier
+
+config LGE_MME_BUS
+        bool "boost interface for LGE MME"
+        depends on MACH_LGE
+        help
+          Say 'y' here to include support for the boost interface
+          of msm bus to support LGE MME.
+
+config LGE_MME_BOOST
+        bool "booster for LGE MME"
+        depends on LGE_MME_BUS
+        help
+          Say 'y' here to include support for the boost
+          of msm bus to support LGE MME.
+
+config LGE_MME_BOOST_LONG_TERM
+        bool "Long term booster for LGE MME"
+        depends on LGE_MME_BUS
+        help
+          Say 'y' here to include support for the long term boost
+          of msm bus to support LGE MME.
+
+config LGE_MME_BOOST_EBI
+        bool "EBI Clock booster for LGE MME"
+        depends on LGE_MME_BUS
+        help
+          Say 'y' here to include support for the ebi clock boost
+          of msm bus to support LGE MME.
+
+config LGE_MME_PM_QOS_DMA_LATENCY
+        bool "PM QOS DMA latency for LGE MME"
+        depends on LGE_MME_BUS
+        help
+          Say 'y' here to include support for PM QOS DMA Latency
+          of msm bus to support LGE MME.
+
+config LGE_MME_DRV
+        tristate "Support WMC driver"
+        depends on MACH_LGE
+        default m
+        help
+          Say 'y' here to enable Wireless Magnetic Communication driver for LG pay
+
+config LGE_POWEROFF_TIMEOUT
+	bool "Support shutdown and reboot timeout"
+	depends on MACH_LGE
+	default y
+	help
+	  Say 'y" here to include support for shutdown and reboot timeout.
+
+config LGE_DUAL_SCREEN
+        bool "Support Dual Screen"
+        depends on MACH_LGE
+        help
+          Say 'y" here to include support for dual screen.
+
+endmenu
+
+menu "LGE QFPROM Values"
+
+config LGE_QFPROM_INTERFACE
+	bool "Support qfprom interface"
+	default n
+	depends on MACH_LGE
+	help
+	  LGE QFPROM DRIVER.
+
+endmenu

@@ -289,9 +289,11 @@ struct hid_item {
 #define HID_DG_DEVICEINDEX	0x000d0053
 #define HID_DG_CONTACTCOUNT	0x000d0054
 #define HID_DG_CONTACTMAX	0x000d0055
+#define HID_DG_SCANTIME		0x000d0056
 #define HID_DG_BUTTONTYPE	0x000d0059
 #define HID_DG_BARRELSWITCH2	0x000d005a
 #define HID_DG_TOOLSERIALNUMBER	0x000d005b
+#define HID_DG_GESTURE		0x000d005c
 
 #define HID_VD_ASUS_CUSTOM_MEDIA_KEYS	0xff310076
 /*
@@ -520,6 +522,53 @@ enum hid_battery_status {
 	HID_BATTERY_REPORTED,		/* Device sent unsolicited battery strength report */
 };
 
+enum hid_touch_event_str {
+	HID_TOUCH_EVENT_KNOCK = 1,
+	HID_TOUCH_EVENT_PALM = 2,
+	HID_TOUCH_STATE_RESUME = 6,
+	HID_TOUCH_STATE_SUSPEND = 7,
+	HID_TOUCH_STATE_IC_NORMAL = 8,
+	HID_TOUCH_STATE_IC_DEEPSLEEP = 9,
+	HID_TOUCH_STATE_TCI_REPORT_ENABLE = 10,
+	HID_TOUCH_STATE_TCI_REPORT_DISABLE = 11,
+	HID_TOUCH_STATE_IC_RESET = 12,
+	HID_TOUCH_STATE_I2C_WRITE_ERROR = 13,
+	HID_TOUCH_STATE_I2C_WRITE_BUSY = 14,
+	HID_TOUCH_STATE_I2C_WRITE_TIMEOUT = 15,
+	HID_TOUCH_STATE_I2C_READ_ERROR = 16,
+	HID_TOUCH_STATE_I2C_READ_BUSY = 17,
+	HID_TOUCH_STATE_I2C_READ_TIMEOUT = 18,
+	HID_TOUCH_STATE_NSM_NONE = 19,
+	HID_TOUCH_STATE_NSM_ENTRY = 20,
+	HID_TOUCH_EVENT_SIZE,
+};
+
+enum TOUCH_DEBUG {
+	_NONE			= 0,
+	BASE_INFO		= (1U << 0),	/* 1 */
+	TRACE			= (1U << 1),	/* 2 */
+	ABS			= (1U << 2),    /* 4 */
+};
+
+#define TOUCH_I(fmt, args...)					\
+	pr_info("[Touch_HID] "					\
+			fmt, ##args)
+
+#define TOUCH_E(fmt, args...)					\
+	pr_err("[Touch_HID E] [%s %d] "				\
+			fmt, __func__, __LINE__, ##args)
+
+extern int hid_touch_debug_mask;
+#define TOUCH_D(condition, fmt, args...)			\
+	do {							\
+		if (unlikely(hid_touch_debug_mask & (condition)))	\
+			pr_info("[Touch_HID] " fmt, ##args);	\
+	} while (0)
+
+#define __SHORT_FILE__ (strrchr(__FILE__, '/') + 1)
+#define HID_TOUCH_TRACE()	TOUCH_D(TRACE, "- %s(%s) %d\n",		\
+		__func__, __SHORT_FILE__, __LINE__)
+
 struct hid_driver;
 struct hid_ll_driver;
 
@@ -541,6 +590,8 @@ struct hid_device {							/* device report descriptor */
 	unsigned country;						/* HID country */
 	struct hid_report_enum report_enum[HID_REPORT_TYPES];
 	struct work_struct led_work;					/* delayed LED worker */
+	struct workqueue_struct *uevent_wq;
+	struct work_struct uevent_work;
 
 	struct semaphore driver_input_lock;				/* protects the current driver */
 	struct device dev;						/* device */
@@ -817,6 +868,7 @@ static inline bool hid_is_using_ll_driver(struct hid_device *hdev,
 
 extern int hid_debug;
 
+extern void hid_touch_send_uevent(struct hid_device *hid, int type);
 extern bool hid_ignore(struct hid_device *);
 extern int hid_add_device(struct hid_device *);
 extern void hid_destroy_device(struct hid_device *);
@@ -920,34 +972,49 @@ static inline void hid_device_io_stop(struct hid_device *hid) {
  * @max: maximal valid usage->code to consider later (out parameter)
  * @type: input event type (EV_KEY, EV_REL, ...)
  * @c: code which corresponds to this usage and type
+ *
+ * The value pointed to by @bit will be set to NULL if either @type is
+ * an unhandled event type, or if @c is out of range for @type. This
+ * can be used as an error condition.
  */
 static inline void hid_map_usage(struct hid_input *hidinput,
 		struct hid_usage *usage, unsigned long **bit, int *max,
-		__u8 type, __u16 c)
+		__u8 type, unsigned int c)
 {
 	struct input_dev *input = hidinput->input;
-
-	usage->type = type;
-	usage->code = c;
+	unsigned long *bmap = NULL;
+	unsigned int limit = 0;
 
 	switch (type) {
 	case EV_ABS:
-		*bit = input->absbit;
-		*max = ABS_MAX;
+		bmap = input->absbit;
+		limit = ABS_MAX;
 		break;
 	case EV_REL:
-		*bit = input->relbit;
-		*max = REL_MAX;
+		bmap = input->relbit;
+		limit = REL_MAX;
 		break;
 	case EV_KEY:
-		*bit = input->keybit;
-		*max = KEY_MAX;
+		bmap = input->keybit;
+		limit = KEY_MAX;
 		break;
 	case EV_LED:
-		*bit = input->ledbit;
-		*max = LED_MAX;
+		bmap = input->ledbit;
+		limit = LED_MAX;
 		break;
 	}
+
+	if (unlikely(c > limit || !bmap)) {
+		pr_warn_ratelimited("%s: Invalid code %d type %d\n",
+				    input->name, c, type);
+		*bit = NULL;
+		return;
+	}
+
+	usage->type = type;
+	usage->code = c;
+	*max = limit;
+	*bit = bmap;
 }
 
 /**
@@ -961,7 +1028,8 @@ static inline void hid_map_usage_clear(struct hid_input *hidinput,
 		__u8 type, __u16 c)
 {
 	hid_map_usage(hidinput, usage, bit, max, type, c);
-	clear_bit(c, *bit);
+	if (*bit)
+		clear_bit(usage->code, *bit);
 }
 
 /**

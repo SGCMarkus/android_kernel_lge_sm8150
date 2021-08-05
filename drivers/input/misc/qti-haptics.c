@@ -514,6 +514,8 @@ static int qti_haptics_config_vmax(struct qti_hap_chip *chip, int vmax_mv)
 	addr = REG_HAP_VMAX_CFG;
 	mask = HAP_VMAX_MV_MASK;
 	val = (vmax_mv / HAP_VMAX_MV_LSB) << HAP_VMAX_MV_SHIFT;
+	//dev_err(chip->dev, "write. val 0x%x\n", val);
+	if( val == 0 )	return 0;
 	rc = qti_haptics_masked_write(chip, addr, mask, val);
 	if (rc < 0)
 		dev_err(chip->dev, "write VMAX_CFG failed, rc=%d\n",
@@ -1916,6 +1918,48 @@ cleanup:
 }
 #endif
 
+#ifdef CONFIG_PM8150B_HAPTICS
+#define IMMVIBED_STEP_SIZE	125
+static struct qti_hap_chip *g_chip = NULL;
+static int scale_factor = -1;
+
+int qti_haptic_timed_vmax(int value)
+{
+	struct qti_hap_chip *chip = g_chip;
+
+	if( chip == NULL ) {
+		dev_err(chip->dev, "%s : qti_hap_chip is NULL.\n", __func__);
+		return -1;
+	}
+
+	if( scale_factor == -1 ) {
+		struct qti_hap_config *config = &chip->config;
+		scale_factor = config->vmax_mv / IMMVIBED_STEP_SIZE;
+		dev_err(chip->dev, "%s : scale_factor : %d, \n", __func__, scale_factor);
+		//dev_err(chip->dev, "act_type=%d, lra_shape=%d, lra_auto_res_mode=%d\n", config->act_type, config->lra_shape, config->lra_auto_res_mode);
+
+		// disable auto-resonance mode
+		qti_haptics_lra_auto_res_enable(chip, false);
+	}
+
+	dev_err(chip->dev, "%s : amplitude value : %d, set Vmax %d.\n", __func__, value, value*scale_factor);
+
+	// set Vmax
+	qti_haptics_config_vmax(chip, value*scale_factor);
+
+	if (value == 0) {
+		qti_haptics_play(chip, false);
+		qti_haptics_module_en(chip, false);
+	} else {
+		qti_haptics_module_en(chip, true);
+		qti_haptics_play(chip, true);
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qti_haptic_timed_vmax);
+#endif /* CONFIG_PM8150B_HAPTICS */
+
 static int qti_haptics_probe(struct platform_device *pdev)
 {
 	struct qti_hap_chip *chip;
@@ -2023,6 +2067,11 @@ static int qti_haptics_probe(struct platform_device *pdev)
 	if (rc < 0)
 		dev_dbg(chip->dev, "create debugfs failed, rc=%d\n", rc);
 #endif
+#ifdef CONFIG_PM8150B_HAPTICS
+	g_chip = chip;
+#endif /* CONFIG_PM8150B_HAPTICS */
+	dev_err(chip->dev, "DONE: Probing qti haptics \n");
+
 	return 0;
 
 destroy_ff:

@@ -84,7 +84,7 @@ static int mdm4x_do_first_power_on(struct mdm_ctrl *mdm)
 	struct device *dev = mdm->dev;
 
 	esoc_mdm_log("Powering on modem for the first time\n");
-	dev_dbg(dev, "Powering on modem for the first time\n");
+	dev_err(dev, "Powering on modem for the first time\n");
 	if (mdm->esoc->auto_boot)
 		return 0;
 
@@ -100,7 +100,7 @@ static int mdm4x_do_first_power_on(struct mdm_ctrl *mdm)
 				break;
 			usleep_range(5000, 6000);
 		}
-		dev_dbg(dev, "pblrdy i:%d\n", i);
+		dev_err(dev, "pblrdy i:%d\n", i);
 		msleep(200);
 	}
 	/*
@@ -166,7 +166,7 @@ static int mdm9x55_power_down(struct mdm_ctrl *mdm)
 	/* Assert the soft reset line whether mdm2ap_status went low or not */
 	gpio_direction_output(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),
 			soft_reset_direction_assert);
-	dev_dbg(dev, "Doing a hard reset\n");
+	dev_err(dev, "Doing a hard reset\n");
 	/*
 	 * Currently, there is a debounce timer on the charm PMIC. It is
 	 * necessary to hold the PMIC RESET low for 406ms
@@ -187,7 +187,7 @@ static int sdx50m_power_down(struct mdm_ctrl *mdm)
 	esoc_mdm_log("Setting AP2MDM_SOFT_RESET = %d\n", soft_reset_direction);
 	gpio_direction_output(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),
 					soft_reset_direction);
-	dev_dbg(dev, "Doing a hard reset\n");
+	dev_err(dev, "Doing a hard reset\n");
 	gpio_direction_output(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),
 						soft_reset_direction);
 	/*
@@ -202,7 +202,7 @@ static int sdx50m_power_down(struct mdm_ctrl *mdm)
 
 static void mdm9x55_cold_reset(struct mdm_ctrl *mdm)
 {
-	dev_dbg(mdm->dev, "Triggering mdm cold reset");
+	dev_err(mdm->dev, "Triggering mdm cold reset");
 
 	gpio_direction_output(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),
 			!!mdm->soft_reset_inverted);
@@ -219,7 +219,7 @@ static void mdm9x55_cold_reset(struct mdm_ctrl *mdm)
 
 static void sdx50m_cold_reset(struct mdm_ctrl *mdm)
 {
-	dev_dbg(mdm->dev, "Triggering mdm cold reset");
+	dev_err(mdm->dev, "Triggering mdm cold reset");
 	esoc_mdm_log("Setting AP2MDM_SOFT_RESET = %d\n",
 					!!mdm->soft_reset_inverted);
 	gpio_direction_output(MDM_GPIO(mdm, AP2MDM_SOFT_RESET),

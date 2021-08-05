@@ -33,7 +33,13 @@
 #include <linux/mm.h>
 #include "dmxdev.h"
 
+/* module parameters for overflow method configuration */
+#ifdef CONFIG_LGE_BROADCAST_ISDBT_JAPAN
+static int overflow_auto_flush = 0;
+#else /* CONFIG_LGE_BROADCAST_ISDBT_JAPAN */
 static int overflow_auto_flush = 1;
+#endif /* CONFIG_LGE_BROADCAST_ISDBT_JAPAN */
+
 module_param(overflow_auto_flush, int, 0644);
 MODULE_PARM_DESC(overflow_auto_flush,
 	"Automatically flush buffer on overflow (default: on)");
