@@ -52,7 +52,7 @@
 #include "wcd934x-dsd.h"
 
 #ifdef CONFIG_MACH_LGE // add extcon dev for SAR backoff
-#include "../../../../../../../kernel/msm-4.14/drivers/extcon/extcon.h"
+#include "../../../../../drivers/extcon/extcon.h"
 
 static const unsigned int extcon_sar_backoff[] = {
 	EXTCON_MECHANICAL,
