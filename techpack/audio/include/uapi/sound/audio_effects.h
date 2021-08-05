@@ -145,6 +145,21 @@
 #define PBE_ENABLE_PARAM_LEN		1
 #define PBE_CONFIG_PARAM_LEN		28
 
+/*LGMQA*/
+#define LGMQA_MODULE            0x00009040
+#define LGMQA_ENABLE            0x00009041
+#define LGMQA_POWERMODE         0x00009042
+#define LGMQA_MULTIPLERATE      0x00009043
+#define LGMQA_OUTPUTMODE        0x00009044
+#define LGMQA_PROPERTIES        0x00009045
+
+struct lgmqa_params {
+    uint32_t    device;
+    uint32_t    enable_flag;
+    int32_t     powerMode;
+    int32_t     multipleRate;
+    int32_t     outputMode;
+};
 /* Command Payload length and size for Non-IID commands */
 #define COMMAND_PAYLOAD_LEN	3
 #define COMMAND_PAYLOAD_SZ	(COMMAND_PAYLOAD_LEN * sizeof(uint32_t))

@@ -13,6 +13,10 @@ $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/Module.symvers)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/Module.symvers)
 $(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/wcd934x/Module.symvers)
+$(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/tfa9872/Module.symvers)
+$(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/sma6101/Module.symvers)
+$(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/cs43131/Module.symvers)
+$(shell rm -rf $(PRODUCT_OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codecs/cs35l41/Module.symvers)
 
 include $(MY_LOCAL_PATH)/include/uapi/Android.mk
 include $(MY_LOCAL_PATH)/ipc/Android.mk
@@ -22,6 +26,10 @@ include $(MY_LOCAL_PATH)/soc/Android.mk
 include $(MY_LOCAL_PATH)/asoc/Android.mk
 include $(MY_LOCAL_PATH)/asoc/codecs/Android.mk
 include $(MY_LOCAL_PATH)/asoc/codecs/wcd934x/Android.mk
+include $(MY_LOCAL_PATH)/asoc/codecs/tfa9872/Android.mk
+include $(MY_LOCAL_PATH)/asoc/codecs/sma6101/Android.mk
+include $(MY_LOCAL_PATH)/asoc/codecs/cs43131/Android.mk
+include $(MY_LOCAL_PATH)/asoc/codecs/cs35l41/Android.mk
 endif
 
 ifeq ($(call is-board-platform-in-list, atoll),true)

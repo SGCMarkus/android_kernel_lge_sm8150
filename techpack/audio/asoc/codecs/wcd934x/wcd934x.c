@@ -51,6 +51,15 @@
 #include "../wcdcal-hwdep.h"
 #include "wcd934x-dsd.h"
 
+#ifdef CONFIG_MACH_LGE // add extcon dev for SAR backoff
+#include "../../../../../../../kernel/msm-4.14/drivers/extcon/extcon.h"
+
+static const unsigned int extcon_sar_backoff[] = {
+	EXTCON_MECHANICAL,
+	EXTCON_NONE,
+};
+#endif /* CONFIG_MACH_LGE */
+
 #define WCD934X_RATES_MASK (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			    SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000 |\
 			    SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_192000 |\
@@ -649,6 +658,9 @@ struct tavil_priv {
 	int micb_load_high;
 	u8 dmic_drv_ctl;
 	unsigned short slim_tx_of_uf_cnt[WCD934X_TX_MAX][SB_PORT_ERR_MAX];
+#ifdef CONFIG_MACH_LGE // add extcon dev for SAR backoff
+	struct extcon_dev* sar;
+#endif
 };
 
 static const struct tavil_reg_mask_val tavil_spkr_default[] = {
@@ -1479,6 +1491,32 @@ err:
 	mutex_unlock(&tavil_p->codec_mutex);
 	return -EINVAL;
 }
+
+#ifdef CONFIG_SND_LGE_WDSP_SSR
+static int wdsp_ssr_get(struct snd_kcontrol *kcontrol,
+        struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s(): \n", __func__);
+	return 0;
+}
+
+static int wdsp_ssr_put(struct snd_kcontrol *kcontrol,
+        struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+
+	int ret = 0;
+	ret = ucontrol->value.enumerated.item[0];
+	pr_err("%s():ret = %d\n", __func__ ,ret );
+
+	if(ret)
+	{
+		pr_err("%s(): WDSP SSR Irq\n", __func__);
+		snd_soc_write(codec,WCD934X_CPE_SS_BACKUP_INT,0x02);
+	}
+	return 0;
+}
+#endif
 
 static void tavil_codec_enable_slim_port_intr(
 					struct wcd9xxx_codec_dai_data *dai,
@@ -6420,6 +6458,11 @@ static const struct snd_kcontrol_new tavil_snd_controls[] = {
 	SOC_ENUM_EXT("CLK MODE", tavil_clkmode_enum, tavil_get_clkmode,
 		     tavil_put_clkmode),
 
+#ifdef CONFIG_SND_LGE_WDSP_SSR
+	SOC_SINGLE_EXT("wdsp ssr", SND_SOC_NOPM, 0, 1, 0,
+		     wdsp_ssr_get,wdsp_ssr_put),
+#endif
+
 	SOC_ENUM("TX0 HPF cut off", cf_dec0_enum),
 	SOC_ENUM("TX1 HPF cut off", cf_dec1_enum),
 	SOC_ENUM("TX2 HPF cut off", cf_dec2_enum),
@@ -11217,6 +11260,23 @@ static int tavil_probe(struct platform_device *pdev)
 				__func__);
 	}
 
+#ifdef CONFIG_MACH_LGE
+	tavil->sar = devm_extcon_dev_allocate(&pdev->dev, extcon_sar_backoff);
+	if (IS_ERR(tavil->sar)) {
+		dev_err(&pdev->dev, "failed to allocate extcon device\n");
+		return -ENOMEM;
+	}
+	
+	tavil->sar->name = "sar_backoff";
+	ret = devm_extcon_dev_register(&pdev->dev, tavil->sar);
+	if (ret < 0) {
+		dev_err(&pdev->dev, "extcon_dev_register() failed: %d\n",
+			ret);
+		return ret;
+	}
+	pr_info("%s register sar_backoff extcon device\n",__func__);
+#endif  /* CONFIG_MACH_LGE */
+
 	return ret;
 
 err_cdc_reg:
@@ -11243,6 +11303,11 @@ static int tavil_remove(struct platform_device *pdev)
 	tavil = platform_get_drvdata(pdev);
 	if (!tavil)
 		return -EINVAL;
+
+#ifdef CONFIG_MACH_LGE
+	 if( tavil->sar != NULL )
+		 devm_extcon_dev_unregister(&pdev->dev, tavil->sar);
+#endif /* CONFIG_MACH_LGE */
 
 	/* do dsd deinit before codec->component->regmap becomes freed */
 	if (tavil->dsd_config) {
