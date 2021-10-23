@@ -1648,7 +1648,7 @@ static int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 			ctx->enable_refcnt = old_cnt;
 	}
 
-	pr_debug("pid %d enable %d, refcnt %d, vote_req %d\n",
+	pr_info("pid %d enable %d, refcnt %d, vote_req %d\n",
 			current->pid, power_ctrl->enable, ctx->enable_refcnt,
 			vote_req);
 	SDE_EVT32(current->pid, power_ctrl->enable, ctx->enable_refcnt,

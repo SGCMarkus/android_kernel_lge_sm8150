@@ -7949,7 +7949,7 @@ static void netdev_wait_allrefs(struct net_device *dev)
 			rebroadcast_time = jiffies;
 		}
 
-		msleep(250*10);
+		msleep(250);
 
 		refcnt = netdev_refcnt_read(dev);
 

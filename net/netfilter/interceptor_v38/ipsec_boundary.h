@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2014, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2014, Rambus Inc. All rights reserved.
 */
 
 #ifndef IPSEC_BOUNDARY_H

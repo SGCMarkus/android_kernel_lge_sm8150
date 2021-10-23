@@ -39,7 +39,7 @@
 	dpdm-supply = <&usb2_phy1>;
 	dwc3@a800000 {
 		maximum-speed = "high-speed";
-		dr_mode = "otg";
+		dr_mode = "host";
 		usbpd = <&pm8150b_pdphy>;
 	};
 };

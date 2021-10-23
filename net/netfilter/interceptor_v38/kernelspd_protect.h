@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2017 - 2018, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2017 - 2018, Rambus Inc. All rights reserved.
 */
 
 

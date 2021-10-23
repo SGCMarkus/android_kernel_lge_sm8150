@@ -1,13 +1,13 @@
 /**
    @copyright
-   Copyright (c) 2013 - 2019, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2013 - 2020, Rambus Inc. All rights reserved.
 */
 
 #ifndef PACKAGE_VERSION_H
 #define PACKAGE_VERSION_H
 
 #define PACKAGE_VERSION \
-        "939-23012-001-quicksec-vpnclient-for-android-3.8-7369-5bd50a" \
-        "3e087f-7369 " \
+        "913-23014-400-quicksec-vpnclient-for-android-4.0.0-7744-1364" \
+        "f6f07d07-7744 " \
 
 #endif

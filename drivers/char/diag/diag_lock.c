@@ -47,7 +47,8 @@ static unsigned char allowed_commands[] = {
 #endif
 };
 
-#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+#if 0
+/* SPR diag lock requirement will no longer be required. */
 static diag_lock_state_t get_diag_lock_state_from_smem(void)
 {
 	struct _smem_id_vendor0 {
@@ -91,15 +92,8 @@ static diag_lock_state_t get_diag_lock_state_from_smem(void)
 bool diag_lock_is_allowed(void)
 {
 #ifdef CONFIG_LGE_USB_FACTORY
-#if defined(CONFIG_LGE_ONE_BINARY_SKU) || !defined(CONFIG_LGE_USB_DIAG_LOCK_SPR)
-#if defined(CONFIG_LGE_ONE_BINARY_SKU)
-	if (lge_get_laop_operator() == OP_SPR_US)
-		if (lge_get_qemmode_boot())
-			return true;
-#endif
 	if (lge_get_factory_boot())
 		return true;
-#endif
 #endif /* CONFIG_LGE_USB_FACTORY */
 
 	return diag_lock_state == DIAG_LOCK_STATE_UNLOCK;
@@ -121,16 +115,6 @@ bool diag_lock_is_allowed_command(const unsigned char *buf)
 	pr_info_once("%s: opcode = %d\n",__func__, i);
 
 	switch (i) {
-	case OP_SPR_US:
-		switch (buf[0]) {
-		case 0xA1:	//port lock
-			return true;
-		default:
-			break;
-		}
-
-		return false;
-
 	case OP_VZW_POSTPAID:
 	case OP_VZW_PREPAID:
 		switch (buf[0]) {
@@ -222,7 +206,8 @@ static int __init diag_lock_init(void)
 {
 	int rc;
 
-#ifdef CONFIG_LGE_USB_DIAG_LOCK_SPR
+#if 0
+/* SPR diag lock requirement will no longer be required. */
 #ifdef CONFIG_LGE_ONE_BINARY_SKU
 	if (lge_get_laop_operator() == OP_SPR_US)
 #endif

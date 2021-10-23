@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2013 - 2019, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2013 - 2019, Rambus Inc. All rights reserved.
 */
 
 #include "implementation_defs.h"

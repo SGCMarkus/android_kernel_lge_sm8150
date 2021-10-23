@@ -46,7 +46,7 @@ struct lge_drs_mngr {
 	u32 request_res;
 	u32 current_res;
 	int current_freeze_state;
-	struct drs_res_info supported_res[3];
+	struct drs_res_info supported_res[6];
 	struct mutex drs_lock;
 	struct workqueue_struct *drs_workq;
 	struct delayed_work drs_work;

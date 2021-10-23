@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2013, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2013, Rambus Inc. All rights reserved.
 */
 
 #ifndef PUBLIC_DEFS_H

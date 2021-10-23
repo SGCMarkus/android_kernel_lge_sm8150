@@ -1174,7 +1174,8 @@ int dsi_panel_post_enable(struct dsi_panel *panel)
 error:
 	mutex_unlock(&panel->panel_lock);
 
-	if (panel->lge.lp_state == LGE_PANEL_NOLP)
+	pr_info("lp_state=%d, dsi_mode_flags=0x%X\n", panel->lge.lp_state, panel->cur_mode->dsi_mode_flags);
+	if (panel->lge.lp_state == LGE_PANEL_NOLP && !(panel->cur_mode->dsi_mode_flags & DSI_MODE_FLAG_DMS))
 		lge_panel_notifier_call_chain(LGE_PANEL_EVENT_BLANK, 0, LGE_PANEL_STATE_UNBLANK); // U3, UNBLANK
 
 	return rc;

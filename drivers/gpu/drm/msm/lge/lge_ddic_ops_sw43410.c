@@ -26,7 +26,10 @@ extern char* get_payload_addr(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set
 extern int get_payload_cnt(struct dsi_panel *panel, enum lge_ddic_dsi_cmd_set_type type, int position);
 extern int lge_backlight_device_update_status(struct backlight_device *bd);
 
-const struct drs_res_info sw43410_res[3] = {
+const struct drs_res_info sw43410_res[6] = {
+	{"qhd", 0, 1440, 3120},
+	{"fhd", 1, 1080, 2340},
+	{"hd", 3, 720, 1560},
 	{"qhd", 0, 1440, 3120},
 	{"fhd", 1, 1080, 2340},
 	{"hd", 3, 720, 1560},

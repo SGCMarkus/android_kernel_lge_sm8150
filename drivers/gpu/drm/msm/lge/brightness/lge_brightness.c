@@ -228,17 +228,19 @@ int lge_backlight_device_update_status(struct backlight_device *bd)
 	}
 #endif
 
-	if ((bd->props.power != FB_BLANK_UNBLANK) ||
-			(bd->props.state & BL_CORE_FBBLANK) ||
-			(bd->props.state & BL_CORE_SUSPENDED)) {
-		brightness = 0;
-		bd->props.brightness = 0;
-	}
-
 	c_conn = bl_get_data(bd);
 	display = (struct dsi_display *) c_conn->display;
 	panel = display->panel;
 	panel->bl_config.raw_bd = bd;
+
+	if ((bd->props.power != FB_BLANK_UNBLANK) ||
+			(bd->props.state & BL_CORE_FBBLANK) ||
+			(bd->props.state & BL_CORE_SUSPENDED)) {
+		if (!panel->lge.panel_dead && !c_conn->panel_dead) {
+			brightness = 0;
+			bd->props.brightness = 0;
+		}
+	}
 
 	if ((panel->lge.lp_state == LGE_PANEL_LP2) || (panel->lge.lp_state == LGE_PANEL_LP1)) {
 		bl_type = LGE_BLMAP_EX;
@@ -297,12 +299,9 @@ int lge_backlight_device_update_status(struct backlight_device *bd)
 			rc = c_conn->ops.set_backlight(&c_conn->base, c_conn->display, bl_lvl);
 			pr_info("BR:%d BL:%d %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 		}
-	} else if (!panel->lge.allow_bl_update) {
-		panel->lge.bl_lvl_unset = bl_lvl;
-		pr_info("brightness = %d, bl_lvl = %d -> differed (not allow) %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 	} else {
 		panel->lge.bl_lvl_unset = bl_lvl;
-		pr_info("brightness = %d, bl_lvl = %d -> differed %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
+		pr_info("brightness = %d, bl_lvl = %d -> differed (not allow) %s\n", brightness, bl_lvl, lge_get_blmapname(bl_type));
 	}
 	mutex_unlock(&display->display_lock);
 

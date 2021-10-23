@@ -553,6 +553,17 @@ static void process_rx_w(struct work_struct *work)
 		return;
 
 	while ((skb = skb_dequeue(&dev->rx_frames))) {
+#ifdef CONFIG_LGE_USB_GADGET
+		if (status < 0
+				|| ETH_HLEN > skb->len
+				|| skb->len > GETHER_MAX_ETH_FRAME_LEN) {
+			dev->net->stats.rx_errors++;
+			dev->net->stats.rx_length_errors++;
+			DBG(dev, "rx length %d\n", skb->len);
+			dev_kfree_skb_any(skb);
+			continue;
+		}
+#else
 		if (status < 0
 				|| ETH_HLEN > skb->len
 				|| skb->len > ETH_FRAME_LEN) {
@@ -562,6 +573,7 @@ static void process_rx_w(struct work_struct *work)
 			dev_kfree_skb_any(skb);
 			continue;
 		}
+#endif
 
 		if (test_bit(RMNET_MODE_LLP_IP, &dev->flags))
 			skb->protocol = ether_ip_type_trans(skb, dev->net);

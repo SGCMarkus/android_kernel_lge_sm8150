@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2013 - 2018, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2013 - 2018, Rambus Inc. All rights reserved.
 */
 
 #ifndef IP_SELECTOR_MATCH_H

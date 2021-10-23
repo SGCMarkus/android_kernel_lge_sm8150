@@ -1,6 +1,6 @@
 /**
    @copyright
-   Copyright (c) 2017, INSIDE Secure Oy. All rights reserved.
+   Copyright (c) 2017, Rambus Inc. All rights reserved.
 */
 
 #ifndef KERNEL_STATS_H

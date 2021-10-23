@@ -306,15 +306,6 @@ static int prepare_aod_cmds_sw43408a(struct dsi_panel *panel, struct dsi_cmd_des
 	return rc;
 }
 
-static int get_current_resolution_sw43408a(struct dsi_panel *panel)
-{
-	u8 reg;
-
-	lge_mdss_dsi_panel_cmd_read(panel, (u8)ADDR_RDDISPM, 1, &reg);
-
-	return (int)(reg & 0x03);
-}
-
 static void get_support_resolution_sw43408a(int idx, void *input)
 {
 	struct drs_res_info *res = (struct drs_res_info *)input;
@@ -1342,7 +1333,7 @@ struct lge_ddic_ops sw43408a_ops = {
 	.set_irc_default_state = lge_set_irc_default_state_sw43408a,
 	.bist_ctrl = control_bist_cmds_sw43408a,
 	.release_bist = release_bist_cmds_sw43408a,
-	.get_current_res = get_current_resolution_sw43408a,
+	.get_current_res = NULL,
 	.get_support_res = get_support_resolution_sw43408a,
 	.set_pps_cmds = set_pps_cmds_sw43408a,
 	.unset_pps_cmds = unset_pps_cmds_sw43408a,
