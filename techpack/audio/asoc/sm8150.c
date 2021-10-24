@@ -219,7 +219,9 @@ struct msm_asoc_mach_data {
 	struct device_node *hph_en1_gpio_p; /* used by pinctrl API */
 	struct device_node *hph_en0_gpio_p; /* used by pinctrl API */
 	struct device_node *fsa_handle;
+	#ifndef CONFIG_MACH_LGE // temp CVE-2017-0609 fail
 	struct device_node *mi2s_gpio_p[MI2S_MAX]; /* used by pinctrl API */
+	#endif
 	struct snd_soc_codec *codec;
 	struct work_struct adsp_power_up_work;
 };
@@ -6695,6 +6697,7 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA31,
 	},
+#ifndef CONFIG_MACH_LGE // temp CVE-2017-0609 fail
 	{
 		.name = "Quaternary MI2S_RX Hostless Playback",
 		.stream_name = "Quaternary MI2S_RX Hostless Playback",
@@ -6725,6 +6728,7 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+#endif
 /* Voice Stub */
 	{
 		.name = "Voice Stub",
@@ -9212,9 +9216,11 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		pr_err("%s: Parsing pinctrl failed %d. switching to gpio\n",
 			__func__, ret);
 		ret = 0;
+		#ifndef CONFIG_MACH_LGE // temp CVE-2017-0609 fail
 		pdata->mi2s_gpio_p[QUAT_MI2S] =
 			of_parse_phandle(pdev->dev.of_node,
 				"qcom,quat-mi2s-gpios", 0);
+		#endif
 	}
 
 	msm_i2s_auxpcm_init(pdev);

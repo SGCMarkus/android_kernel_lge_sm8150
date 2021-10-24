@@ -94,6 +94,9 @@ struct wcd937x_priv {
 	struct snd_info_entry *variant_entry;
 	int ana_clk_count;
 	struct mutex ana_tx_clk_lock;
+#ifdef CONFIG_MACH_LGE // add extcon dev for SAR backoff
+	struct extcon_dev* sar;
+#endif
 };
 
 struct wcd937x_micbias_setting {

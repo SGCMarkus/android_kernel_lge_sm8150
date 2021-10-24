@@ -29,7 +29,10 @@
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
 #include "q6afecal-hwdep.h"
-#ifdef CONFIG_MACH_LGE
+#ifdef CONFIG_TAS2562_ALGO
+#include <dsp/smart_amp.h>
+#endif
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 #include <soc/qcom/subsystem_restart.h>
 #endif
 
@@ -79,6 +82,12 @@ static void voice_mute_detection_status_work(struct work_struct *work)
 #endif /* CONFIG_SND_LGE_VOC_MUTE_DET */
 
 #define WAKELOCK_TIMEOUT	5000
+
+#ifdef CONFIG_TAS2562_ALGO
+static int32_t smartamp_algo_callback(uint32_t opcode, uint32_t *payload,
+				    uint32_t payload_size);
+#endif
+
 enum {
 	AFE_COMMON_RX_CAL = 0,
 	AFE_COMMON_TX_CAL,
@@ -216,6 +225,9 @@ struct afe_ctl {
 	struct vad_config vad_cfg[AFE_MAX_PORTS];
 	struct work_struct afe_dc_work;
 	struct notifier_block event_notifier;
+#ifdef CONFIG_TAS2562_ALGO
+	struct afe_smartamp_calib_get_resp smart_amp_calib_data;
+#endif
 	/* FTM spk params */
 	uint32_t initial_cal;
 	uint32_t v_vali_flag;
@@ -683,9 +695,17 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			av_dev_drift_afe_cb_handler(data->opcode, data->payload,
 						    data->payload_size);
 		} else {
+#ifdef CONFIG_TAS2562_ALGO
+			if((payload[1] == AFE_SMARTAMP_MODULE_RX)||(payload[1] == AFE_SMARTAMP_MODULE_TX)) {
+				if (smartamp_algo_callback(data->opcode, data->payload, data->payload_size))
+					return -EINVAL;
+			} else if (sp_make_afe_callback(data->opcode, data->payload, data->payload_size))
+				return -EINVAL;
+#else
 			if (sp_make_afe_callback(data->opcode, data->payload,
 						 data->payload_size))
 				return -EINVAL;
+#endif
 		}
 		if (afe_token_is_valid(data->token))
 			wake_up(&this_afe.wait[data->token]);
@@ -1144,7 +1164,7 @@ static int afe_apr_send_pkt(void *data, wait_queue_head_t *wait)
 					&this_afe.status)));
 				ret = adsp_err_get_lnx_err_code(
 						atomic_read(&this_afe.status));
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 				if (ret == -ENODATA)
 					subsystem_restart("adsp");
 #endif
@@ -5600,6 +5620,131 @@ fail_cmd:
 	return ret;
 }
 EXPORT_SYMBOL(afe_loopback_gain);
+
+#ifdef CONFIG_TAS2562_ALGO
+static int32_t smartamp_algo_callback(uint32_t opcode, uint32_t *payload,
+				    uint32_t payload_size)
+{
+	struct param_hdr_v3 param_hdr;
+	u32 *data_dest = NULL;
+	u32 *data_start = NULL;
+
+	pr_debug("[Smartamp:%s] ", __func__);
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	switch (opcode) {
+	case AFE_PORT_CMDRSP_GET_PARAM_V2:
+		param_hdr.module_id = payload[1];
+		param_hdr.instance_id = INSTANCE_ID_0;
+		param_hdr.param_id = payload[2];
+		param_hdr.param_size = payload[3];
+		data_start = &payload[4];
+		break;
+	case AFE_PORT_CMDRSP_GET_PARAM_V3:
+		memcpy(&param_hdr, &payload[1], sizeof(struct param_hdr_v3));
+		data_start = &payload[5];
+		break;
+	default:
+		pr_err("[Smartamp:%s] Unrecognized command %d\n", __func__, opcode);
+		return -EINVAL;
+	}
+	data_dest = (u32 *) &this_afe.smart_amp_calib_data;
+	data_dest[0] = payload[0];
+	memcpy(&data_dest[1], &param_hdr, sizeof(struct param_hdr_v3));
+	memcpy(&data_dest[5], data_start, param_hdr.param_size);
+	if (!data_dest[0]) {
+		atomic_set(&this_afe.state, 0);
+	} else {
+		pr_debug("[Smartamp:%s] status: %d", __func__, data_dest[0]);
+		atomic_set(&this_afe.state, -1);
+	}
+	return 0;
+}
+int afe_smartamp_get_calib_data(struct afe_smartamp_get_calib *calib_resp,
+		uint32_t param_id, uint32_t module_id)
+{
+	int ret = -EINVAL;
+	struct param_hdr_v3 param_hdr;
+	int port = TAS_RX_PORT;
+	if (!calib_resp) {
+		pr_err("[Smartamp:%s] Invalid params\n", __func__);
+		goto fail_cmd;
+	}
+
+	pr_info("[Smartamp:%s] module id : 0x%x ", __func__, module_id);
+	if (module_id == AFE_SMARTAMP_MODULE_RX) {
+		port = TAS_RX_PORT;
+	} else if (module_id == AFE_SMARTAMP_MODULE_TX) {
+		port = TAS_TX_PORT;
+	} else {
+		pr_err("[Smartamp:%s] Invalid module id 0x%x\n", __func__, module_id);
+		return ret;
+	}
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = module_id;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = param_id;
+	param_hdr.param_size = sizeof(struct afe_smartamp_get_calib);
+	ret = q6afe_get_params(port, NULL, &param_hdr);
+	if (ret < 0) {
+		pr_err("[Smartamp:%s] get param port 0x%x param id[0x%x]failed %d\n",
+		       __func__, port, param_hdr.param_id, ret);
+		goto fail_cmd;
+	}
+	memcpy(&calib_resp->res_cfg, &this_afe.smart_amp_calib_data.res_cfg,
+		sizeof(this_afe.smart_amp_calib_data.res_cfg));
+	ret = 0;
+fail_cmd:
+	return ret;
+}
+EXPORT_SYMBOL(afe_smartamp_get_calib_data);
+int afe_smartamp_set_calib_data(uint32_t param_id,struct afe_smartamp_set_params_t *prot_config,
+		uint8_t length, uint32_t module_id)
+{
+	int ret = -EINVAL;
+	int port = TAS_RX_PORT;
+	struct param_hdr_v3 param_hdr;
+	u8 *packed_param_data = NULL;
+	u32 packed_param_size = 0;
+	u32 single_param_size = 0;
+	if (!prot_config) {
+		pr_err("[Smartamp:%s] Invalid params\n", __func__);
+		return ret;
+	}
+	pr_info("[Smartamp:%s] module id : 0x%x ", __func__, module_id);
+	if (module_id == AFE_SMARTAMP_MODULE_RX) {
+		port = TAS_RX_PORT;
+	} else if (module_id == AFE_SMARTAMP_MODULE_TX) {
+		port = TAS_TX_PORT;
+	} else {
+		pr_err("[Smartamp:%s] Invalid module id 0x%x\n", __func__, module_id);
+		return ret;
+	}
+	packed_param_size =
+		sizeof(param_hdr) + sizeof(prot_config);
+	packed_param_data = kzalloc(packed_param_size, GFP_KERNEL);
+	if (!packed_param_data)
+		return -ENOMEM;
+	packed_param_size = 0;
+	param_hdr.module_id = module_id;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = param_id;
+	param_hdr.param_size = length;
+	ret = q6common_pack_pp_params(packed_param_data, &param_hdr,
+				      (u8 *) prot_config, &single_param_size);
+	if (ret) {
+		pr_err("[Smartamp:%s] Failed to pack param data, error %d\n", __func__,
+		       ret);
+		goto done;
+	}
+	packed_param_size += single_param_size;
+	ret = q6afe_set_params(port, q6audio_get_port_index(port),
+			       NULL, packed_param_data, packed_param_size);
+done:
+	kfree(packed_param_data);
+	return ret;
+}
+EXPORT_SYMBOL(afe_smartamp_set_calib_data);
+#endif
 
 int afe_pseudo_port_start_nowait(u16 port_id)
 {

@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+//#define DEBUG
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
@@ -45,6 +46,9 @@
 #include <dt-bindings/sound/audio-codec-port-types.h>
 #include "codecs/bolero/wsa-macro.h"
 #include "codecs/wcd937x/wcd937x.h"
+#ifdef CONFIG_MACH_LGE
+#include <linux/regulator/consumer.h>
+#endif
 
 #define DRV_NAME "sm6150-asoc-snd"
 
@@ -209,8 +213,58 @@ struct aux_codec_dev_info {
 	u32 index;
 };
 
+#ifdef CONFIG_MACH_LGE
+enum pinctrl_pin_state {
+	STATE_PRI_MI2S_DISABLE = 0,
+	STATE_PRI_MI2S_ACTIVE,
+	STATE_SEC_MI2S_DISABLE,
+	STATE_SEC_MI2S_ACTIVE,
+	STATE_TERT_MI2S_DISABLE,
+	STATE_TERT_MI2S_ACTIVE,
+	STATE_QUAT_MI2S_DISABLE,
+	STATE_QUAT_MI2S_ACTIVE,
+	STATE_TDM_DISABLE,
+	STATE_TDM_ACTIVE,
+	STATE_FM_LNA,
+};
+
+struct msm_pinctrl_info {
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *pri_mi2s_disable;
+	struct pinctrl_state *sec_mi2s_disable;
+	struct pinctrl_state *tert_mi2s_disable;
+	struct pinctrl_state *quat_mi2s_disable;
+	struct pinctrl_state *tdm_disable;
+	struct pinctrl_state *pri_mi2s_active;
+	struct pinctrl_state *sec_mi2s_active;
+	struct pinctrl_state *tert_mi2s_active;
+	struct pinctrl_state *quat_mi2s_active;
+	struct pinctrl_state *tdm_active;
+	struct pinctrl_state *fm_lna_default;
+	enum pinctrl_pin_state curr_state;
+};
+#else
+enum pinctrl_pin_state {
+	STATE_DISABLE = 0, /* All pins are in sleep state */
+	STATE_MI2S_ACTIVE,  /* I2S = active, TDM = sleep */
+	STATE_TDM_ACTIVE,  /* I2S = sleep, TDM = active */
+};
+
+struct msm_pinctrl_info {
+	struct pinctrl *pinctrl;
+	struct pinctrl_state *mi2s_disable;
+	struct pinctrl_state *tdm_disable;
+	struct pinctrl_state *mi2s_active;
+	struct pinctrl_state *tdm_active;
+	enum pinctrl_pin_state curr_state;
+};
+#endif
+
 struct msm_asoc_mach_data {
 	struct snd_info_entry *codec_root;
+#ifdef CONFIG_MACH_LGE
+	struct msm_pinctrl_info pinctrl_info;
+#endif
 	int usbc_en2_gpio; /* used by gpio driver API */
 	int hph_en1_gpio;
 	int hph_en0_gpio;
@@ -229,6 +283,13 @@ struct msm_asoc_wcd93xx_codec {
 	void* (*get_afe_config_fn)(struct snd_soc_codec *codec,
 				   enum afe_config_type config_type);
 };
+#ifdef CONFIG_MACH_LGE
+static const char *const pin_states[] = {"pri-mi2s-sleep","pri-mi2s-active","sec-mi2s-sleep","sec-mi2s-active","tert-mi2s-sleep","tert-mi2s-active","quat-mi2s-sleep","quat-mi2s-active",
+						"tert-tdm-sleep","tert-tdm-active","fm-default"};
+#else
+static const char *const pin_states[] = {"sleep", "i2s-active",
+					 "tdm-active"};
+#endif
 
 static struct snd_soc_card snd_soc_card_sm6150_msm;
 
@@ -487,7 +548,11 @@ static char const *tdm_sample_rate_text[] = {"KHZ_8", "KHZ_16", "KHZ_32",
 static const char *const auxpcm_rate_text[] = {"KHZ_8", "KHZ_16"};
 static char const *mi2s_rate_text[] = {"KHZ_8", "KHZ_11P025", "KHZ_16",
 				      "KHZ_22P05", "KHZ_32", "KHZ_44P1",
+#ifdef CONFIG_MACH_LGE
+				      "KHZ_48", "KHZ_88P2","KHZ_96", "KHZ_176P4", "KHZ_192", "KHZ_384"};
+#else
 				      "KHZ_48", "KHZ_96", "KHZ_192"};
+#endif
 static const char *const mi2s_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Five", "Six", "Seven",
 					   "Eight"};
@@ -638,12 +703,187 @@ static struct msm_asoc_wcd93xx_codec msm_codec_fn;
 static int dmic_0_1_gpio_cnt;
 static int dmic_2_3_gpio_cnt;
 
+#ifdef CONFIG_MACH_LGE
+static int fmradio_lna_en_gpio=-1;
+static int fmradio_rf_ctrl_gpio=-1;
+struct regulator *lna_regulator;
+struct regulator *spdt_regulator;
+bool lna_regulator_enabled;
+bool lna_spdt_regulator_ctrl;
+
+static const char * const fmradio_lna_state_texts[] = {
+	"Off",
+	"On",
+};
+static const struct soc_enum fmradio_lna_state_enum =
+SOC_ENUM_SINGLE(SND_SOC_NOPM, 0,
+		ARRAY_SIZE(fmradio_lna_state_texts),
+		fmradio_lna_state_texts);
+
+static const char * const fmradio_rf_ctrl_texts[] = {
+	"Off",
+	"On",
+};
+static const struct soc_enum fmradio_rf_ctrl_enum =
+SOC_ENUM_SINGLE(SND_SOC_NOPM, 0,
+		ARRAY_SIZE(fmradio_rf_ctrl_texts),
+		fmradio_rf_ctrl_texts);
+
+static void fmradio_lna_regulator_control(bool state)
+{
+	int ret = 0;
+
+	pr_info("%s enter:%d\n",__func__, state);
+	if(state && !lna_regulator_enabled){
+		ret = regulator_enable(lna_regulator);
+		if (ret < 0)
+			pr_err("%s fail to enable lna_regulator: %d\n",__func__	,ret);
+		else
+			lna_regulator_enabled = true;
+	} else {
+		if(lna_regulator_enabled) {
+			ret = regulator_disable(lna_regulator);
+			if(ret < 0)
+				pr_err("%s fail to disable lna_regulator: %d\n",__func__,ret);
+			else
+				lna_regulator_enabled = false;
+		}
+	}
+}
+
+static void fmradio_lna_spdt_regulator_control(bool state)
+{
+	int ret1 = 0;
+	int ret2 = 0;
+
+	pr_info("%s enter:%d\n",__func__, state);
+	if(state && !lna_regulator_enabled){
+		ret1 = regulator_enable(lna_regulator);
+		ret2 = regulator_enable(spdt_regulator);
+		if (ret1 < 0 || ret2 < 0)
+			pr_err("%s fail to enable lna_regulator: %d, spdt_regulator: %d\n",
+						__func__	, ret1, ret2);
+		else
+			lna_regulator_enabled = true;
+	} else {
+		if(lna_regulator_enabled) {
+			ret1 = regulator_disable(lna_regulator);
+			ret2 = regulator_disable(spdt_regulator);
+			if (ret1 < 0 || ret2 < 0)
+				pr_err("%s fail to enable lna_regulator: %d, spdt_regulator: %d\n",
+							__func__	, ret1, ret2);
+			else
+				lna_regulator_enabled = false;
+		}
+	}
+}
+
+static int fmradio_lna_state_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	int lna_state;
+
+	if (fmradio_lna_en_gpio < 0) {
+		pr_err("%s: unsupported control: %s %d", __func__, kcontrol->id.name,fmradio_lna_en_gpio);
+		return -EINVAL;
+	}
+
+	lna_state = gpio_get_value(fmradio_lna_en_gpio);
+	ucontrol->value.enumerated.item[0] = lna_state;
+	pr_info("%s enter lna_state: %d\n", __func__, lna_state);
+
+	return 0;
+}
+
+static int fmradio_lna_state_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	int lna_state = ucontrol->value.enumerated.item[0];
+
+	if (fmradio_lna_en_gpio < 0) {
+		pr_err("%s: unsupported control: %s %d", __func__, kcontrol->id.name,fmradio_lna_en_gpio);
+		return -EINVAL;
+	}
+
+	switch(lna_state) {
+		case 0:
+			gpio_set_value(fmradio_lna_en_gpio, 0);
+			pr_info("%s: low fmradio_lna_en_gpio\n", __func__);
+			if (!lna_spdt_regulator_ctrl)
+				fmradio_lna_regulator_control(false);
+			else
+				fmradio_lna_spdt_regulator_control(false);
+			break;
+		case 1:
+			if (!lna_spdt_regulator_ctrl)
+				fmradio_lna_regulator_control(true);
+			else
+				fmradio_lna_spdt_regulator_control(true);
+			gpio_set_value(fmradio_lna_en_gpio, 1);
+			pr_info("%s: high fmradio_lna_en_gpio\n", __func__);
+			break;
+		default:
+			pr_info("%s: invalid value %d\n", __func__,lna_state);
+			break;
+	}
+	return 0;
+}
+static int fmradio_rf_ctrl_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	int rf_enable;
+
+	if (fmradio_rf_ctrl_gpio < 0) {
+		pr_err("%s: unsupported control: %s %d", __func__, kcontrol->id.name,fmradio_rf_ctrl_gpio);
+		return -EINVAL;
+	}
+
+	rf_enable = gpio_get_value(fmradio_rf_ctrl_gpio);
+	ucontrol->value.enumerated.item[0] = rf_enable;
+	pr_info("%s enter rf_enable: %d\n", __func__, rf_enable);
+
+	return 0;
+}
+
+static int fmradio_rf_ctrl_put(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+
+    /* DMB_FM_SPDT switch control (GPIO 92)
+       SPDT-switch is LOW when FMradio start*/
+
+	int rf_enable = ucontrol->value.enumerated.item[0];
+
+	if (fmradio_rf_ctrl_gpio < 0) {
+		pr_err("%s: unsupported control: %s %d", __func__, kcontrol->id.name,fmradio_rf_ctrl_gpio);
+		return -EINVAL;
+	}
+
+	switch(rf_enable) {
+		case 0:
+			gpio_set_value(fmradio_rf_ctrl_gpio, 1);
+			pr_info("%s: disable fmradio-rf-ctrl-gpio \n", __func__);
+			break;
+		case 1:
+			gpio_set_value(fmradio_rf_ctrl_gpio, 0);
+			pr_info("%s: enable fmradio-rf-ctrl-gpio \n", __func__);
+			break;
+		default:
+			pr_err("%s: invalid value %d \n", __func__, rf_enable);
+			break;
+	}
+	return 0;
+}
+#endif
+
 static void *def_wcd_mbhc_cal(void);
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
 					int enable, bool dapm);
 static int msm_wsa881x_init(struct snd_soc_component *component);
 static int msm_aux_codec_init(struct snd_soc_component *component);
-
+#if defined(CONFIG_SND_SOC_TAS2562)
+int	tas2562_module_dep(void);
+#endif
 /*
  * Need to report LINEIN
  * if R/L channel impedance is larger than 5K ohm
@@ -651,7 +891,11 @@ static int msm_aux_codec_init(struct snd_soc_component *component);
 static struct wcd_mbhc_config wcd_mbhc_cfg = {
 	.read_fw_bin = false,
 	.calibration = NULL,
+#ifdef CONFIG_MACH_LGE
+	.detect_extn_cable = false,
+#else   /* Qualcomm Orig. */
 	.detect_extn_cable = true,
+#endif
 	.mono_stero_detection = false,
 	.swap_gnd_mic = NULL,
 	.hs_ext_micbias = true,
@@ -721,6 +965,7 @@ static struct afe_clk_set mi2s_clk[MI2S_MAX] = {
 
 };
 
+#ifndef CONFIG_MACH_LGE
 static struct afe_clk_set mi2s_mclk[MI2S_MAX] = {
 	{
 		AFE_API_VERSION_I2S_CONFIG,
@@ -763,6 +1008,7 @@ static struct afe_clk_set mi2s_mclk[MI2S_MAX] = {
 		0,
 	}
 };
+#endif
 
 static struct mi2s_conf mi2s_intf_conf[MI2S_MAX];
 
@@ -3055,12 +3301,30 @@ static int mi2s_get_sample_rate_val(int sample_rate)
 	case SAMPLING_RATE_48KHZ:
 		sample_rate_val = 6;
 		break;
+#ifndef CONFIG_MACH_LGE
 	case SAMPLING_RATE_96KHZ:
 		sample_rate_val = 7;
 		break;
 	case SAMPLING_RATE_192KHZ:
 		sample_rate_val = 8;
 		break;
+#else
+	case SAMPLING_RATE_88P2KHZ:
+		sample_rate_val = 7;
+		break;
+	case SAMPLING_RATE_96KHZ:
+		sample_rate_val = 8;
+		break;
+	case SAMPLING_RATE_176P4KHZ:
+		sample_rate_val = 9;
+		break;
+	case SAMPLING_RATE_192KHZ:
+		sample_rate_val = 10;
+		break;
+	case SAMPLING_RATE_384KHZ:
+		sample_rate_val = 11;
+		break;
+#endif
 	default:
 		sample_rate_val = 6;
 		break;
@@ -3094,12 +3358,30 @@ static int mi2s_get_sample_rate(int value)
 	case 6:
 		sample_rate = SAMPLING_RATE_48KHZ;
 		break;
+#ifndef CONFIG_MACH_LGE
 	case 7:
 		sample_rate = SAMPLING_RATE_96KHZ;
 		break;
 	case 8:
 		sample_rate = SAMPLING_RATE_192KHZ;
 		break;
+#else
+	case 7:
+		sample_rate = SAMPLING_RATE_88P2KHZ;
+		break;
+	case 8:
+		sample_rate = SAMPLING_RATE_96KHZ;
+		break;
+	case 9:
+		sample_rate = SAMPLING_RATE_176P4KHZ;
+		break;
+	case 10:
+		sample_rate = SAMPLING_RATE_192KHZ;
+		break;
+	case 11:
+		sample_rate = SAMPLING_RATE_384KHZ;
+		break;
+#endif
 	default:
 		sample_rate = SAMPLING_RATE_48KHZ;
 		break;
@@ -3866,6 +4148,12 @@ static const struct snd_kcontrol_new msm_common_snd_controls[] = {
 			msm_bt_sample_rate_tx_put),
 	SOC_ENUM_EXT("VI_FEED_TX Channels", vi_feed_tx_chs,
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
+#ifdef CONFIG_MACH_LGE
+	SOC_ENUM_EXT("FM_LNA_ENABLE",fmradio_lna_state_enum,
+		fmradio_lna_state_get, fmradio_lna_state_put),
+	SOC_ENUM_EXT("FM_RF_ENABLE", fmradio_rf_ctrl_enum,
+		fmradio_rf_ctrl_get, fmradio_rf_ctrl_put),
+#endif
 };
 
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
@@ -5070,7 +5358,7 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
 	struct snd_card *card;
 	struct snd_info_entry *entry;
-	struct snd_soc_component *aux_comp;
+//	struct snd_soc_component *aux_comp;
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(rtd->card);
 
@@ -5115,6 +5403,7 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 	 */
 	dev_dbg(codec->dev, "%s: Number of aux devices: %d\n",
 		__func__, rtd->card->num_aux_devs);
+#if 0 //Remove below code to probe wcd9370 codec
 	if (rtd->card->num_aux_devs &&
 	    !list_empty(&rtd->card->aux_comp_list)) {
 		list_for_each_entry(aux_comp, &rtd->card->aux_comp_list,
@@ -5129,6 +5418,7 @@ static int msm_int_audrx_init(struct snd_soc_pcm_runtime *rtd)
 			}
 		}
 	}
+#endif
 	card = rtd->card->snd_card;
 	if (!pdata->codec_root) {
 		entry = snd_info_create_subdir(card->module, "codecs",
@@ -5183,7 +5473,11 @@ static void *def_wcd_mbhc_cal(void)
 		return NULL;
 
 #define S(X, Y) ((WCD_MBHC_CAL_PLUG_TYPE_PTR(wcd_mbhc_cal)->X) = (Y))
+#if defined(CONFIG_SND_SOC_ES9218P)
 	S(v_hs_max, 1600);
+#else
+	S(v_hs_max, 1600);
+#endif
 #undef S
 #define S(X, Y) ((WCD_MBHC_CAL_BTN_DET_PTR(wcd_mbhc_cal)->X) = (Y))
 	S(num_btn, WCD_MBHC_DEF_BUTTONS);
@@ -5193,6 +5487,16 @@ static void *def_wcd_mbhc_cal(void)
 	btn_high = ((void *)&btn_cfg->_v_btn_low) +
 		(sizeof(btn_cfg->_v_btn_low[0]) * btn_cfg->num_btn);
 
+#ifdef CONFIG_MACH_LGE
+	btn_high[0] = 80;
+	btn_high[1] = 140;
+	btn_high[2] = 240;
+	btn_high[3] = 450;
+	btn_high[4] = 450;
+	btn_high[5] = 450;
+	btn_high[6] = 450;
+	btn_high[7] = 450;
+#else
 	btn_high[0] = 75;
 	btn_high[1] = 150;
 	btn_high[2] = 237;
@@ -5201,6 +5505,7 @@ static void *def_wcd_mbhc_cal(void)
 	btn_high[5] = 500;
 	btn_high[6] = 500;
 	btn_high[7] = 500;
+#endif
 
 	return wcd_mbhc_cal;
 }
@@ -5618,6 +5923,491 @@ err:
 	return ret;
 }
 
+#ifdef CONFIG_MACH_LGE
+static int msm_set_pinctrl(struct msm_pinctrl_info *pinctrl_info,
+				enum pinctrl_pin_state new_state)
+{
+	int ret = 0;
+	int curr_state = 0;
+
+	if (pinctrl_info == NULL) {
+		pr_err("%s: pinctrl_info is NULL\n", __func__);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	if (pinctrl_info->pinctrl == NULL) {
+		pr_err("%s: pinctrl_info->pinctrl is NULL\n", __func__);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	curr_state = pinctrl_info->curr_state;
+	pinctrl_info->curr_state = new_state;
+	pr_debug("%s: curr_state = %s new_state = %s\n", __func__,
+		 pin_states[curr_state], pin_states[pinctrl_info->curr_state]);
+	pr_debug("%s: pinctrl_info->curr_state:%d\n", __func__, pinctrl_info->curr_state);
+
+	if (curr_state == pinctrl_info->curr_state) {
+		pr_debug("%s: Already in same state\n", __func__);
+		goto err;
+	}
+
+	switch (pinctrl_info->curr_state) {
+	case STATE_PRI_MI2S_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->pri_mi2s_active);
+		if (ret) {
+			pr_err("%s: MI2S state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	case STATE_SEC_MI2S_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->sec_mi2s_active);
+		if (ret) {
+			pr_err("%s: MI2S state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_TERT_MI2S_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tert_mi2s_active);
+		if (ret) {
+			pr_err("%s: MI2S state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_QUAT_MI2S_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->quat_mi2s_active);
+		if (ret) {
+			pr_err("%s: MI2S state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	case STATE_TDM_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tdm_active);
+		if (ret) {
+			pr_err("%s: TDM state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	case STATE_PRI_MI2S_DISABLE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->pri_mi2s_disable);
+		if (ret) {
+			pr_err("%s: mi2s state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+	break;
+
+	case STATE_SEC_MI2S_DISABLE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->sec_mi2s_disable);
+		if (ret) {
+			pr_err("%s: mi2s state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_TERT_MI2S_DISABLE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tert_mi2s_disable);
+		if (ret) {
+			pr_err("%s: mi2s state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_QUAT_MI2S_DISABLE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->quat_mi2s_disable);
+		if (ret) {
+			pr_err("%s: mi2s state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	case STATE_TDM_DISABLE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tdm_disable);
+		if (ret) {
+			pr_err("%s: tdm state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	case STATE_FM_LNA:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->fm_lna_default);
+		if (ret) {
+			pr_err("%s: fm lna state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+
+	default:
+		pr_err("%s: TLMM pin state is invalid\n", __func__);
+		return -EINVAL;
+	}
+
+err:
+	return ret;
+}
+#else
+static int msm_set_pinctrl(struct msm_pinctrl_info *pinctrl_info,
+				enum pinctrl_pin_state new_state)
+{
+	int ret = 0;
+	int curr_state = 0;
+
+	if (pinctrl_info == NULL) {
+		pr_err("%s: pinctrl_info is NULL\n", __func__);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	if (pinctrl_info->pinctrl == NULL) {
+		pr_err("%s: pinctrl_info->pinctrl is NULL\n", __func__);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	curr_state = pinctrl_info->curr_state;
+	pinctrl_info->curr_state = new_state;
+	pr_debug("%s: curr_state = %s new_state = %s\n", __func__,
+		 pin_states[curr_state], pin_states[pinctrl_info->curr_state]);
+
+	if (curr_state == pinctrl_info->curr_state) {
+		pr_debug("%s: Already in same state\n", __func__);
+		goto err;
+	}
+
+	if (curr_state != STATE_DISABLE &&
+		pinctrl_info->curr_state != STATE_DISABLE) {
+		pr_debug("%s: state already active cannot switch\n", __func__);
+		ret = -EIO;
+		goto err;
+	}
+
+	switch (pinctrl_info->curr_state) {
+	case STATE_MI2S_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->mi2s_active);
+		if (ret) {
+			pr_err("%s: MI2S state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_TDM_ACTIVE:
+		ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tdm_active);
+		if (ret) {
+			pr_err("%s: TDM state select failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	case STATE_DISABLE:
+		if (curr_state == STATE_MI2S_ACTIVE) {
+			ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->mi2s_disable);
+		} else {
+			ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->tdm_disable);
+		}
+		if (ret) {
+			pr_err("%s:  state disable failed with %d\n",
+				__func__, ret);
+			ret = -EIO;
+			goto err;
+		}
+		break;
+	default:
+		pr_err("%s: TLMM pin state is invalid\n", __func__);
+		return -EINVAL;
+	}
+
+err:
+	return ret;
+}
+#endif
+
+#ifdef CONFIG_MACH_LGE
+static int msm_initialize_pinctrl_state(struct msm_pinctrl_info *pinctrl_info,
+				enum pinctrl_pin_state new_state)
+{
+	int ret = 0;
+
+	if (IS_ERR(pinctrl_info->pri_mi2s_disable) && IS_ERR(pinctrl_info->pri_mi2s_active)
+		&& IS_ERR(pinctrl_info->sec_mi2s_disable) && IS_ERR(pinctrl_info->sec_mi2s_active)
+		&& IS_ERR(pinctrl_info->tert_mi2s_disable) && IS_ERR(pinctrl_info->tert_mi2s_active)
+		&& IS_ERR(pinctrl_info->quat_mi2s_disable) && IS_ERR(pinctrl_info->quat_mi2s_active)
+		&& IS_ERR(pinctrl_info->tdm_disable) && IS_ERR(pinctrl_info->tdm_active)
+		&& IS_ERR(pinctrl_info->fm_lna_default)
+		) {
+			pr_err("%s: all audio interface is not existed\n", __func__);
+			return -EINVAL;
+		}
+
+	switch(new_state){
+	case STATE_PRI_MI2S_ACTIVE:
+	case STATE_PRI_MI2S_DISABLE:
+		if (IS_ERR(pinctrl_info->pri_mi2s_disable) || IS_ERR(pinctrl_info->pri_mi2s_active)){
+			pr_err("%s: PRI MI2S interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_PRI_MI2S_DISABLE);
+			if (ret)
+				pr_err("%s: PRI MI2S TLMM pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+
+	case STATE_SEC_MI2S_ACTIVE:
+	case STATE_SEC_MI2S_DISABLE:
+		if (IS_ERR(pinctrl_info->sec_mi2s_disable) || IS_ERR(pinctrl_info->sec_mi2s_active)){
+			pr_err("%s: SEC MI2S interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_SEC_MI2S_DISABLE);
+			if (ret)
+				pr_err("%s: SEC MI2S TLMM pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+	case STATE_TERT_MI2S_ACTIVE:
+	case STATE_TERT_MI2S_DISABLE:
+		if (IS_ERR(pinctrl_info->tert_mi2s_disable) || IS_ERR(pinctrl_info->tert_mi2s_active)){
+			pr_err("%s: TERT MI2S interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_TERT_MI2S_DISABLE);
+			if (ret)
+				pr_err("%s: TERT MI2S TLMM pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+	case STATE_QUAT_MI2S_ACTIVE:
+	case STATE_QUAT_MI2S_DISABLE:
+		if (IS_ERR(pinctrl_info->quat_mi2s_disable) || IS_ERR(pinctrl_info->quat_mi2s_active)){
+			pr_err("%s: QUAT MI2S interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_QUAT_MI2S_DISABLE);
+			if (ret)
+				pr_err("%s: QUAT MI2S TLMM pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+	case STATE_TDM_ACTIVE:
+	case STATE_TDM_DISABLE:
+		if (IS_ERR(pinctrl_info->tdm_disable) || IS_ERR(pinctrl_info->tdm_active)){
+			pr_err("%s: TDM interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_TDM_DISABLE);
+			if (ret)
+				pr_err("%s: TDM TLMM pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+	case STATE_FM_LNA:
+		if (IS_ERR(pinctrl_info->fm_lna_default)){
+			pr_err("%s: FM LNA interface is not existed\n", __func__);
+		} else {
+			ret = msm_set_pinctrl(pinctrl_info, STATE_FM_LNA);
+			if (ret)
+				pr_err("%s: FM LNA pinctrl set failed with %d\n",__func__, ret);
+		}
+		break;
+	}
+	return ret;
+}
+
+static int msm_get_pinctrl(struct platform_device *pdev)
+{
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+	struct msm_pinctrl_info *pinctrl_info = NULL;
+	struct pinctrl *pinctrl;
+	int ret;
+
+	pinctrl_info = &pdata->pinctrl_info;
+
+	if (pinctrl_info == NULL) {
+		pr_err("%s: pinctrl_info is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR_OR_NULL(pinctrl)) {
+		pr_err("%s: Unable to get pinctrl handle\n", __func__);
+		return -EINVAL;
+	}
+	pinctrl_info->pinctrl = pinctrl;
+
+	/* get all the states handles from Device Tree */
+	pinctrl_info->pri_mi2s_disable = pinctrl_lookup_state(pinctrl,
+						"pri-mi2s-sleep");
+	pinctrl_info->pri_mi2s_active = pinctrl_lookup_state(pinctrl,
+						"pri-mi2s-active");
+	pinctrl_info->sec_mi2s_disable = pinctrl_lookup_state(pinctrl,
+						"sec-mi2s-sleep");
+	pinctrl_info->sec_mi2s_active = pinctrl_lookup_state(pinctrl,
+						"sec-mi2s-active");
+	pinctrl_info->tert_mi2s_disable = pinctrl_lookup_state(pinctrl,
+						"tert-mi2s-sleep");
+	pinctrl_info->tert_mi2s_active = pinctrl_lookup_state(pinctrl,
+						"tert-mi2s-active");
+	pinctrl_info->quat_mi2s_disable = pinctrl_lookup_state(pinctrl,
+						"quat-mi2s-sleep");
+	pinctrl_info->quat_mi2s_active = pinctrl_lookup_state(pinctrl,
+						"quat-mi2s-active");
+	pinctrl_info->tdm_active = pinctrl_lookup_state(pinctrl,
+						"tert-tdm-active");
+	pinctrl_info->tdm_disable = pinctrl_lookup_state(pinctrl,
+						"tert-tdm-sleep");
+	pinctrl_info->fm_lna_default = pinctrl_lookup_state(pinctrl,
+						"fm_lna");
+
+/* Reset the TLMM pins to a default state */
+	pinctrl_info->curr_state = STATE_PRI_MI2S_ACTIVE;
+	ret = msm_initialize_pinctrl_state(pinctrl_info,STATE_PRI_MI2S_DISABLE);
+	if (ret != 0) {
+		pr_err("%s: Disable SEC TLMM pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+
+	ret = msm_initialize_pinctrl_state(pinctrl_info,STATE_SEC_MI2S_DISABLE);
+	if (ret != 0) {
+		pr_err("%s: Disable SEC TLMM pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+
+	ret = msm_initialize_pinctrl_state(pinctrl_info,STATE_TERT_MI2S_DISABLE);
+	if (ret != 0) {
+		pr_err("%s: Disable TERT TLMM pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+
+	ret = msm_initialize_pinctrl_state(pinctrl_info,STATE_QUAT_MI2S_DISABLE);
+	if (ret != 0) {
+		pr_err("%s: Disable QUAT TLMM pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+
+	ret = msm_initialize_pinctrl_state(pinctrl_info,STATE_FM_LNA);
+	if (ret != 0) {
+		pr_err("%s: Disable FM LNA pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+
+	return 0;
+
+err:
+	devm_pinctrl_put(pinctrl);
+	pinctrl_info->pinctrl = NULL;
+	return -EINVAL;
+}
+#else
+static int msm_get_pinctrl(struct platform_device *pdev)
+{
+	struct snd_soc_card *card = platform_get_drvdata(pdev);
+	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+	struct msm_pinctrl_info *pinctrl_info = NULL;
+	struct pinctrl *pinctrl;
+	int ret = 0;
+
+	pinctrl_info = &pdata->pinctrl_info;
+
+	if (pinctrl_info == NULL) {
+		pr_err("%s: pinctrl_info is NULL\n", __func__);
+		return -EINVAL;
+	}
+
+	pinctrl = devm_pinctrl_get(&pdev->dev);
+	if (IS_ERR_OR_NULL(pinctrl)) {
+		pr_err("%s: Unable to get pinctrl handle\n", __func__);
+		return -EINVAL;
+	}
+	pinctrl_info->pinctrl = pinctrl;
+
+	/* get all the states handles from Device Tree */
+	pinctrl_info->mi2s_disable = pinctrl_lookup_state(pinctrl,
+						"quat-mi2s-sleep");
+	if (IS_ERR(pinctrl_info->mi2s_disable)) {
+		pr_err("%s: could not get mi2s_disable pinstate\n", __func__);
+		goto err;
+	}
+	pinctrl_info->mi2s_active = pinctrl_lookup_state(pinctrl,
+						"quat-mi2s-active");
+	if (IS_ERR(pinctrl_info->mi2s_active)) {
+		pr_err("%s: could not get mi2s_active pinstate\n", __func__);
+		goto err;
+	}
+	pinctrl_info->tdm_disable = pinctrl_lookup_state(pinctrl,
+						"quat-tdm-sleep");
+	if (IS_ERR(pinctrl_info->tdm_disable)) {
+		pr_err("%s: could not get tdm_disable pinstate\n", __func__);
+		goto err;
+	}
+	pinctrl_info->tdm_active = pinctrl_lookup_state(pinctrl,
+						"quat-tdm-active");
+	if (IS_ERR(pinctrl_info->tdm_active)) {
+		pr_err("%s: could not get tdm_active pinstate\n",
+			__func__);
+		goto err;
+	}
+	/* Reset the TLMM pins to a default state */
+	ret = pinctrl_select_state(pinctrl_info->pinctrl,
+					pinctrl_info->mi2s_disable);
+	if (ret != 0) {
+		pr_err("%s: Disable TLMM pins failed with %d\n",
+			__func__, ret);
+		ret = -EIO;
+		goto err;
+	}
+	pinctrl_info->curr_state = STATE_DISABLE;
+
+	return 0;
+
+err:
+	devm_pinctrl_put(pinctrl);
+	pinctrl_info->pinctrl = NULL;
+	return -EINVAL;
+}
+#endif
+
+
 static int sm6150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 				     struct snd_pcm_hw_params *params)
 {
@@ -5796,6 +6586,26 @@ static void sm6150_tdm_snd_shutdown(struct snd_pcm_substream *substream)
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int tdm_mode = msm_get_tdm_mode(cpu_dai->id);
 
+#ifdef CONFIG_MACH_LGE
+	int ret = 0;
+	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
+
+	pr_debug("%s enter cpu_dai->id:%d\n", __func__, cpu_dai->id);
+	if (cpu_dai->id == AFE_PORT_ID_TERTIARY_TDM_RX)
+		ret = msm_set_pinctrl(pinctrl_info, STATE_TDM_DISABLE);
+	if (ret)
+		pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+			__func__, ret);
+#else
+	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
+	if ((cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_RX) ||
+		(cpu_dai->id == AFE_PORT_ID_QUATERNARY_TDM_TX)) {
+		ret = msm_set_pinctrl(pinctrl_info, STATE_DISABLE);
+		if (ret)
+			pr_err("%s: TDM TLMM pinctrl set failed with %d\n",
+				__func__, ret);
+	}
+#endif
 	if (tdm_mode < 0) {
 		dev_err(rtd->card->dev, "%s: Invalid tdm_mode\n", __func__);
 		return;
@@ -5847,6 +6657,10 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 	unsigned int fmt = SND_SOC_DAIFMT_CBS_CFS;
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+#ifdef CONFIG_MACH_LGE
+	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
+	int ret_pinctrl = 0;
+#endif
 
 	dev_dbg(rtd->card->dev,
 		"%s: substream = %s  stream = %d, dai name %s, dai ID %d\n",
@@ -5892,6 +6706,40 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 				__func__, index, ret);
 			goto clk_off;
 		}
+#ifdef CONFIG_MACH_LGE
+		if (index == PRIM_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_PRI_MI2S_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: PRI MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
+		if (index == SEC_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_SEC_MI2S_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: SEC MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
+		if (index == TERT_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_TERT_MI2S_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: TERT MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
+		if (index == QUAT_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_QUAT_MI2S_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: QUAT MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
+#else
+		if (index == QUAT_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+						      STATE_MI2S_ACTIVE);
+			if (ret_pinctrl)
+				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
+
 		if (mi2s_intf_conf[index].msm_is_ext_mclk) {
 			pr_debug("%s: Enabling mclk, clk_freq_in_hz = %u\n",
 				__func__, mi2s_mclk[index].clk_freq_in_hz);
@@ -5907,6 +6755,7 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 		if (pdata->mi2s_gpio_p[index])
 			msm_cdc_pinctrl_select_active_state(
 					pdata->mi2s_gpio_p[index]);
+#endif
 	}
 clk_off:
 	if (ret < 0)
@@ -5927,6 +6776,10 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 	int port_id = msm_get_port_id(rtd->dai_link->id);
 	struct snd_soc_card *card = rtd->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
+#ifdef CONFIG_MACH_LGE
+	struct msm_pinctrl_info *pinctrl_info = &pdata->pinctrl_info;
+	int ret_pinctrl = 0;
+#endif
 
 	pr_debug("%s(): substream = %s  stream = %d\n", __func__,
 		 substream->name, substream->stream);
@@ -5951,6 +6804,39 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 		if (ret < 0)
 			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
 				__func__, index, ret);
+#ifdef CONFIG_MACH_LGE
+	if (index == PRIM_MI2S) {
+		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_PRI_MI2S_DISABLE);
+		if (ret_pinctrl)
+			pr_err("%s: PRI MI2S TLMM pinctrl set failed with %d\n",
+				__func__, ret_pinctrl);
+	}
+	if (index == SEC_MI2S) {
+		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_SEC_MI2S_DISABLE);
+		if (ret_pinctrl)
+			pr_err("%s: SEC MI2S TLMM pinctrl set failed with %d\n",
+				__func__, ret_pinctrl);
+	}
+	if (index == TERT_MI2S) {
+		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_TERT_MI2S_DISABLE);
+		if (ret_pinctrl)
+			pr_err("%s: TERT MI2S TLMM pinctrl set failed with %d\n",
+				__func__, ret_pinctrl);
+	}
+	if (index == QUAT_MI2S) {
+		ret_pinctrl = msm_set_pinctrl(pinctrl_info, STATE_QUAT_MI2S_DISABLE);
+		if (ret_pinctrl)
+			pr_err("%s: QUAT MI2S TLMM pinctrl set failed with %d\n",
+				__func__, ret_pinctrl);
+	}
+#else
+		if (index == QUAT_MI2S) {
+			ret_pinctrl = msm_set_pinctrl(pinctrl_info,
+						      STATE_DISABLE);
+			if (ret_pinctrl)
+				pr_err("%s: MI2S TLMM pinctrl set failed with %d\n",
+					__func__, ret_pinctrl);
+		}
 
 		if (mi2s_intf_conf[index].msm_is_ext_mclk) {
 			pr_debug("%s: Disabling mclk, clk_freq_in_hz = %u\n",
@@ -5962,6 +6848,7 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 					__func__, index, ret);
 			mi2s_mclk[index].enable = 0;
 		}
+#endif
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
 }
@@ -6707,6 +7594,25 @@ static struct snd_soc_dai_link msm_int_compress_capture_dai[] = {
 };
 
 static struct snd_soc_dai_link msm_bolero_fe_dai_links[] = {
+#ifdef CONFIG_MACH_LGE
+	{
+		.name = "Dummy DAI 1",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+#else // QCT WSA
 	{/* hw:x,37 */
 		.name = LPASS_BE_WSA_CDC_DMA_TX_0,
 		.stream_name = "WSA CDC DMA0 Capture",
@@ -6720,6 +7626,7 @@ static struct snd_soc_dai_link msm_bolero_fe_dai_links[] = {
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ops = &msm_cdc_dma_be_ops,
 	},
+#endif
 };
 
 static struct snd_soc_dai_link msm_tasha_fe_dai_links[] = {
@@ -6846,6 +7753,23 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+#if defined(CONFIG_SND_SOC_TAS2562)
+        {
+                .name = "Tertiary MI2S_TX Hostless",
+                .stream_name = "Tertiary MI2S_TX Hostless",
+                .cpu_dai_name = "TERT_MI2S_TX_HOSTLESS",
+                .platform_name = "msm-pcm-hostless",
+                .dynamic = 1,
+                .dpcm_capture = 1,
+                .trigger = {SND_SOC_DPCM_TRIGGER_POST,
+                            SND_SOC_DPCM_TRIGGER_POST},
+                .no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+                .ignore_suspend = 1,
+                .ignore_pmdown_time = 1,
+                .codec_dai_name = "snd-soc-dummy-dai",
+                .codec_name = "snd-soc-dummy",
+        },
+#endif
 };
 
 static struct snd_soc_dai_link msm_common_be_dai_links[] = {
@@ -7554,6 +8478,23 @@ static struct snd_soc_dai_link ext_disp_be_dai_link[] = {
 };
 
 static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
+#if defined(CONFIG_SND_SOC_ES9218P)
+	{
+		.name = LPASS_BE_PRI_MI2S_RX,
+		.stream_name = "Primary MI2S Playback",
+		.cpu_dai_name = "msm-dai-q6-mi2s.0",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "es9218-codec.3-0048",
+		.codec_dai_name = "es9218-hifi",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_PRI_MI2S_RX,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &msm_mi2s_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+#else
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
 		.stream_name = "Primary MI2S Playback",
@@ -7569,6 +8510,7 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 	},
+#endif
 	{
 		.name = LPASS_BE_PRI_MI2S_TX,
 		.stream_name = "Primary MI2S Capture",
@@ -7612,6 +8554,38 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ops = &msm_mi2s_be_ops,
 		.ignore_suspend = 1,
 	},
+#if defined(CONFIG_SND_SOC_TAS2562)
+	{
+		.name = LPASS_BE_TERT_MI2S_RX,
+		.stream_name = "Tertiary MI2S Playback",
+		.cpu_dai_name = "msm-dai-q6-mi2s.2",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "tas2562.2-004c",
+		.codec_dai_name = "tas2562 ASI1",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_TERTIARY_MI2S_RX,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &msm_mi2s_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	{
+		.name = "Tertiary_MI2S_RX Hostless Playback",
+		.stream_name = "Tertiary_MI2S_RX Hostless",
+		.cpu_dai_name = "TERT_MI2S_RX_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
+#else
 	{
 		.name = LPASS_BE_TERT_MI2S_RX,
 		.stream_name = "Tertiary MI2S Playback",
@@ -7627,6 +8601,7 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 	},
+#endif
 	{
 		.name = LPASS_BE_TERT_MI2S_TX,
 		.stream_name = "Tertiary MI2S Capture",
@@ -7845,6 +8820,59 @@ static struct snd_soc_dai_link msm_auxpcm_be_dai_links[] = {
 };
 
 static struct snd_soc_dai_link msm_wsa_cdc_dma_be_dai_links[] = {
+#ifdef CONFIG_MACH_LGE
+	{
+		.name = "Dummy DAI 2",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+	{
+		.name = "Dummy DAI 3",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+	{
+		.name = "Dummy DAI 4",
+		.stream_name = "MultiMedia2",
+		.cpu_dai_name = "MultiMedia2",
+		.platform_name = "msm-pcm-dsp.0",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.ignore_suspend = 1,
+		/* this dainlink has playback support */
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA2,
+	},
+#else // QCT WSA
 	/* WSA CDC DMA Backend DAI Links */
 	{
 		.name = LPASS_BE_WSA_CDC_DMA_RX_0,
@@ -7891,6 +8919,7 @@ static struct snd_soc_dai_link msm_wsa_cdc_dma_be_dai_links[] = {
 		.ignore_suspend = 1,
 		.ops = &msm_cdc_dma_be_ops,
 	},
+#endif
 };
 
 static struct snd_soc_dai_link msm_rx_tx_cdc_dma_be_dai_links[] = {
@@ -7904,6 +8933,9 @@ static struct snd_soc_dai_link msm_rx_tx_cdc_dma_be_dai_links[] = {
 		.codec_dai_name = "rx_macro_rx1",
 		.no_pcm = 1,
 		.dpcm_playback = 1,
+#ifdef CONFIG_MACH_LGE
+		.init = &msm_int_audrx_init,
+#endif
 		.id = MSM_BACKEND_DAI_RX_CDC_DMA_RX_0,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_pmdown_time = 1,
@@ -9088,7 +10120,9 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	struct msm_asoc_mach_data *pdata;
 	const char *mbhc_audio_jack_type = NULL;
 	int ret;
-
+#if defined(CONFIG_SND_SOC_TAS2562)
+	tas2562_module_dep();
+#endif
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
 		return -EINVAL;
@@ -9128,6 +10162,57 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err;
 	}
+
+#ifdef CONFIG_MACH_LGE
+	if(of_property_read_bool(pdev->dev.of_node, "lna-supply")){
+		lna_regulator = devm_regulator_get(&pdev->dev, "lna");
+		if (IS_ERR(lna_regulator)) {
+			ret = PTR_ERR(lna_regulator);
+			pr_err("%s Failed to request lna_regulator: %d\n", __func__, ret);
+		} else {
+			pr_info("%s loading lna_regulator\n", __func__);
+			lna_regulator_enabled = false;
+			lna_spdt_regulator_ctrl = false;
+		}
+	}
+
+	if(of_property_read_bool(pdev->dev.of_node, "spdt-supply")){
+		spdt_regulator = devm_regulator_get(&pdev->dev, "spdt");
+		if (IS_ERR(spdt_regulator)) {
+			ret = PTR_ERR(spdt_regulator);
+			pr_err("%s Failed to request spdt_regulator: %d\n", __func__, ret);
+		} else {
+			pr_info("%s loading spdt_regulator\n", __func__);
+			lna_spdt_regulator_ctrl = true;
+		}
+	}
+
+	fmradio_lna_en_gpio = of_get_named_gpio(pdev->dev.of_node,"lge,fmradio-lna-enable-gpio",0);
+	if (fmradio_lna_en_gpio  < 0) {
+		pr_err("%s lge,fmradio-lna-enable-gpio not provided in device tree",__func__);
+	} else {
+		pr_info("%s loading fmradio_lna_en_gpio:%d\n", __func__, fmradio_lna_en_gpio);
+		ret = gpio_request(fmradio_lna_en_gpio, "fm_lna_gpio_en");
+		if (ret) {
+			pr_err("%s unable to request gpio %d (%d)\n",__func__,
+						 fmradio_lna_en_gpio, ret);
+		}
+		gpio_direction_output(fmradio_lna_en_gpio, 0);
+	}
+
+	fmradio_rf_ctrl_gpio = of_get_named_gpio(pdev->dev.of_node,"lge,fmradio-rf-ctrl-gpio",0);
+	if (fmradio_rf_ctrl_gpio  < 0) {
+		pr_err("%s lge,fmradio-rf-ctrl-gpio not provided in device tree",__func__);
+	} else {
+		pr_info("%s loading fmradio_rf_ctrl_gpio:%d\n", __func__, fmradio_rf_ctrl_gpio);
+		ret = gpio_request(fmradio_rf_ctrl_gpio, "fmradio_rf_ctrl_gpio");
+		if (ret) {
+			pr_err("%s unable to request gpio %d (%d)\n",__func__,
+							fmradio_rf_ctrl_gpio, ret);
+		}
+		gpio_direction_output(fmradio_rf_ctrl_gpio, 0);
+	}
+#endif
 
 	ret = msm_init_aux_dev(pdev, card);
 	if (ret)
@@ -9234,7 +10319,17 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 				"fsa4480-i2c-handle",
 				pdev->dev.of_node->full_name);
 	}
-
+#ifdef CONFIG_MACH_LGE  	/* Parse pinctrl info from devicetree */
+	ret = msm_get_pinctrl(pdev);
+	if (!ret) {
+		pr_debug("%s: pinctrl parsing successful\n", __func__);
+	} else {
+		dev_dbg(&pdev->dev,
+			"%s: Parsing pinctrl failed with %d. Cannot use Ports\n",
+			__func__, ret);
+		ret = 0;
+	}
+#endif
 	msm_i2s_auxpcm_init(pdev);
 	if (!strnstr(card->name, "tavil", strlen(card->name)) &&
 	    !strnstr(card->name, "tasha", strlen(card->name))) {

@@ -31,7 +31,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/msm_audio.h>
 
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 #include <soc/qcom/subsystem_restart.h>
 #endif
 
@@ -397,7 +397,7 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 				ADSP_ASM_API_VERSION_V2) &&
 					q6core_use_Q6_32ch_support())
-#ifdef CONFIG_MACH_LGE // 24bit ASM patch
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150) // 24bit ASM patch
 			ret = q6asm_open_write_v5(prtd->audio_client,
 				fmt_type, 24);
 		else
@@ -416,7 +416,7 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 			__func__, ret);
 			q6asm_audio_client_free(prtd->audio_client);
 			prtd->audio_client = NULL;
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 			if (ret == -ETIMEDOUT || ret == -EALREADY || ret == -ENODATA)
 				subsystem_restart("adsp");
 #endif

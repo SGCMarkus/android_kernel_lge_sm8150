@@ -357,7 +357,7 @@ static DEFINE_MUTEX(tdm_mutex);
 static atomic_t tdm_group_ref[IDX_GROUP_TDM_MAX];
 
 /* cache of group cfg per parent node */
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 static struct afe_param_id_group_device_tdm_cfg tdm_group_cfg = {
 	AFE_API_VERSION_GROUP_DEVICE_TDM_CONFIG,
 	AFE_GROUP_DEVICE_ID_TERTIARY_TDM_RX,
@@ -402,7 +402,7 @@ static u32 num_tdm_group_ports;
 
 static struct afe_clk_set tdm_clk_set = {
 	AFE_API_VERSION_CLOCK_SET,
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 	Q6AFE_LPASS_CLK_ID_TER_TDM_EBIT,
 #else
 	Q6AFE_LPASS_CLK_ID_QUAD_TDM_EBIT,
@@ -5251,7 +5251,7 @@ static int msm_dai_q6_mi2s_hw_params(struct snd_pcm_substream *substream,
 		dai_data->port_config.i2s.bit_width = 24;
 		dai_data->bitwidth = 24;
 		break;
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 	case SNDRV_PCM_FORMAT_S32_LE:
 		dai_data->port_config.i2s.bit_width = 32;
 		dai_data->bitwidth = 32;
@@ -9126,7 +9126,7 @@ static struct snd_soc_dai_driver msm_dai_q6_tdm_dai[] = {
 			.aif_name = "TERT_TDM_RX_0",
 			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |
 				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000 |
-#ifdef CONFIG_MACH_LGE
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_SND_LGE_SM6150)
 				SNDRV_PCM_RATE_44100 | SNDRV_PCM_RATE_176400 |
 				SNDRV_PCM_RATE_352800| SNDRV_PCM_RATE_384000,
 #else

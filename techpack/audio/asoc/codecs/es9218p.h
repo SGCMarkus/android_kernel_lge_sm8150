@@ -246,6 +246,9 @@ struct es9218_data {
 #endif
     bool    always_power_on;
     bool    use_internal_ldo;
+#if defined(CONFIG_MACH_SM6150_MH3_LAO_KR)
+    struct regulator *dac_comparator_regulator;
+#endif	
 };
 
 

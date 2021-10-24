@@ -2969,13 +2969,13 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		    (rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_32K))
 			rate = 16000;
 	}
-
+#if defined(LVSA)
     if (topology == AUDIO_LVSA_TOPOLOGY) {
            pr_debug("%s: topology is : 0x%x, change sampling rate %d to 16K\n",
                     __func__, topology, rate);
 		rate = 16000;
         }  
-
+#endif
 	if (topology == FFECNS_TOPOLOGY) {
 		this_adm.ffecns_port_id = port_id;
 		pr_debug("%s: ffecns port id =%x\n", __func__,

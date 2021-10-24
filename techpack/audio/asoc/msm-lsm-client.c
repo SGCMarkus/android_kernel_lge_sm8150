@@ -819,7 +819,7 @@ static int msm_lsm_check_and_set_lab_controls(struct snd_pcm_substream *substrea
 	 * best channel (0xff). For second channel onwards,
 	 * the channel indices are 0, 1, .. etc
 	 */
-#if 0 // QCT origin
+#ifdef CONFIG_SND_LGE_SM6150 // QCT origin
 	chmap[0] = 0xFF;
 	for (ch_idx = 1; ch_idx < out_hw_params->num_chs; ch_idx++)
 		chmap[ch_idx] = ch_idx - 1;

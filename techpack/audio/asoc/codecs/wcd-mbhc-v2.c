@@ -165,7 +165,38 @@ static void lge_set_edev_name(struct wcd_mbhc *mbhc, int status)
 	pr_info("[LGE MBHC] edev.name: %s\n", mbhc->edev->name);
 	pr_debug("%s: leave\n", __func__);
 }
+#ifdef CONFIG_MACH_SM6150_MH3_LAO_KR
+static int lge_set_extcon_device(struct wcd_mbhc *mbhc, int status)
+{
+	int result = NO_DEVICE;
 
+	pr_debug("%s: enter. status:0x%x\n", __func__, status);
+
+	status = status & ~SND_JACK_MECHANICAL;
+
+	switch (status) {
+		case 0:
+		case SND_JACK_UNSUPPORTED:
+			pr_err("[LGE MBHC] SND_JACK_UNSUPPORTED(0x%x) is reported.\n", status);
+			break;
+		case SND_JACK_HEADPHONE:
+		case SND_JACK_HEADSET:
+		case SND_JACK_LINEOUT:
+			lge_set_edev_name(mbhc, status);
+			result = (status == SND_JACK_HEADPHONE || status == SND_JACK_LINEOUT)? LGE_HEADPHONE : LGE_HEADSET;
+			pr_info("[LGE MBHC] %s %s is Inserted. jack_type=0x%x\n",
+					(result-1)?"3 Pin":"4 Pin",
+					(mbhc->zr < (LGE_ADVANCED_HEADSET_THRESHOLD))?"Headset":"AUX Cable", status);
+			break;
+		default:
+			pr_err("[LGE MBHC] Unsupported jack type(0x%x) is reported.\n", status);
+			break;
+	}
+
+	pr_info("[LGE MBHC] edev state: %d, edev name: %s\n", result, mbhc->edev->name);
+	return result;
+}
+#else
 static int lge_set_extcon_device(struct wcd_mbhc *mbhc, int status)
 {
 	int result = NO_DEVICE;
@@ -214,6 +245,7 @@ static int lge_set_extcon_device(struct wcd_mbhc *mbhc, int status)
 	pr_info("[LGE MBHC] edev state: %d, edev name: %s\n", result, mbhc->edev->name);
 	return result;
 }
+#endif
 #endif
 
 void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,

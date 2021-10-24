@@ -303,6 +303,12 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	u8 adc_en = 0;
 
 	pr_debug("%s: enter\n", __func__);
+#if defined(CONFIG_MACH_SM6150_MH3_LAO_KR)
+#ifdef CONFIG_MACH_LGE	/* Return false to avoid malfunction of several AUX cables */
+	pr_info("[LGE MBHC] %s: Doesn't support GND-MIC-SWAP feature. return false.\n", __func__);
+	return false;
+#endif
+#endif
 	/* Check for button press and plug detection */
 	if (wcd_swch_level_remove(mbhc)) {
 		pr_info("[LGE MBHC] %s: Switch level is low\n", __func__);
@@ -950,10 +956,12 @@ correct_plug_type:
 #else
 			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
 				pr_info("[LGE MBHC] %s: cable is HIGH_HPH in correct-loop. Report 4-pin Headset.\n", __func__);
+				#ifndef CONFIG_MACH_SM6150_MH3_LAO_KR
 				if ((snd_soc_read(mbhc->codec, 0x0623) & 0x3f) != 0x22) {
 					pr_info("[LGE MBHC] %s: Raise mic bias to 2.7v in correct-loop\n", __func__);
 					mbhc->mbhc_cb->mbhc_micb_ctrl_thr_mic(mbhc->codec, MIC_BIAS_2, true);
 				}
+				#endif
 				plug_type = MBHC_PLUG_TYPE_HEADSET;
 				if (mbhc->is_hs_recording == true)
 					goto enable_supply;
@@ -1068,7 +1076,7 @@ report:
 
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, 0);
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, 0);
-
+#ifndef CONFIG_MACH_SM6150_MH3_LAO_KR
 /* [MOBILE_19 / TD 32767, 33466] : specipic headset w/a
    [Risk]
    [japan model] : DBM cable(gender) mis-recognition monitoring.
@@ -1088,7 +1096,7 @@ report:
 		}
 	}
 #endif
-
+#endif
 	WCD_MBHC_RSC_LOCK(mbhc);
 	wcd_mbhc_find_plug_and_report(mbhc, plug_type);
 	WCD_MBHC_RSC_UNLOCK(mbhc);
